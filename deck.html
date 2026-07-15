@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>细胞远征 · 项目介绍</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-snap-type:y mandatory;scroll-behavior:smooth}
+body{font-family:'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;background:#0a0a18;color:#e8e8f0}
+
+.slide{
+  min-height:100vh;scroll-snap-align:start;
+  display:flex;flex-direction:column;justify-content:center;align-items:center;
+  padding:60px 80px;position:relative;overflow:hidden;
+}
+
+/* backgrounds */
+.bg-dark{background:linear-gradient(135deg,#0a0a18 0%,#1a0a1a 50%,#0d0d22 100%)}
+.bg-red{background:linear-gradient(135deg,#1a0a0a 0%,#2a1020 50%,#1a0a1a 100%)}
+.bg-blue{background:linear-gradient(135deg,#0a0a1a 0%,#0d1a2a 50%,#0a0a1a 100%)}
+.bg-purple{background:linear-gradient(135deg,#1a0a2a 0%,#0d1028 50%,#1a0a1a 100%)}
+
+/* floating cells bg */
+.bg-cells::before{
+  content:'';position:absolute;inset:0;opacity:.06;
+  background:radial-gradient(circle at 20% 30%,#e94560 0%,transparent 40%),
+             radial-gradient(circle at 70% 60%,#4fc3f7 0%,transparent 35%),
+             radial-gradient(circle at 40% 80%,#ff8a8a 0%,transparent 30%),
+             radial-gradient(circle at 80% 20%,#ab47bc 0%,transparent 25%);
+}
+
+h1{font-size:clamp(36px,5vw,72px);font-weight:900;letter-spacing:.04em;text-align:center}
+h2{font-size:clamp(28px,3.5vw,48px);font-weight:700;margin-bottom:40px;text-align:center}
+h3{font-size:clamp(18px,2vw,28px);font-weight:600;margin-bottom:16px}
+p,li{font-size:clamp(15px,1.5vw,22px);line-height:1.7;opacity:.9}
+
+.subtitle{font-size:clamp(18px,2vw,32px);opacity:.7;margin-top:12px;letter-spacing:.08em;text-align:center}
+.tagline{font-size:clamp(16px,1.5vw,22px);opacity:.6;margin-top:24px;text-align:center;max-width:600px}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:40px;max-width:1000px;width:100%}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;max-width:1100px;width:100%}
+
+.card{
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;padding:32px 28px;transition:transform .2s
+}
+.card:hover{transform:translateY(-4px)}
+.card-icon{font-size:48px;margin-bottom:16px}
+.card-title{font-size:20px;font-weight:700;margin-bottom:10px}
+.card-desc{font-size:15px;opacity:.8;line-height:1.6}
+
+/* cell cards */
+.card-wbc{border-color:rgba(240,237,224,.2);background:rgba(240,237,224,.04)}
+.card-plt{border-color:rgba(255,138,138,.2);background:rgba(255,138,138,.04)}
+.card-rbc{border-color:rgba(217,48,37,.2);background:rgba(217,48,37,.04)}
+
+.highlight{color:#ff6b8a;font-weight:700}
+.highlight-blue{color:#4fc3f7;font-weight:700}
+.highlight-gold{color:#ffd700;font-weight:700}
+
+.bar{width:60px;height:4px;border-radius:2px;margin:0 auto 24px}
+.bar-red{background:#e94560}
+.bar-blue{background:#4fc3f7}
+.bar-gold{background:#ffd700}
+
+.flow{display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:center;max-width:1000px}
+.flow-item{
+  background:rgba(255,255,255,.06);border-radius:12px;
+  padding:20px 28px;text-align:center;min-width:140px
+}
+.flow-arrow{font-size:28px;opacity:.4}
+
+.stat-row{display:flex;gap:40px;justify-content:center;flex-wrap:wrap;margin-top:40px}
+.stat-item{text-align:center}
+.stat-num{font-size:clamp(32px,4vw,56px);font-weight:900;color:#ff6b8a}
+.stat-label{font-size:14px;opacity:.6;margin-top:6px}
+
+.link-box{
+  background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.2);
+  border-radius:12px;padding:24px 40px;text-align:center;margin-top:30px;
+  font-family:'SF Mono','Consolas',monospace;font-size:18px;word-break:break-all
+}
+.link-box a{color:#4fc3f7;text-decoration:none}
+.link-box a:hover{text-decoration:underline}
+
+.screenshot{
+  max-width:600px;width:90%;border-radius:12px;
+  border:2px solid rgba(255,255,255,.12);
+  box-shadow:0 8px 40px rgba(0,0,0,.4);
+  margin-top:28px
+}
+
+/* page number */
+.pn{position:absolute;bottom:24px;right:32px;font-size:13px;opacity:.3}
+
+/* print */
+@media print{
+  html{scroll-snap-type:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .slide{min-height:100vh;page-break-after:always;padding:40px 60px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{background:#0a0a18!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+
+<!-- Slide 1: Title -->
+<section class="slide bg-dark bg-cells">
+  <h1>🦠 细胞远征</h1>
+  <div class="subtitle">CELL QUEST</div>
+  <div class="bar bar-red" style="margin-top:24px"></div>
+  <div class="tagline">
+    扮演免疫细胞 · 穿越人体组织 · 消灭入侵细菌<br>
+    一款融合免疫学科普的 2D 横版平台跳跃游戏
+  </div>
+  <div class="pn">1 / 9</div>
+</section>
+
+<!-- Slide 2: Overview -->
+<section class="slide bg-dark">
+  <h2>📖 作品概述</h2>
+  <div class="bar bar-red"></div>
+  <div style="max-width:850px;text-align:center">
+    <p style="margin-bottom:20px">
+      <span class="highlight">细胞远征</span> 是一款以<span class="highlight">人体免疫系统</span>为题材的 HTML5 2D 横版平台跳跃游戏。
+    </p>
+    <p style="margin-bottom:20px">
+      玩家可自由切换 <span class="highlight">白细胞</span>、<span class="highlight">血小板</span>、<span class="highlight">红细胞</span> 三种免疫细胞，
+      每种细胞拥有基于真实生理功能设计的独特能力。
+    </p>
+    <p>
+      游戏模拟了人体<span class="highlight">擦伤感染的完整病理过程</span>——出血期、创面缺口、炎症潮汐、愈合衰减，
+      让玩家在闯关中亲历一次免疫应答的微观之旅。
+    </p>
+  </div>
+  <img class="screenshot" src="images/main-menu-screenshot.jpg" alt="细胞远征主界面">
+  <div class="stat-row">
+    <div class="stat-item"><div class="stat-num">3</div><div class="stat-label">可切换细胞</div></div>
+    <div class="stat-item"><div class="stat-num">5</div><div class="stat-label">规划关卡</div></div>
+    <div class="stat-item"><div class="stat-num">7+</div><div class="stat-label">游戏机制</div></div>
+    <div class="stat-item"><div class="stat-num">~350KB</div><div class="stat-label">纯原生 JS</div></div>
+  </div>
+  <div class="pn">2 / 9</div>
+</section>
+
+<!-- Slide 3: Three Cells -->
+<section class="slide bg-red">
+  <h2>🧬 三种细胞 · 三种玩法</h2>
+  <div class="bar bar-gold"></div>
+  <div class="grid3">
+    <div class="card card-wbc">
+      <div class="card-icon">⚔️</div>
+      <div class="card-title" style="color:#f0ede0">白细胞 · WBC</div>
+      <div class="card-desc">
+        <p>免疫系统的 <span style="color:#f0ede0;font-weight:700">战士</span></p>
+        <p>🦶 踩踏消灭细菌</p>
+        <p>🗡️ <kbd>E</kbd> 键挥剑近战斩杀</p>
+        <p>💨 <kbd>Shift</kbd> 高速突进穿透敌人</p>
+        <p style="margin-top:8px;opacity:.6;font-size:13px">唯一能对 Boss 造成伤害的细胞</p>
+      </div>
+    </div>
+    <div class="card card-plt">
+      <div class="card-icon">🩹</div>
+      <div class="card-title" style="color:#ff8a8a">血小板 · PLT</div>
+      <div class="card-desc">
+        <p>血管的 <span style="color:#ff8a8a;font-weight:700">修理工</span></p>
+        <p>🧱 <kbd>E</kbd> 键消耗能量生成凝血平台</p>
+        <p>🛑 止血暂停炎症潮汐 2 秒</p>
+        <p>🔗 填补地形缺口，解锁新路径</p>
+        <p style="margin-top:8px;opacity:.6;font-size:13px">搭桥是通关缺口地形的唯一手段</p>
+      </div>
+    </div>
+    <div class="card card-rbc">
+      <div class="card-icon">🫁</div>
+      <div class="card-title" style="color:#d93025">红细胞 · RBC</div>
+      <div class="card-desc">
+        <p>氧气的 <span style="color:#d93025;font-weight:700">搬运工</span></p>
+        <p>🌬️ 氧气压制领域（被动触发）</p>
+        <p>📉 潮汐效果减半 · 抑菌 · 消退脓液</p>
+        <p>🍎 唯一能收集营养包的细胞</p>
+        <p style="margin-top:8px;opacity:.6;font-size:13px">移动速度最快，适合速通挑战</p>
+      </div>
+    </div>
+  </div>
+  <img class="screenshot" src="images/character-select.jpg" alt="角色选择" style="margin-top:32px">
+  <div class="pn">3 / 9</div>
+</section>
+
+<!-- Slide 4: Cell Synergy -->
+<section class="slide bg-dark">
+  <h2>🔗 细胞协作 · 战术闭环</h2>
+  <div class="bar bar-blue"></div>
+  <p style="text-align:center;max-width:700px;margin-bottom:36px">
+    三种细胞的能力并非孤立存在，而是形成<span class="highlight-blue">紧密的战术联动</span>：
+  </p>
+  <div class="flow">
+    <div class="flow-item">🩹 血小板搭桥<br><small style="opacity:.6">创造落脚点</small></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">⚔️ 白细胞高处踩踏<br><small style="opacity:.6">触发范围清怪</small></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">🫁 红细胞氧气领域<br><small style="opacity:.6">搭桥能耗减半</small></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-item">⚔️ 白细胞踩踏加成<br><small style="opacity:.6">额外伤害 x2</small></div>
+  </div>
+  <div style="max-width:750px;margin-top:40px;text-align:center">
+    <p style="opacity:.7;font-size:15px">
+      氧气联动：红细胞领域激活后 → 血小板搭桥能耗 <span class="highlight-blue">减半</span>、持续时间 <span class="highlight-blue">翻倍</span><br>
+      踩踏联动：临时平台上踩踏 → 触发 <span class="highlight-gold">AoE 范围清怪 buff</span> → 氧气领域再附 <span class="highlight">+1 踩踏伤害</span>
+    </p>
+  </div>
+  <div class="pn">4 / 9</div>
+</section>
+
+<!-- Slide 5: Game Systems -->
+<section class="slide bg-purple">
+  <h2>⚙️ 核心机制系统</h2>
+  <div class="bar bar-gold"></div>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <div class="card-title">能量资源管理</div>
+      <div class="card-desc">
+        全局能量条 — 出血区持续流失 / 潮涌时加速消耗 / 搭桥挥剑扣能量。<br>
+        <span class="highlight">低于阈值降速 & 禁用搭桥</span>，玩家始终在战斗消耗与生存续航间博弈。
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🌊</div>
+      <div class="card-title">炎症潮汐系统</div>
+      <div class="card-desc">
+        周期性涌动（3 秒潮涌 / 3 秒消退），潮涌时能量消耗 <span class="highlight">×3</span>、移速额外减半。<br>
+        血小板止血可暂停潮汐；越靠近终点，潮汐强度自动衰减。
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🧪</div>
+      <div class="card-title">四段生理剧情</div>
+      <div class="card-desc">
+        <span class="highlight">① 出血期</span>（8 秒持续失血）→ <span class="highlight">② 创面缺口</span>（需血小板搭桥）→
+        <span class="highlight">③ 炎症潮汐</span>（周期性恶化）→ <span class="highlight">④ 愈合衰减</span>（越近终点越平静）
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🦠</div>
+      <div class="card-title">差异化敌人设计</div>
+      <div class="card-desc">
+        葡萄球菌：死亡分裂为 2 个小体 · 链球菌：蓄力 0.7 秒后直线冲刺（蹲下可躲）<br>
+        Boss 巨型细菌集群：仅白细胞能伤害，<span class="highlight">全灭敌人才可通关</span>。
+      </div>
+    </div>
+  </div>
+  <div class="pn">5 / 9</div>
+</section>
+
+<!-- Slide 6: Educational Value -->
+<section class="slide bg-blue">
+  <h2>🎓 科普教育设计</h2>
+  <div class="bar bar-blue"></div>
+  <div class="grid3">
+    <div class="card">
+      <div class="card-icon">📚</div>
+      <div class="card-title">玩中学 · 学中玩</div>
+      <div class="card-desc">
+        每种细胞技能基于真实生理功能——白细胞的吞噬杀菌、血小板的凝血修复、红细胞的携氧运输。<br>
+        <span class="highlight-blue">操作即理解</span>，无需死记硬背。
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🃏</div>
+      <div class="card-title">知识卡片系统</div>
+      <div class="card-desc">
+        关卡中触发白细胞/红细胞/血小板的科普卡片，解释其生物学功能。<br>
+        收集隐藏的 <span class="highlight-blue">「记忆细胞」</span>道具解锁免疫记忆科普，讲述疫苗原理。
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🖼️</div>
+      <div class="card-title">角色图鉴</div>
+      <div class="card-desc">
+        主城内置细胞图鉴，配有精美 SVG 插图。<br>
+        涵盖白细胞多叶核、血小板小圆盘、红细胞双凹圆饼的<span class="highlight-blue">真实形态特征</span>。
+      </div>
+    </div>
+  </div>
+  <div style="max-width:700px;text-align:center;margin-top:36px">
+    <p style="opacity:.8">
+      适合 <span class="highlight-blue">中小学科学课堂</span>、<span class="highlight-blue">医学科普展馆</span> 等场景，寓教于乐
+    </p>
+  </div>
+  <div class="pn">6 / 9</div>
+</section>
+
+<!-- Slide 7: Game Feel -->
+<section class="slide bg-dark">
+  <h2>🎮 游戏性打磨</h2>
+  <div class="bar bar-red"></div>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">经典平台跳跃手感</div>
+      <div class="card-desc">
+        🦊 土狼时间（离地缓冲）<br>
+        ⏱️ 跳跃预输入缓冲<br>
+        🦘 二段跳 & 变跳高<br>
+        📳 屏幕震动反馈<br>
+        ✨ 粒子特效系统<br>
+        🔊 WebAudio 程序化音效
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">评价与复玩驱动</div>
+      <div class="card-desc">
+        ⭐ 三星评价体系<br>
+        &nbsp;&nbsp;&nbsp;→ 零死亡 + 高能量 + 记忆细胞<br>
+        ⏱️ 速通时间记录<br>
+        &nbsp;&nbsp;&nbsp;→ 本地持久化最佳成绩<br>
+        🔓 关卡逐关解锁<br>
+        &nbsp;&nbsp;&nbsp;→ 5 关递进式难度
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">丰富道具系统</div>
+      <div class="card-desc">
+        🛡️ 护盾 · 🌬️ 氧气回血 · 💊 补体弹药<br>
+        🪙 金币 · 🍖 食物 · 🥤 饮料 · 🍎 营养包<br>
+        🧬 隐藏记忆细胞<br>
+        → 每种道具都有独特视觉和获取规则
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">环境叙事与反馈</div>
+      <div class="card-desc">
+        🔴 潮涌→屏幕顶部红色脉冲<br>
+        🟢 止血→绿色平静指示<br>
+        🔵 氧气领域→大范围蓝光晕<br>
+        🩸 出血期→全屏淡红覆盖<br>
+        💚 愈合→屏幕暖色过渡
+      </div>
+    </div>
+  </div>
+  <div class="pn">7 / 9</div>
+</section>
+
+<!-- Slide 8: Tech -->
+<section class="slide bg-purple">
+  <h2>🛠️ 技术实现</h2>
+  <div class="bar bar-gold"></div>
+  <div class="grid2" style="max-width:900px">
+    <div>
+      <h3 style="color:#ffd700">技术栈</h3>
+      <ul style="list-style:none;padding:0">
+        <li style="margin-bottom:12px">🖥️ <span class="highlight">纯原生技术</span> — HTML5 Canvas + CSS3 + Vanilla JS，零依赖、零框架</li>
+        <li style="margin-bottom:12px">📐 <span class="highlight">模块化架构</span> — config → entities → levels → game 四层分离</li>
+        <li style="margin-bottom:12px">⚡ <span class="highlight">固定步长循环</span> — 60fps 游戏循环，物理帧与渲染帧分离</li>
+        <li style="margin-bottom:12px">💾 <span class="highlight">localStorage 存档</span> — 关卡进度、星级评价、速通记录本地持久化</li>
+        <li style="margin-bottom:12px">🎵 <span class="highlight">WebAudio 音效</span> — 程序化生成，无需音频文件</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="color:#4fc3f7">数据亮点</h3>
+      <ul style="list-style:none;padding:0">
+        <li style="margin-bottom:12px">📦 总体积 <span class="highlight-blue">~350KB</span>（含图片资源）</li>
+        <li style="margin-bottom:12px">🎨 60+ 调色板常量，像素风格渲染</li>
+        <li style="margin-bottom:12px">🧩 5 种敌人类型 + Boss + 迷你分裂体</li>
+        <li style="margin-bottom:12px">🎒 8 种道具，各有独立效果与视觉</li>
+        <li style="margin-bottom:12px">📱 自适应 800×480 画布，跨平台即开即玩</li>
+        <li style="margin-bottom:12px">🌐 部署至 Vercel，全球 CDN 加速</li>
+      </ul>
+    </div>
+  </div>
+  <div class="pn">8 / 9</div>
+</section>
+
+<!-- Slide 9: Play Now -->
+<section class="slide bg-dark bg-cells">
+  <h1>🎮 现在就玩</h1>
+  <div class="bar bar-red" style="margin-top:16px"></div>
+  <div class="link-box" style="margin-top:24px">
+    <a href="https://cell-quest-ten.vercel.app" target="_blank">cell-quest-ten.vercel.app</a>
+  </div>
+  <p style="margin-top:16px;opacity:.5;font-size:15px">扫码或点击链接，在浏览器中直接体验</p>
+  <div style="margin-top:40px;text-align:center">
+    <p style="opacity:.4;font-size:14px">操作提示：<kbd>1/2/3</kbd> 切换细胞 · <kbd>← →</kbd> 移动 · <kbd>空格</kbd> 跳跃 · <kbd>E</kbd> 技能 · <kbd>Shift</kbd> 突进</p>
+  </div>
+  <h2 style="margin-top:60px;opacity:.8">谢谢观看 🙏</h2>
+  <div class="pn">9 / 9</div>
+</section>
+
+</body>
+</html>

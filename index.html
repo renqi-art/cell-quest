@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>细胞远征 · Cell Quest</title>
+<link rel="stylesheet" href="css/style.css?v=80">
+</head>
+<body>
+<div id="game-container" tabindex="0">
+  <canvas id="canvas" width="800" height="480"></canvas>
+  <div id="focus-prompt">点击此处开始游戏</div>
+
+  <!-- ===== HUD ===== -->
+  <div id="hud">
+    <div id="hud-tl">
+      <div id="cell-avatar" title="当前细胞"></div>
+      <div id="cell-badge"><span class="dot"></span><span id="cell-name">白细胞</span></div>
+      <div id="hearts"></div>
+    </div>
+    <div id="hud-tr">
+      <span id="energy-label">能量 ENERGY</span>
+      <div id="energy-bar"><div id="energy-fill"></div></div>
+      <div id="buffs"></div>
+      <div id="timer-row">
+        <span id="timer">00:00.00</span>
+        <span id="memory-icon" title="记忆细胞">🧬</span>
+      </div>
+    </div>
+    <div id="hud-bottom">
+      <span><kbd>1</kbd>白细胞</span><span class="sep">|</span>
+      <span><kbd>2</kbd>血小板</span><span class="sep">|</span>
+      <span><kbd>3</kbd>红细胞</span><span class="sep">|</span>
+      <span><kbd>↓</kbd>下蹲</span><span class="sep">|</span>
+      <span><kbd>空格</kbd>跳/二段跳</span><span class="sep">|</span>
+      <span><kbd>Shift</kbd>突进(WBC)</span><span class="sep">|</span>
+      <span><kbd>E</kbd>挥剑(WBC)/搭桥(PLT)</span><span class="sep">|</span>
+      <span><kbd>P</kbd>暂停</span>
+    </div>
+  </div>
+
+  <!-- ===== Death Flash ===== -->
+  <div id="death-flash"></div>
+
+  <!-- ===== Toast ===== -->
+  <div id="toast"></div>
+
+  <!-- ===== Dialogue Bubble (教程对话) ===== -->
+  <div id="dialogue-bubble">
+    <div class="bubble-content">
+      <div class="bubble-speaker" id="bubble-speaker"></div>
+      <div class="bubble-body" id="bubble-body"></div>
+      <div class="bubble-buttons">
+        <button class="btn-small" id="btn-bubble-next">继续 (空格)</button>
+        <button class="btn-small skip" id="btn-bubble-skip">跳过全部</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Memory Card (记忆细胞科普) ===== -->
+  <div id="memory-card" class="overlay hidden">
+    <div class="memory-card-inner">
+      <h2 id="memory-card-title">免疫记忆</h2>
+      <p id="memory-card-text"></p>
+      <button class="btn primary" id="btn-memory-close">按空格关闭</button>
+    </div>
+  </div>
+
+  <!-- ===== Main Menu ===== -->
+  <div id="main-menu" class="overlay">
+    <h1>细胞远征</h1>
+    <h3>CELL QUEST</h3>
+    <p>扮演免疫系统细胞，穿越人体组织，消灭入侵细菌<br>切换白细胞·血小板·红细胞，利用各自能力闯关</p>
+    <button class="btn primary" id="btn-start">开始游戏</button>
+  </div>
+
+  <!-- ===== Hub / Level Select ===== -->
+  <div id="hub-screen" class="overlay hidden">
+    <div class="hub-header">
+      <h2>选择关卡</h2>
+    </div>
+    <div id="level-grid"></div>
+    <div class="hub-footer">
+      <button class="btn hub-btn" id="btn-hub-pedia">📖 角色图鉴</button>
+      <button class="btn hub-btn hub-back" id="btn-menu-back">🏠 返回主菜单</button>
+      <button class="btn hub-btn" id="btn-hub-settings">⚙️ 设置</button>
+    </div>
+  </div>
+
+  <!-- ===== Character Pedia (角色图鉴) ===== -->
+  <div id="pedia-screen" class="overlay hidden">
+    <button class="btn hub-btn" id="btn-pedia-close">返回关卡选择</button>
+    <div class="pedia-btn-row">
+      <button class="pedia-cell-btn" id="btn-pedia-wbc">白细胞</button>
+      <button class="pedia-cell-btn" id="btn-pedia-rbc">红细胞</button>
+      <button class="pedia-cell-btn" id="btn-pedia-plt">血小板</button>
+    </div>
+  </div>
+
+  <!-- ===== Character Detail (角色详情) ===== -->
+  <div id="char-detail-screen" class="overlay hidden">
+    <button class="btn hub-btn" id="btn-char-back">返回角色选择</button>
+    <div id="char-detail-bg"></div>
+    <img id="char-detail-img" src="" alt="">
+  </div>
+
+  <!-- ===== Pause Menu ===== -->
+  <div id="pause-menu" class="overlay hidden">
+    <h2>暂停</h2>
+    <div class="btn-row" style="flex-direction:column;">
+      <button class="btn primary" id="btn-resume">继续游戏</button>
+      <button class="btn" id="btn-quit">返回主城</button>
+    </div>
+  </div>
+
+  <!-- ===== Level Complete ===== -->
+  <div id="complete-screen" class="overlay hidden">
+    <h1>关卡完成</h1>
+    <h3 id="complete-level-name"></h3>
+    <div class="stats">
+      <div class="row"><span>击杀细菌</span><span class="val" id="stat-kills">0</span></div>
+      <div class="row"><span>拾取道具</span><span class="val" id="stat-items">0</span></div>
+      <div class="row"><span>剩余能量</span><span class="val" id="stat-energy">0</span></div>
+      <div class="row"><span>记忆细胞</span><span class="val" id="stat-memory">-</span></div>
+      <div class="row"><span>本局用时</span><span class="val" id="stat-time">00:00.00</span></div>
+      <div class="row"><span>最佳速通</span><span class="val" id="stat-best-time">--:--.--</span></div>
+      <div class="row"><span>通关评价</span><span class="val" id="stat-rating">★★★</span></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="btn-next-level">返回主城</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js?v=75"></script>
+<script src="js/entities.js?v=75"></script>
+<script src="js/levels.js?v=75"></script>
+<script src="js/game.js?v=75"></script>
+</body>
+</html>
