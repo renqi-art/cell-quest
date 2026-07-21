@@ -1,199 +1,108 @@
 /* ====================================================================
- * levels.js — 关卡地图数据 + 教程对话 + 浮动平台定义
- * 仅第一关有完整数据，2~5关为空占位
+ * levels.js — 关卡汇总入口（数据在 js/levels/ 目录下各文件中）
  * ==================================================================== */
 
-const LEVEL_MAPS = [
-  /* ===== 第 1 关：擦伤 ===== */
-  {
-    name: '擦伤',
-    width: 80,
-    sky: [C.sky1, C.sky3],
-    map: [
-      //0         1         2         3         4         5         6         7
-      //0123456789012345678901234567890123456789012345678901234567890123456789012345678901
-      "                                                                                ", // 0
-      "                                                                                ", // 1
-      "                                                                                ", // 2
-      "                                                                                ", // 3
-      "                                                                                ", // 4
-      "                                                                                ", // 5
-      "                                 o                                              ", // 6  最高金币
-      "                           f    ===   n                                         ", // 7  食物+最高平台+营养包
-      "                      n   ===        ===   o                                    ", // 8  营养包+平台+平台+金币
-      "                o    ===                  ===   C                               ", // 9  金币+平台+平台+存档
-      "           n   ===                             ===   d        O                 ", // 10 营养包+平台+平台+饮料+氧气
-      "          ===                                       ===     ====                ", // 11 平台+平台+平台+gap2浮动平台
-      "  P  o o g       C                                  g  tb===                >   ", // 12 实体层
-      "##################   ######################################       ##############", // 13 地面(gap1=18-20, gap2=59-65)
-      "##################   ######################################       ##############", // 14 深地面
-    ],
-    // 浮动毛细血管平台（本关平台用静态阶梯，暂不启用浮动）
-    floatPlatforms: [],
-    // 教程对话气泡 (x触发位置, 角色, 台词)
-    tutorials: [
-      { x: 1750,useCurrent: true,
-        body: '前方是终点大门！\nBoss细菌守在门前\n只有白细胞能伤害Boss\n击杀Boss后门会解锁\n走到门前即可通关！' },
-    ],
-    // 知识卡片触发位置 (x触发, y可选高度限制, key标识, 标题, 文本)
-    // y: 指定时仅当玩家在该高度或更高时触发（y越小越高，地面y≈340, 平台y≈276）
-    knowledgeCards: [
-      { x: 2, key: 'wbc',
-        title: '白细胞',
-        text: '嘿！我是白细胞。\n白细胞，将自体外入侵至体内的细菌与病毒等异物排除干净，是白细胞的主要工作。人类血液中的白细胞有一半以上都是中性粒细胞。\n前方有细菌出没，按 1 切换到白细胞！白细胞能消灭细菌，跳到细菌头顶踩踏消灭或按 E 挥剑斩杀！\n← → 或 A D 移动\n空格 / W / ↑ 跳跃\n长按跳更高，空中再按一次二段跳！' },
-      { x: 440, y: 310, key: 'rbc',
-        title: '红细胞',
-        text: '看到粉色营养包了吗？\n按 3 切换到红细胞才能收集，营养包可以恢复大量能量\n红细胞，可通过血液循环将氧气和二氧化碳在体内运送。营养包只有红细胞能收集哦。' },
-      { x: 1700, key: 'plt',
-        title: '血小板',
-        text: '嘿！我是血小板。血小板，血液中含有的一种细胞成分，会在血管受损时集结，堵住伤口进行止血。前方有断裂缺口，按 2 切换到血小板，按 E 消耗能量生成凝血平台，注意能量是否充足！' },
-    ],
-  },
+// 内置关卡数据
+const _BUILTIN_LEVELS = [LEVEL_0, LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5];
 
-  /* ===== 第 2 关：肺泡迷宫（呼吸系统·链球菌专项） ===== */
-  {
-    name: '肺泡迷宫',
-    width: 90,
-    sky: ['#1a2a3a','#3a6a8a'],
-    map: [
-      //0         1         2         3         4         5         6         7         8
-      //0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
-      "                                                                                          ", // 0
-      "                                                                                          ", // 1
-      "                                                                                          ", // 2
-      "                                                                                          ", // 3
-      "                              ====                                                        ", // 4
-      "                        o    ==  ==         o             o                               ", // 5
-      "                   ==  ===  ==    ==   ==  ===   ==  ==  ===              o               ", // 6
-      "               o  ==  ==      ==    == == ==  ==  ==  ==        o  ==  ===                ", // 7
-      "          ==  === ==          == t  ==        ==  ==        ==  === ==           o        ", // 8
-      "     o   ==  ==              ==    ==            ==      o  ==  ==          ==  ===       ", // 9
-      "    ==  ==             o    ==              o            ==  ==      o    ==  ==          ", // 10
-      "   ==          o  o   ==   ==   o   C  o   ==   t  o   ==      o   ==   ==          o    ", // 11
-      "P ==  f  o  t ====  ==   ==   ==  ========  ==  ========  f  ====  ==   ==   t   ====  > ", // 12
-      "==========================================================================================", // 13
-      "==========================================================================================", // 14
-    ],
-    floatPlatforms: [
-      { x: 38*32, y: 6*32, range: 24, speed: 0.04, phase: 0 },
-      { x: 52*32, y: 4*32, range: 20, speed: 0.035, phase: 1.5 },
-      { x: 70*32, y: 5*32, range: 28, speed: 0.03, phase: 3 },
-    ],
-    tutorials: [
-      { x: 600, useCurrent: true, body: '进入肺泡！这里是气体交换之地\n链球菌在肺泡中滋生\n它们会蓄力冲刺——保持警惕！' },
-      { x: 1700, useCurrent: true, body: '肺泡内通道狭窄\n利用浮动气泡平台通过\n注意链球菌的冲刺预警线\n在它们蓄力时蹲下可以躲避！' },
-    ],
-    knowledgeCards: [
-      { x: 300, key: 'alveoli',
-        title: '肺泡 — 气体交换站',
-        text: '肺泡是肺部进行气体交换的微小囊状结构。\n每个肺约有3亿个肺泡！\n这里氧气充足，但也容易被\n空气中的细菌侵入。' },
-      { x: 1500, key: 'strep_info',
-        title: '链球菌 — 呼吸道常客',
-        text: '链球菌(Streptococcus)是呼吸道感染最常见的病原菌。\n它们排列成链状，能释放毒素。\n部分链球菌会蓄力冲刺攻击，\n蹲下可躲避冲刺，蓄力时挥剑可打断！' },
-    ],
-  },
+// 自定义关卡（从 localStorage 加载）
+const _CUSTOM_LEVELS = loadCustomLevels();
 
-  /* ===== 第 3 关：血管奔流（循环系统·葡萄球菌专项） ===== */
-  {
-    name: '血管奔流',
-    width: 100,
-    sky: ['#2a0a1a','#5a1a3a'],
-    map: [
-      //0         1         2         3         4         5         6         7         8         9
-      //01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
-      "                                                                                                    ", // 0
-      "                                                                                                    ", // 1
-      "                                                                                                    ", // 2
-      "                                                                                                    ", // 3
-      "                                                                        o     o     o              ", // 4
-      "                                                     o    f    o    ===   ===   ===                 ", // 5
-      "                                            o  f   ===  ===  ===                 ===                ", // 6
-      "                                o    f    ===  ===              o  f            ===   o   f         ", // 7
-      "                     o    f   ===  ===                    o    ===  ===   C      ===  ===  ===      ", // 8
-      "          o    f    ===  ===                    o    f    ===        ===  ========        ===       ", // 9
-      "  o  f  ===  ===  ==               o    f     ===  ===  ==     o             ====    o    ===   D  ", // 10
-      " ===  ==         ==  f  o  g  G  ===  ===  o  ==        == g === f  o  g  G ====  g ===  ==  ===== ", // 11
-      "P   BBBBBBBBBBBB  =====  ======  =====  =====  BBBBBBBBBB  ======  =====  ==BBB==  =====  ==  b  > ", // 12
-      "====================================================================================================", // 13
-      "====================================================================================================", // 14
-    ],
-    floatPlatforms: [],
-    tutorials: [
-      { x: 300, useCurrent: true, body: '进入血管！血流冲击强烈\n失血区域遍布全程\n切换到红细胞减缓能量消耗！' },
-      { x: 1400, useCurrent: true, body: '大型葡萄球菌挡路！\n踩踏两次才能消灭\n按E挥剑或Shift突进快速解决\n氧气领域可以加成踩踏伤害！' },
-      { x: 2600, useCurrent: true, body: '前方Boss出没！\n只有白细胞能伤害Boss\n利用挥剑+突进+跳劈连招\nBoss掉落传说装备！' },
-    ],
-    knowledgeCards: [
-      { x: 200, key: 'vessel',
-        title: '血管 — 生命之河',
-        text: '血管是血液流动的通道。\n动脉将氧气和营养输送到全身，\n静脉将代谢废物带回心肺。\n病原体入侵血管会引发菌血症，\n这是免疫系统的紧急事态！' },
-      { x: 1200, key: 'staph_info',
-        title: '葡萄球菌 — 血液入侵者',
-        text: '金黄色葡萄球菌(Staphylococcus aureus)\n是菌血症最常见的病原菌。\n大型葡萄球菌有更强的生命力，\n死亡后会分裂成多个小型个体。\n善用范围攻击清理！' },
-    ],
-  },
+// 合并所有关卡
+const LEVEL_MAPS = [..._BUILTIN_LEVELS, ..._CUSTOM_LEVELS];
 
-  /* ===== 第 4 关：淋巴结（免疫中枢·精英战） ===== */
-  {
-    name: '淋巴结',
-    width: 80,
-    sky: ['#1a1a2a','#3a3a5a'],
-    map: [
-      //0         1         2         3         4         5         6         7
-      //012345678901234567890123456789012345678901234567890123456789012345678901234567890
-      "                                                                                ", // 0
-      "                                                                                ", // 1
-      "                                                                                ", // 2
-      "                                                              ===               ", // 3
-      "                                            o      o    o    == ==              ", // 4
-      "                               o    o     ===    ===  ===      ==    o          ", // 5
-      "                   o    o    ===  ===            ==        D  ==   ===          ", // 6
-      "          o       ===  ===          ==  C   o   ==  t      ===      ==    o     ", // 7
-      "    o    ===     ==      ==   t    ==  ========  ==      ==      G  ==   ===    ", // 8
-      "   ===  ==  o  ==  G    ==  ========      ==    ==  t  ==  o   ========  ==    ", // 9
-      "  ==  ==  ====  ========  ==      ==  o   ==  o ==  ====  ===       ==  ==  D  ", // 10
-      "P ==  G   t  ==  t   ==  ==  o   ==  ===  ==  ====      ==  G  o  ==  ==  ===> ", // 11
-      "================================================================================", // 12
-      "================================================================================", // 13
-      "================================================================================", // 14
-    ],
-    floatPlatforms: [],
-    tutorials: [
-      { x: 300, useCurrent: true, body: '淋巴结是免疫系统的指挥中心\n这里是最后的防线\n多重精英敌人把守\n善用三种细胞配合通关！' },
-      { x: 1500, useCurrent: true, body: '前方敌人密集！\n利用跳劈清理群怪\n存档点在右侧，激活后可重生\n注意收集护盾和氧气！' },
-    ],
-    knowledgeCards: [
-      { x: 100, key: 'lymph',
-        title: '淋巴结 — 免疫司令部',
-        text: '淋巴结是免疫细胞集结和激活的场所。\nT细胞和B细胞在这里接受训练，\n识别敌人后迅速增殖分化为战斗部队。\n当淋巴结肿大，说明免疫系统正在激战！' },
-      { x: 1200, key: 'elite',
-        title: '精英敌人',
-        text: '淋巴结中的精英敌人拥有更高的HP和攻击力。\n大型葡萄球菌(HP2)死亡后分裂、\n链球菌蓄力冲刺速度更快。\n善用装备和技能树的加成优势！' },
-    ],
-  },
-
-  /* ===== 第 5 关：Boss感染（Boss决战·保留） ===== */
-  { name: 'Boss感染', width: 80, sky: ['#2a0a0a','#6a0a0a'], map: [], tutorials: [], floatPlatforms: [], knowledgeCards: [] },
+// ===== 关卡独立配置表 =====
+const _BUILTIN_DEFS = [
+  { id:0, name:'血液循环', bgMusic:'tutorial', enemies:[], mechanics:['collect','tutorial','pipe'], checkpoint:true },
+  { id:1, name:'擦伤',     bgMusic:'wound',    enemies:['staph','staphLarge','strep','boss'], mechanics:['sword','dash','stomp'], checkpoint:true },
+  { id:2, name:'肺泡迷宫', bgMusic:'lung',     enemies:['strep'], mechanics:['crouch','floatPlatform','tide'], checkpoint:true },
+  { id:3, name:'血管奔流', bgMusic:'vessel',   enemies:[], mechanics:['bloodLoss','tide','oxyField','collect','pipe'], checkpoint:true },
+  { id:4, name:'淋巴结',   bgMusic:'lymph',    enemies:['staph','staphLarge','strep'], mechanics:['sword','dash','stomp'], checkpoint:true },
+  { id:5, name:'Boss感染', bgMusic:'boss',     enemies:['boss'], mechanics:['sword','dash','stomp','pipe'], checkpoint:true },
 ];
 
-// ===== 关卡独立配置表（预留，后续关卡复用） =====
-const LEVEL_DEFS = [
-  {
-    id: 1,
-    name: '擦伤',
-    bgMusic: 'wound',
-    enemies: ['staph', 'staphLarge', 'strep', 'boss'],
-    mechanics: ['bridge', 'crouch', 'sword', 'nutrition', 'boss'],
-    checkpoint: true,
-  },
-  { id: 2, name: '肺泡迷宫', bgMusic: 'lung', enemies: [], mechanics: [], checkpoint: true },
-  { id: 3, name: '血管奔流', bgMusic: 'vessel', enemies: [], mechanics: [], checkpoint: true },
-  { id: 4, name: '淋巴结', bgMusic: 'lymph', enemies: [], mechanics: [], checkpoint: true },
-  { id: 5, name: 'Boss感染', bgMusic: 'boss', enemies: [], mechanics: [], checkpoint: true },
-];
+// 自定义关卡配置（从 localStorage 数据生成）
+const _CUSTOM_DEFS = _CUSTOM_LEVELS.map((lvl, i) => ({
+  id: 6 + i,
+  name: lvl.name || '自定义关卡',
+  icon: lvl.icon || '🗺️',
+  bgMusic: 'tutorial',
+  enemies: [],
+  mechanics: [],
+  checkpoint: false,
+  _isCustom: true,
+}));
+
+// 合并所有配置
+const LEVEL_DEFS = [..._BUILTIN_DEFS, ..._CUSTOM_DEFS];
+
+// ===== LEVEL_CONFIGS 动态生成（给渲染用）=====
+function buildLevelConfigs(){
+  const configs = [
+    { id:0, name:'血液循环', icon:'🫁', cellType:3, winCondition:WIN_COLLECT_ALL,
+      desc:'红细胞教学·体循环+肺循环完整旅程', bg:[C.sky2,'#e8a0a0'] },
+    { id:1, name:'白细胞觉醒', icon:'⚔️', cellType:1, winCondition:WIN_KILL_ALL,
+      desc:'战斗入门·消灭全部细菌通关', bg:[C.sky1,C.sky3] },
+    { id:2, name:'肺泡迷宫', icon:'🫁', cellType:1, winCondition:WIN_KILL_ALL,
+      desc:'呼吸系统·链球菌·浮动平台', bg:['#1a2a3a','#3a6a8a'] },
+    { id:3, name:'血管奔流', icon:'🩸', cellType:3, winCondition:WIN_COLLECT_ALL,
+      desc:'循环系统·失血潮涌·收集挑战', bg:['#2a0a1a','#5a1a3a'] },
+    { id:4, name:'淋巴结',   icon:'⚪', cellType:1, winCondition:WIN_KILL_ALL,
+      desc:'免疫中枢·精英敌人', bg:['#1a1a2a','#3a3a5a'], locked:true },
+    { id:5, name:'Boss感染', icon:'☠️', cellType:1, winCondition:WIN_KILL_ALL,
+      desc:'终极决战·Boss', bg:['#2a0a0a','#6a0a0a'], locked:true },
+  ];
+  // 追加自定义关卡
+  for(let i=0; i<_CUSTOM_LEVELS.length; i++){
+    const lvl = _CUSTOM_LEVELS[i];
+    configs.push({
+      id: 6 + i,
+      name: lvl.name || '自定义关卡',
+      icon: lvl.icon || '🗺️',
+      cellType: lvl.cellType || 3,
+      winCondition: lvl.winCondition || WIN_COLLECT_ALL,
+      desc: lvl.desc || `由玩家创建的自定义关卡 #${i+1}`,
+      bg: lvl.sky || [C.sky2, '#e8a0a0'],
+      _isCustom: true,
+    });
+  }
+  return configs;
+}
 
 // 记忆细胞科普卡片文本
 const MEMORY_CARD = {
   title: '免疫记忆',
-  text: '记忆细胞是免疫系统的"档案库"。\n当身体首次遇到某种病原体后，\n部分淋巴细胞会转化为记忆细胞。\n下次再遇到同样的敌人时，\n它们能迅速唤醒免疫系统，\n以更快的速度和更大的规模消灭入侵者。\n这就是疫苗起效的原理。',
+  text: '记忆细胞是免疫系统的"档案库"。\\n当身体首次遇到某种病原体后，\\n部分淋巴细胞会转化为记忆细胞。\\n下次再遇到同样的敌人时，\\n它们能迅速唤醒免疫系统，\\n以更快的速度和更大的规模消灭入侵者。\\n这就是疫苗起效的原理。',
 };
+
+// 刷新关卡数据（编辑器保存后调用）
+function refreshCustomLevels(){
+  const newLevels = loadCustomLevels();
+  _CUSTOM_LEVELS.length = 0;
+  _CUSTOM_LEVELS.push(...newLevels);
+  // 同步更新 LEVEL_MAPS
+  LEVEL_MAPS.length = _BUILTIN_LEVELS.length;
+  LEVEL_MAPS.push(..._CUSTOM_LEVELS);
+  // 同步更新 LEVEL_DEFS
+  LEVEL_DEFS.length = _BUILTIN_DEFS.length;
+  const newDefs = _CUSTOM_LEVELS.map((lvl, i) => ({
+    id: 6 + i,
+    name: lvl.name || '自定义关卡',
+    icon: lvl.icon || '🗺️',
+    bgMusic: 'tutorial',
+    enemies: [],
+    mechanics: [],
+    checkpoint: false,
+    _isCustom: true,
+  }));
+  LEVEL_DEFS.push(...newDefs);
+  // 确保 Game 数组长度匹配（增加时填充，减少时裁剪）
+  const total = LEVEL_MAPS.length;
+  while(Game.unlocked.length < total) Game.unlocked.push(true);
+  while(Game.completed.length < total) Game.completed.push(false);
+  while(Game.stars.length < total) Game.stars.push(0);
+  // 删除时裁剪多余项
+  if(Game.unlocked.length > total) Game.unlocked.splice(total);
+  if(Game.completed.length > total) Game.completed.splice(total);
+  if(Game.stars.length > total) Game.stars.splice(total);
+}

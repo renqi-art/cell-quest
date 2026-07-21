@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>细胞远征 · Cell Quest</title>
-<link rel="stylesheet" href="css/style.css?v=117">
+<link rel="stylesheet" href="css/style.css?v=118">
 </head>
 <body>
 <div id="game-container" tabindex="0">
@@ -19,7 +19,8 @@
       <div id="hearts"></div>
     </div>
     <div id="hud-tr">
-      <span id="energy-label">能量 ENERGY <span id="level-badge">Lv.1</span></span>
+      <div id="objective-display"></div>
+      <span id="energy-label">能量 ATP <span id="level-badge">Lv.1</span></span>
       <div id="energy-bar"><div id="energy-fill"></div></div>
       <div id="xp-bar"><div id="xp-fill"></div></div>
       <div id="buffs"></div>
@@ -30,14 +31,8 @@
       </div>
     </div>
     <div id="hud-bottom">
-      <span><kbd>1</kbd>白细胞</span><span class="sep">|</span>
-      <span><kbd>2</kbd>血小板</span><span class="sep">|</span>
-      <span><kbd>3</kbd>红细胞</span><span class="sep">|</span>
-      <span><kbd>↓</kbd>下蹲</span><span class="sep">|</span>
-      <span><kbd>空格</kbd>跳/二段跳</span><span class="sep">|</span>
-      <span><kbd>Shift</kbd>技1</span><span class="sep">|</span>
-      <span><kbd>E</kbd>技2</span><span class="sep">|</span>
-      <span><kbd>Q</kbd>大招</span><span class="sep">|</span>
+      <span id="hud-controls"></span>
+      <span class="sep">|</span>
       <span><kbd>P</kbd>暂停</span>
     </div>
   </div>
@@ -87,7 +82,8 @@
       <button class="btn hub-btn" id="btn-hub-pedia">📖 角色图鉴</button>
       <button class="btn hub-btn hub-back" id="btn-menu-back">🏠 返回主菜单</button>
       <button class="btn hub-btn" id="btn-hub-equip">🎒 装备</button>
-        <button class="btn hub-btn" id="btn-hub-settings">⭐ 技能树</button>
+      <button class="btn hub-btn" id="btn-hub-settings">⭐ 技能树</button>
+      <button class="btn hub-btn" id="btn-hub-editor" style="border-color:#ffd700;color:#ffd700" onclick="window.open('editor.html','_blank')">🗺️ 地图编辑器</button>
     </div>
   </div>
 
@@ -173,7 +169,13 @@
 
 <script src="js/config.js?v=84"></script>
 <script src="js/entities.js?v=105"></script>
-<script src="js/levels.js?v=77"></script>
+<script src="js/levels/level0_blood.js?v=1"></script>
+<script src="js/levels/level1_wbc.js?v=1"></script>
+<script src="js/levels/level2_alveoli.js?v=1"></script>
+<script src="js/levels/level3_vessel.js?v=1"></script>
+<script src="js/levels/level4_lymph.js?v=1"></script>
+<script src="js/levels/level5_boss.js?v=1"></script>
+<script src="js/levels.js?v=78"></script>
 <script src="js/game.js?v=110"></script>
 </body>
 </html>
