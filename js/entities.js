@@ -412,6 +412,18 @@ class Player {
     }
     // 补充地面检测（脚底在瓦片边界时getOverlapTiles可能漏掉）
     if(!this.onGround&&this.vy>=0){const fr=Math.floor((this.y+this.h)/32);const fc1=Math.floor(this.x/32),fc2=Math.floor((this.x+this.w-1)/32);for(let c=fc1;c<=fc2;c++){if(level.solidAt(c,fr)){this.y=fr*32-this.h;this.vy=0;this.onGround=true;break;}}}
+    // ? 方块顶击检测
+    if(this.vy < 0 && Game.qBlocks){
+      for(const qb of Game.qBlocks){
+        if(qb.used) continue;
+        if(this.x + this.w > qb.x + 2 && this.x < qb.x + qb.w - 2 &&
+           this.y < qb.y + qb.h && this.y + this.h > qb.y){
+          qb.hit();
+          this.vy = 0;
+          break;
+        }
+      }
+    }
     // 临时平台碰撞
     for(const tp of Game.tempPlatforms){
       if(tp.expired) continue;
