@@ -1373,6 +1373,24 @@ class Item {
   update(player){
     this.animT++;
     if(!this.alive) return;
+
+    // ATP 物理：弹出后受重力下落
+    if(this.type === 'atp' && (this.vy !== 0 || this.vx !== 0)){
+      this.vy += GRAVITY;
+      this.y += this.vy;
+      this.x += this.vx;
+      this.vx *= 0.98;
+      const level = Game.level;
+      if(level){
+        const col = Math.floor((this.x + this.w/2) / TILE);
+        const row = Math.floor((this.y + this.h) / TILE);
+        if(row >= 0 && row < level.grid.length && level.solidAt(col, row)){
+          this.y = row * TILE - this.h;
+          this.vy = 0; this.vx = 0;
+        }
+      }
+    }
+
     if(rectOverlap(this, player)){
       this.alive = false;
       Game.stats.items++;
