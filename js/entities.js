@@ -1520,14 +1520,20 @@ class Item {
       ctx.beginPath(); ctx.arc(px+6, py+6, 2.5, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 7px sans-serif'; ctx.textAlign='center';
       ctx.fillText('营', px+8, py+11);
-    } else if(this.type==='xp'){const p=Math.sin(this.animT*0.15)*2;ctx.beginPath();ctx.arc(px+8,py+8,7+p,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffdd44';ctx.beginPath();ctx.arc(px+8,py+8,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 6px sans-serif';ctx.textAlign='center';ctx.fillText('XP',px+8,py+11);}else if(this.type==='equipment'){const eq=findEquip(this.equipId);const rc=eq?RARITY_COLORS[eq.rarity]:'#fff';ctx.fillStyle=this.color();ctx.beginPath();ctx.moveTo(px+8,py+1);ctx.lineTo(px+15,py+8);ctx.lineTo(px+8,py+15);ctx.lineTo(px+1,py+8);ctx.closePath();ctx.fill();ctx.strokeStyle=rc;ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold 6px sans-serif';ctx.textAlign='center';ctx.fillText('装',px+8,py+11);} else if(this.type === 'atp'){
-      // ATP 金色闪电符号
-      ctx.fillStyle = '#ffd700';
-      ctx.beginPath(); ctx.arc(px+8, py+8, 7, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('⚡', px+8, py+12);
-    } else {
+    } else if(this.type === 'atp'){
+          // ATP 使用图片
+          const atpImg = Game.atpImg;
+          if(atpImg && atpImg.complete && atpImg.naturalWidth > 0){
+            const s = this.w + 4;
+            ctx.drawImage(atpImg, px - 2, py - 2, s, s);
+          } else {
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath(); ctx.arc(px+8, py+8, 7, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('⚡', px+8, py+12);
+          }
+        } else {
       // 补体：星形
       ctx.beginPath();
       for(let i=0;i<10;i++){
