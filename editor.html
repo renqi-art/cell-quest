@@ -580,8 +580,17 @@ async function saveLevel(){
   const name = document.getElementById('levelName').value || '新关卡';
   const fileId = document.getElementById('levelSelect').value;
   const presets = ['level0_blood','level1_wbc','level2_alveoli','level3_vessel','level4_lymph','level5_boss'];
-  const levelNum = fileId !== '' ? fileId : presets.length;
-  const fileName = fileId !== '' ? presets[parseInt(fileId)] : ('level' + levelNum + '_custom');
+  let fileName, levelNum;
+  if (fileId.startsWith('builtin_')) {
+    levelNum = parseInt(fileId.replace('builtin_', ''));
+    fileName = presets[levelNum];
+  } else if (fileId.startsWith('custom_')) {
+    levelNum = parseInt(fileId.replace('custom_', ''));
+    fileName = 'level' + levelNum + '_custom';
+  } else {
+    levelNum = presets.length;
+    fileName = 'level' + levelNum + '_custom';
+  }
   const lines = grid.map(row => `      "${row.join('')}",`);
   const extras = buildExtraStr();
   const code = `/* ${name} */\nconst LEVEL_${levelNum} = {\n  name: '${name}',\n  width: ${mapWidth},\n  cellType: 3,\n  winCondition: WIN_COLLECT_ALL,\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};\n`;
@@ -797,7 +806,8 @@ function doImportRaw(text){
   const mapRows = rows.map(l=>l.slice(1,-1));
   mapWidth = mapRows[0].length;
   mapHeight = mapRows.length;
-  grid = mapRows.map(r=>r.split(''));
+  // 规范化行长度：统一补齐/截断到 mapWidth
+  grid = mapRows.map(r=>r.padEnd(mapWidth,' ').slice(0,mapWidth).split(''));
   snapshot = grid.map(r=>[...r]);
   document.getElementById('mapWidth').value = mapWidth;
   const nameMatch = text.match(/name:\s*'([^']+)'/);

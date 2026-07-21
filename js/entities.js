@@ -1046,16 +1046,20 @@ class Enemy {
     this.animT++;
 
     if(this.type === 'staph'){
-      // 葡萄球菌：巡逻
-      const baseSpeed = this.isLarge ? 0.3 : (this.isMini ? 0.6 : 0.4);
-      this.vx = this.dir * baseSpeed;
-      this.x += this.vx;
-      const frontCol = Math.floor((this.dir > 0 ? this.x + this.w : this.x) / TILE);
-      const checkRow = Math.floor((this.y + this.h + 2) / TILE);
-      if(level.solidAt(frontCol, Math.floor(this.y / TILE))){
-        this.dir *= -1;
-      } else if(!level.solidAt(frontCol, checkRow) && this.onGround){
-        this.dir *= -1;
+      // 葡萄球菌：仅在落地后巡逻
+      if(!this.onGround){
+        this.vx = 0;
+      } else {
+        const baseSpeed = this.isLarge ? 0.3 : (this.isMini ? 0.6 : 0.4);
+        this.vx = this.dir * baseSpeed;
+        this.x += this.vx;
+        const frontCol = Math.floor((this.dir > 0 ? this.x + this.w : this.x) / TILE);
+        const checkRow = Math.floor((this.y + this.h + 2) / TILE);
+        if(level.solidAt(frontCol, Math.floor(this.y / TILE))){
+          this.dir *= -1;
+        } else if(!level.solidAt(frontCol, checkRow) && this.onGround){
+          this.dir *= -1;
+        }
       }
     } else {
       // 链球菌：游荡 + 冲刺
@@ -1089,6 +1093,16 @@ class Enemy {
         // 高速直线冲刺
         this.vx = this.chargeDir * CHARGE_SPEED;
         this.x += this.vx;
+        // 撞到实心方块则停止冲刺
+        const dashCol = Math.floor((this.chargeDir > 0 ? this.x + this.w - 1 : this.x) / TILE);
+        const dashRow = Math.floor((this.y + this.h/2) / TILE);
+        if(level.solidAt(dashCol, dashRow) || level.solidAt(dashCol, Math.floor(this.y / TILE))){
+          this.x = this.chargeDir > 0 ? dashCol * TILE - this.w : (dashCol + 1) * TILE;
+          this.state = 'cooldown';
+          this.stateTimer = CHARGE_COOLDOWN;
+          this.dir = this.chargeDir;
+          spawnParticles(this.x+this.w/2, this.y+this.h/2, C.chargeWarn, 8, 2);
+        }
         this.stateTimer--;
         if(this.stateTimer <= 0){
           this.state = 'cooldown';
@@ -1397,7 +1411,10 @@ class Item {
       Game.stats.items++;
       if(this.type !== 'atp') Game.itemsCollected++;
       Sfx.pickup();
-      if(this.type === 'shield'){
+      if(this.type === 'atp'){
+        Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + ATP_PICKUP);
+        spawnParticles(this.x+this.w/2, this.y+this.h/2, '#ffd700', 10, 2);
+      } else if(this.type === 'shield'){
         player.shield = SHIELD_DURATION;
         showToast('血小板护盾激活！');
       } else if(this.type === 'oxygen'){
@@ -1526,7 +1543,7 @@ class Item {
           if(!this._logged){ console.log('DRAW ATP at', px, py); this._logged = true; }
           const atpImg = Game.atpImg;
           if(atpImg && atpImg.complete && atpImg.naturalWidth > 0){
-            ctx.drawImage(atpImg, px + 2, py + 2, 12, 12);
+            ctx.drawImage(atpImg, px + 2, py + 2, 20, 20);
           } else {
             ctx.fillStyle = '#ffd700';
             ctx.beginPath(); ctx.arc(px+8, py+8, 7, 0, Math.PI*2); ctx.fill();

@@ -1531,7 +1531,7 @@ function init(){
   $('btn-confirm-yes').onclick=e=>{e.stopPropagation();try{if(confirmCallback)confirmCallback();}catch(err){console.error(err);}hideConfirm();};
   $('btn-confirm-no').onclick=e=>{e.stopPropagation();hideConfirm();};
   $('confirm-dialog').addEventListener('click',e=>{if(e.target===$('confirm-dialog'))hideConfirm();});
-  $('home-btn').onclick=e=>{e.stopPropagation();if(Game.state!=='playing')return;showConfirm('确定要离开当前关卡吗？\n进度将不会保存。',()=>{backToHub();});};
+  $('home-btn').onclick=e=>{e.stopPropagation();if(Game.state!=='playing'&&Game.state!=='paused')return;showConfirm('确定要离开当前关卡吗？\n进度将不会保存。',()=>{backToHub();});};
 
   showMenu();
   requestAnimationFrame(loop);
