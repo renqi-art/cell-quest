@@ -54,6 +54,18 @@ class Player {
     const cell = this.cell;
     this.animT++;
 
+    // ===== 血液循环：动脉加速 + 肺泡粒子 =====
+    if(this.cellType === 3){
+      const alveoliStart = 41*TILE, heartStart = 63*TILE, arteryStart = 76*TILE, tissueEnd = 96*TILE;
+      if(this.x >= arteryStart && this.x < tissueEnd && this.onGround && !k.left && !k.right){
+        if(this.vx < MOVE_MAX * 0.5) this.vx = MOVE_MAX * 0.5;
+      }
+      if(this.x >= alveoliStart && this.x < heartStart && Game.frame % 30 === 0){
+        spawnParticles(this.x + this.w/2, this.y + this.h/2, '#81d4fa', 3, 1);
+        spawnParticles(this.x + this.w/2, this.y + this.h/2, '#aaa', 2, 0.8);
+      }
+    }
+
     // ===== 突进状态 =====
     if(this.dashTimer > 0){
       this.dashTimer--;
@@ -1364,6 +1376,7 @@ class Item {
     if(rectOverlap(this, player)){
       this.alive = false;
       Game.stats.items++;
+      if(this.type !== 'atp') Game.itemsCollected++; // ATP不计数
       Sfx.pickup();
       if(this.type === 'shield'){
         player.shield = SHIELD_DURATION;
