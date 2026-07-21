@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>细胞远征 · Cell Quest</title>
-<link rel="stylesheet" href="css/style.css?v=80">
+<link rel="stylesheet" href="css/style.css?v=117">
 </head>
 <body>
 <div id="game-container" tabindex="0">
@@ -19,10 +19,12 @@
       <div id="hearts"></div>
     </div>
     <div id="hud-tr">
-      <span id="energy-label">能量 ENERGY</span>
+      <span id="energy-label">能量 ENERGY <span id="level-badge">Lv.1</span></span>
       <div id="energy-bar"><div id="energy-fill"></div></div>
+      <div id="xp-bar"><div id="xp-fill"></div></div>
       <div id="buffs"></div>
       <div id="timer-row">
+        <span id="home-btn" title="返回关卡选择">🏠</span>
         <span id="timer">00:00.00</span>
         <span id="memory-icon" title="记忆细胞">🧬</span>
       </div>
@@ -33,8 +35,9 @@
       <span><kbd>3</kbd>红细胞</span><span class="sep">|</span>
       <span><kbd>↓</kbd>下蹲</span><span class="sep">|</span>
       <span><kbd>空格</kbd>跳/二段跳</span><span class="sep">|</span>
-      <span><kbd>Shift</kbd>突进(WBC)</span><span class="sep">|</span>
-      <span><kbd>E</kbd>挥剑(WBC)/搭桥(PLT)</span><span class="sep">|</span>
+      <span><kbd>Shift</kbd>技1</span><span class="sep">|</span>
+      <span><kbd>E</kbd>技2</span><span class="sep">|</span>
+      <span><kbd>Q</kbd>大招</span><span class="sep">|</span>
       <span><kbd>P</kbd>暂停</span>
     </div>
   </div>
@@ -51,7 +54,7 @@
       <div class="bubble-speaker" id="bubble-speaker"></div>
       <div class="bubble-body" id="bubble-body"></div>
       <div class="bubble-buttons">
-        <button class="btn-small" id="btn-bubble-next">继续 (空格)</button>
+        <button class="btn-small" id="btn-bubble-next">点击或按空格继续</button>
         <button class="btn-small skip" id="btn-bubble-skip">跳过全部</button>
       </div>
     </div>
@@ -62,7 +65,7 @@
     <div class="memory-card-inner">
       <h2 id="memory-card-title">免疫记忆</h2>
       <p id="memory-card-text"></p>
-      <button class="btn primary" id="btn-memory-close">按空格关闭</button>
+      <button class="btn primary" id="btn-memory-close">点击或按空格关闭</button>
     </div>
   </div>
 
@@ -83,7 +86,8 @@
     <div class="hub-footer">
       <button class="btn hub-btn" id="btn-hub-pedia">📖 角色图鉴</button>
       <button class="btn hub-btn hub-back" id="btn-menu-back">🏠 返回主菜单</button>
-      <button class="btn hub-btn" id="btn-hub-settings">⚙️ 设置</button>
+      <button class="btn hub-btn" id="btn-hub-equip">🎒 装备</button>
+        <button class="btn hub-btn" id="btn-hub-settings">⭐ 技能树</button>
     </div>
   </div>
 
@@ -130,11 +134,46 @@
       <button class="btn primary" id="btn-next-level">返回主城</button>
     </div>
   </div>
+
+  <!-- ===== Skill Tree (技能树) ===== -->
+  <div id="skill-tree-screen" class="overlay hidden">
+    <h2>技能树 <span id="skill-points-display">0 技能点</span></h2>
+    <div id="skill-tree-columns">
+      <div class="skill-col" data-cell="wbc"></div>
+      <div class="skill-col" data-cell="plt"></div>
+      <div class="skill-col" data-cell="rbc"></div>
+    </div>
+    <button class="btn" id="btn-skill-close">关闭</button>
+  </div>
+
+  <!-- ===== Equipment (装备) ===== -->
+  <div id="equipment-screen" class="overlay hidden">
+    <h2>装备</h2>
+    <div id="equip-slots">
+      <div class="equip-slot" data-slot="weapon"><span class="es-label">⚔️ 武器</span><div class="es-item" id="es-weapon">空</div></div>
+      <div class="equip-slot" data-slot="armor"><span class="es-label">🛡️ 护甲</span><div class="es-item" id="es-armor">空</div></div>
+      <div class="equip-slot" data-slot="accessory"><span class="es-label">💍 饰品</span><div class="es-item" id="es-accessory">空</div></div>
+    </div>
+    <h3>背包 <span id="inv-count">0/20</span></h3>
+    <div id="inventory-grid"></div>
+    <button class="btn" id="btn-equip-close">关闭</button>
+  </div>
+
+  <!-- ===== Confirm Dialog (通用确认框) ===== -->
+  <div id="confirm-dialog" class="overlay hidden">
+    <div class="confirm-inner">
+      <p id="confirm-msg">确定要离开当前关卡吗？</p>
+      <div class="confirm-btns">
+        <button class="btn primary" id="btn-confirm-yes">确定</button>
+        <button class="btn" id="btn-confirm-no">取消</button>
+      </div>
+    </div>
+  </div>
 </div>
 
-<script src="js/config.js?v=75"></script>
-<script src="js/entities.js?v=75"></script>
-<script src="js/levels.js?v=75"></script>
-<script src="js/game.js?v=75"></script>
+<script src="js/config.js?v=84"></script>
+<script src="js/entities.js?v=102"></script>
+<script src="js/levels.js?v=77"></script>
+<script src="js/game.js?v=100"></script>
 </body>
 </html>

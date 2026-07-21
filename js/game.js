@@ -430,21 +430,11 @@ function loop(time){
   Game.accumulator += dt;
 
   while(Game.accumulator >= FIXED_STEP){
-    try{
-      update();
-    }catch(err){
-      console.error('Update error:', err);
-      Game.accumulator = 0;
-      break;
-    }
-    Game.accumulator -= FIXED_STEP;
-    Game.frame++;
+    try{update();}catch(err){console.error('Update error:',err);Game.accumulator=0;break;}
+    Game.accumulator-=FIXED_STEP;Game.frame++;
   }
-  try{
-    render();
-  }catch(err){
-    console.error('Render error:', err);
-  }
+  Game.renderAlpha=Math.min(1,Game.accumulator/FIXED_STEP);
+  try{render();}catch(err){console.error('Render error:',err);}
   requestAnimationFrame(loop);
 }
 
@@ -540,7 +530,7 @@ function update(){
   // 粒子更新
   for(const pa of Game.particles) pa.update();
   Game.particles = Game.particles.filter(pa=>pa.life>0);
-
+  for(const dn of Game.damageNumbers)dn.update();Game.damageNumbers=Game.damageNumbers.filter(dn=>dn.life>0);
   // 迷你敌人刷新
   lvl.updateMiniSpawn(p);
 
@@ -611,9 +601,10 @@ function render(){
   if(Game.state !== 'playing' && Game.state !== 'paused') return;
 
   const lvl = Game.level;
-  const camX = Game.camera.x;
-  const shakeX = Game.camera.shake > 0 ? (Math.random()-0.5)*Game.camera.shake*2 : 0;
-  const shakeY = Game.camera.shake > 0 ? (Math.random()-0.5)*Game.camera.shake*2 : 0;
+  const p=Game.player;const ex=p.x+p.vx*Game.renderAlpha;
+  let camX=ex-CW/2+p.w/2;camX=Math.max(0,Math.min(camX,lvl.width*TILE-CW));
+  const shakeX=Game.camera.shake>0?Math.sin(Game.frame*1.7)*Game.camera.shake*0.7:0;
+  const shakeY=Game.camera.shake>0?Math.cos(Game.frame*2.3)*Game.camera.shake*0.7:0;
 
   ctx.save();
   ctx.translate(shakeX, shakeY);
@@ -629,7 +620,7 @@ function render(){
   for(const pr of Game.projectiles) pr.draw(ctx, camX);
   if(Game.player) Game.player.draw(ctx, camX);
   for(const pa of Game.particles) pa.draw(ctx, camX);
-
+  for(const dn of Game.damageNumbers) dn.draw(ctx, camX);
   ctx.restore();
 
   // 潮汐状态指示器 (屏幕顶部)
@@ -703,11 +694,12 @@ function updateHUD(){
   heartsDiv.innerHTML = html;
 
   // 能量条
-  const pct = (Game.globalEnergy / MAX_ENERGY) * 100;
+  const pct=(Game.globalEnergy/getMaxEnergy())*100;
   const ef = $('energy-fill');
   ef.style.width = pct + '%';
-  ef.className = pct < LOW_ENERGY ? 'low' : '';
-
+  ef.className=pct<LOW_ENERGY?'low':'';
+  const lvBadge=$('level-badge');if(lvBadge)lvBadge.textContent='Lv.'+Game.playerLevel;
+  const xpFill=$('xp-fill');if(xpFill){const xpNext=xpForLevel(Game.playerLevel+1);const xpCurr=Game.playerLevel<=1?0:xpForLevel(Game.playerLevel);const xpPct=xpNext>xpCurr?((Game.xp-xpCurr)/(xpNext-xpCurr))*100:100;xpFill.style.width=Math.min(100,Math.max(0,xpPct))+'%';}
   // 细胞名称
   $('cell-name').textContent = p.cell.name;
   document.querySelector('#cell-badge .dot').style.background = p.cell.color;
@@ -1016,7 +1008,7 @@ function levelComplete(){
   if(idx + 1 < 5) Game.unlocked[idx + 1] = true;
 
   // 星级评定
-  const energyPct = Game.globalEnergy / MAX_ENERGY;
+  const energyPct = Game.globalEnergy / getMaxEnergy();
   let stars = 1; // 1星：正常通关
   if(Game.stats.deaths === 0) stars++; // 2星：0死亡
   if(Game.stats.deaths === 0 && energyPct > 0.5 && Game.stats.foundMemory) stars++; // 3星：0死亡+能量>50%+记忆细胞
@@ -1093,7 +1085,7 @@ function LoadLevel(n){
   Game.player = new Player(Game.level.playerSpawn.x, Game.level.playerSpawn.y);
   Game.player.checkpointX = Game.level.playerSpawn.x;
   Game.player.checkpointY = Game.level.playerSpawn.y;
-  Game.particles = [];
+  Game.particles = [];Game.damageNumbers = [];
   Game.tempPlatforms = [];
   Game.projectiles = [];
   Game.camera = {x:0, y:0, shake:0};
@@ -1188,12 +1180,80 @@ function init(){
   Game.bgImg = new Image();
   Game.bgImg.src = 'images/game-bg.png';
 
-  // 预加载白细胞像素精灵图（Aetherion）
-  Game.wbcSprite = new Image();
-  Game.wbcSprite.src = 'images/sprites/v74-wbc.png?v=1';
-  Game.wbcSprite.onload = function(){ console.log('[WBC] v74精灵加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
-  Game.wbcSpriteFrames = { idle: [0,1], run: [4,5,6,7], jump: [8,9,10,11], attack: [12,13,14,15] };
-  Game.wbcFrameSize = { w: 256, h: 256 };
+  // ===== WBC 完整动作精灵系统 v3 =====
+  // 动作精灵表（12帧：idle/walk/crouch/jump/attack/side/back/special）
+  Game.wbcActions = new Image();
+  Game.wbcActions.src = 'images/sprites/wbc-actions.png?v=2';
+  Game.wbcActions.onload = function(){ console.log('[WBC] 动作精灵(右)加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.wbcActionsLeft = new Image();
+  Game.wbcActionsLeft.src = 'images/sprites/wbc-actions-left.png?v=2';
+  Game.wbcActionsLeft.onload = function(){ console.log('[WBC] 动作精灵(左)加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+
+  // 走路专用精灵表 - v3 慢走版（6帧x248x372，flood-fill 抠图 + 硬 alpha）
+  Game.wbcWalkRight = new Image();
+  Game.wbcWalkRight.src = 'images/sprites/wbc-walk-right-v3.png?v=2';
+  Game.wbcWalkRight.onload = function(){ console.log('[WBC] 右走v3加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.wbcWalkLeft = new Image();
+  Game.wbcWalkLeft.src = 'images/sprites/wbc-walk-left-v3.png?v=2';
+  Game.wbcWalkLeft.onload = function(){ console.log('[WBC] 左走v3加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+
+  // 待机专用精灵表 - 用户提供（左走停下姿态，1帧x248x372）
+  Game.wbcIdleRight = new Image();
+  Game.wbcIdleRight.src = 'images/sprites/wbc-idle-right.png?v=1';
+  Game.wbcIdleRight.onload = function(){ console.log('[WBC] 右idle加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.wbcIdleLeft = new Image();
+  Game.wbcIdleLeft.src = 'images/sprites/wbc-idle-left.png?v=1';
+  Game.wbcIdleLeft.onload = function(){ console.log('[WBC] 左idle加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+
+  // 蹲下/跳起使用专用精灵表
+
+  // 动作精灵表配置: 5292x461, 12帧 x 441x461
+  // 帧索引: 0=idle, 1=walk(单), 2=crouch, 3=jump_up, 4=attack_1, 5=attack_2,
+  //         6=side_idle, 7=side_walk, 8=back_idle, 9=back_idle2, 10=back_walk, 11=special
+  Game.wbcActionFrameSize = { w: 441, h: 461 };
+
+  // 走路精灵表配置: 1488x372, 6帧 x 248x372
+  Game.wbcWalkFrameSize = { w: 248, h: 372 };
+
+  // 跳起专用精灵表 - 用户提供（1帧x248x372）
+  Game.wbcJump = new Image();
+  Game.wbcJump.src = 'images/sprites/wbc-jump.png?v=4';
+  Game.wbcJump.onload = function(){ console.log('[WBC] 跳起加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+
+  // 蹲下专用精灵表 - 用户提供（1帧x248x372）
+  Game.wbcCrouch = new Image();
+  Game.wbcCrouch.src = 'images/sprites/wbc-crouch.png?v=2';
+  Game.wbcCrouch.onload = function(){ console.log('[WBC] 蹲下加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+
+  // 攻击专用精灵表 - 用户提供（左+镜像右，1帧x248x372）
+  Game.wbcAttackRight = new Image();
+  Game.wbcAttackRight.src = 'images/sprites/wbc-attack-right.png?v=2';
+  Game.wbcAttackRight.onload = function(){ console.log('[WBC] 右attack加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.wbcAttackLeft = new Image();
+  Game.wbcAttackLeft.src = 'images/sprites/wbc-attack-left.png?v=2';
+  Game.wbcAttackLeft.onload = function(){ console.log('[WBC] 左attack加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+
+  // 待机精灵表配置: 248x372, 1帧
+  Game.wbcIdleFrameSize = { w: 248, h: 372 };
+
+  // 跳起精灵表配置: 248x372, 1帧
+  Game.wbcJumpFrameSize = { w: 248, h: 372 };
+
+  // 蹲下精灵表配置: 248x372, 1帧
+  Game.wbcCrouchFrameSize = { w: 248, h: 372 };
+
+  // 攻击精灵表配置: 435x372, 1帧（按高 fit，剑超出 248 帧宽）
+  Game.wbcAttackFrameSize = { w: 435, h: 372 };
+
+  // 完整帧映射（v3多状态系统）
+  Game.wbcSpriteFrames = {
+    idle: [0],                    // 待机 - 用待机精灵表帧0
+    walk: [0,1,2,3,4,5],          // 走路 - 6帧循环
+    jump: [0],                    // 跳起 - 用跳起精灵表帧0
+    crouch: [0],                  // 蹲下 - 用蹲下精灵表帧0
+    attack: [0, 0],               // 攻击 - 用攻击精灵表帧0（2 帧让挥剑有点节奏）
+    hurt: [11]                    // 受伤 - 用动作精灵表帧11(special)
+  };
 
   // 预加载血小板像素精灵图（Aetherion）
   Game.pltSprite = new Image();
@@ -1231,9 +1291,36 @@ function init(){
   $('btn-bubble-skip').onclick = ()=>{ skipAllTutorials(); };
   // 记忆卡片关闭
   $('btn-memory-close').onclick = ()=>{ closeMemoryCard(); };
+  // 技能树
+  $('btn-hub-settings').onclick = ()=>{ openSkillTree(); };
+  $('btn-skill-close').onclick = ()=>{ closeSkillTree(); };
+  // 装备
+  $('btn-hub-equip').onclick = ()=>{ openEquipment(); };
+  $('btn-equip-close').onclick = ()=>{ closeEquipment(); };
+  // 确认框
+  let confirmCallback=null;
+  window.showConfirm=(msg,onYes)=>{Game.paused=true;$('confirm-msg').textContent=msg;$('confirm-dialog').classList.remove('hidden');confirmCallback=onYes;};
+  window.hideConfirm=()=>{$('confirm-dialog').classList.add('hidden');confirmCallback=null;if(Game.state==='playing')Game.paused=false;};
+  $('btn-confirm-yes').onclick=e=>{e.stopPropagation();try{if(confirmCallback)confirmCallback();}catch(err){console.error(err);}hideConfirm();};
+  $('btn-confirm-no').onclick=e=>{e.stopPropagation();hideConfirm();};
+  $('confirm-dialog').addEventListener('click',e=>{if(e.target===$('confirm-dialog'))hideConfirm();});
+  $('home-btn').onclick=e=>{e.stopPropagation();if(Game.state!=='playing')return;showConfirm('确定要离开当前关卡吗？\n进度将不会保存。',()=>{backToHub();});};
 
   showMenu();
   requestAnimationFrame(loop);
 }
+
+// ===== 技能树 UI =====
+function openSkillTree(){renderSkillTree();$('skill-tree-screen').classList.remove('hidden');}
+function closeSkillTree(){$('skill-tree-screen').classList.add('hidden');}
+function renderSkillTree(){$('skill-points-display').textContent=Game.skillPoints+' 技能点';document.querySelectorAll('.skill-col').forEach(col=>{const cell=col.dataset.cell;const tree=SKILL_TREES[cell];let h='<h3 style="background:'+tree.color+'20;color:'+tree.color+'">'+tree.icon+' '+tree.name+'</h3>';tree.nodes.forEach(node=>{const rank=getSkillLevel(cell,node.id);const maxed=rank>=node.maxRank;let dots='';for(let i=0;i<node.maxRank;i++)dots+='<span class="sk-rank-dot'+(i<rank?' filled':'')+'"></span>';const btnCls=maxed?'sk-btn maxed':'sk-btn';const btnTxt=maxed?'MAX':'升级';const btnDis=maxed||Game.skillPoints<1?' disabled':'';h+='<div class="skill-node"><span class="sk-icon">'+node.icon+'</span><div class="sk-info"><div class="sk-name">'+node.name+'</div><div class="sk-desc">'+node.desc+'</div><div class="sk-ranks">'+dots+'</div></div><button class="'+btnCls+'"'+btnDis+' onclick="unlockSkill(\''+cell+'\',\''+node.id+'\');renderSkillTree();">'+btnTxt+'</button></div>';});col.innerHTML=h;});}
+
+// ===== 装备 UI =====
+function openEquipment(){renderEquipment();$('equipment-screen').classList.remove('hidden');}
+function closeEquipment(){$('equipment-screen').classList.add('hidden');}
+function renderEquipment(){['weapon','armor','accessory'].forEach(slot=>{const el=$('es-'+slot);const eid=Game.equipment[slot];if(eid){const eq=findEquip(eid);el.innerHTML=(eq?eq.name:eid)+'<br><small style="color:'+(eq?RARITY_COLORS[eq.rarity]:'#aaa')+'">'+(eq?RARITY_NAMES[eq.rarity]:'')+'</small>';el.className='es-item equipped';el.onclick=()=>{if(confirm('卸下'+(eq?eq.name:eid)+'？')){unequipItem(slot);renderEquipment();}};}else{el.innerHTML='空';el.className='es-item';el.onclick=null;}});$('inv-count').textContent=Game.inventory.length+'/20';const grid=$('inventory-grid');grid.innerHTML='';Game.inventory.forEach(eid=>{const eq=findEquip(eid);if(!eq)return;const card=document.createElement('div');card.className='inv-card';card.innerHTML='<div class="ic-name">'+eq.name+'</div><div class="ic-rarity" style="color:'+RARITY_COLORS[eq.rarity]+'">'+RARITY_NAMES[eq.rarity]+'</div><div class="ic-stats">'+statsText(eq.stats)+'</div>';card.onclick=()=>{equipItem(eid);renderEquipment();};grid.appendChild(card);});}
+function statsText(stats){const n={atk:'攻',def:'防',spd:'速',maxHp:'命',maxEnergy:'能'};return Object.keys(stats).map(k=>n[k]+'+'+stats[k]).join(' ');}
+
+window.addEventListener('load', init);
 
 window.addEventListener('load', init);

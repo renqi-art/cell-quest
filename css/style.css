@@ -77,6 +77,21 @@ body{
   transition:width .2s ease;
 }
 #energy-fill.low{background:linear-gradient(90deg,#ff6b6b,#ee5a24);}
+#level-badge{
+  display:inline-block;font-size:10px;font-weight:700;
+  color:#ffd700;background:rgba(255,215,0,.15);
+  padding:0 5px;border-radius:8px;margin-left:6px;
+  border:1px solid rgba(255,215,0,.3);vertical-align:middle;
+}
+#xp-bar{
+  width:140px;height:6px;background:rgba(10,10,24,.75);
+  border:1px solid #2a2a4a;border-radius:3px;overflow:hidden;margin-top:3px;
+}
+#xp-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#ab47bc,#ffd700);
+  transition:width .3s ease;
+}
 #buffs{display:flex;gap:4px;margin-top:2px;}
 .buff-icon{
   width:28px;height:28px;border-radius:6px;
@@ -93,6 +108,12 @@ body{
   background:rgba(10,10,24,.75);padding:3px 10px;border-radius:6px;
   border:1px solid #2a3a4a;font-size:13px;
 }
+#home-btn{
+  cursor:pointer;font-size:16px;transition:all .2s ease;opacity:.7;
+  user-select:none;-webkit-user-select:none;
+  pointer-events:auto; /* HUD默认pointer-events:none,需要显式恢复 */
+}
+#home-btn:hover{opacity:1;transform:scale(1.15);filter:drop-shadow(0 0 4px #fff);}
 #timer{font-family:monospace;color:#7ac;font-weight:600;}
 #memory-icon{
   font-size:16px;opacity:.3;transition:all .3s ease;
@@ -429,7 +450,7 @@ body{
 
 /* ===== Dialogue Bubble ===== */
   position:absolute;bottom:72px;left:50%;transform:translateX(-50%);
-  z-index:15;max-width:420px;min-width:280px;
+  z-index:35;max-width:420px;min-width:280px;
   display:none;pointer-events:auto;
 }
 #dialogue-bubble.active{display:block;animation:bubbleIn .25s ease;}
@@ -464,7 +485,9 @@ body{
 }
 
 /* ===== Memory Card ===== */
-#memory-card{z-index:25;}
+#memory-card{z-index:35;pointer-events:auto;}
+#pause-menu{z-index:35;pointer-events:auto;}
+#complete-screen{z-index:35;pointer-events:auto;}
 .memory-card-inner{
   background:rgba(20,15,35,.95);border:1px solid #9c6ade;border-radius:14px;
   padding:24px 32px;max-width:400px;text-align:center;
@@ -493,6 +516,100 @@ body{
 #death-flash{position:absolute;inset:0;background:rgba(255,30,30,.4);z-index:18;display:none;}
 #death-flash.active{display:block;animation:flash .4s ease;}
 @keyframes flash{from{opacity:.6;}to{opacity:0;}}
+
+/* ===== Equipment Screen ===== */
+#equipment-screen{padding:20px;gap:10px;}
+#equip-slots{display:flex;gap:16px;}
+.equip-slot{background:rgba(10,10,24,.6);border:1px solid #3a3a5a;border-radius:10px;padding:10px 14px;text-align:center;min-width:140px;}
+.es-label{font-size:13px;color:#7ac;display:block;margin-bottom:6px;}
+.es-item{background:rgba(20,20,40,.7);border:1px dashed #4a4a6a;border-radius:8px;padding:8px 6px;font-size:12px;min-height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s ease;word-break:break-all;text-align:center;}
+.es-item:hover{border-color:#7ac;background:rgba(30,30,60,.7);}
+.es-item.equipped{border-style:solid;border-color:#ffd700;box-shadow:0 0 8px rgba(255,215,0,.2);}
+#inventory-grid{display:flex;flex-wrap:wrap;gap:6px;max-width:600px;justify-content:center;max-height:160px;overflow-y:auto;}
+.inv-card{background:rgba(20,20,40,.7);border:1px solid #3a3a5a;border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer;transition:all .15s ease;text-align:center;min-width:80px;}
+.inv-card:hover{border-color:#ab47bc;background:rgba(30,30,60,.7);}
+.inv-card .ic-name{font-weight:700;color:#e8e8f0;}
+.inv-card .ic-rarity{font-size:10px;margin-top:1px;}
+.inv-card .ic-stats{font-size:10px;color:#8a8aaa;margin-top:2px;}
+#inv-count{font-size:13px;font-weight:400;color:#8a8aaa;margin-left:8px;}
+
+/* ===== Confirm Dialog ===== */
+/* ===== Skill Tree ===== */
+#skill-tree-screen{padding:20px;gap:12px;}
+#skill-tree-screen h2{font-size:22px;display:flex;align-items:center;gap:16px;}
+#skill-points-display{
+  font-size:14px;color:#ffd700;background:rgba(255,215,0,.12);
+  padding:3px 12px;border-radius:12px;border:1px solid rgba(255,215,0,.25);
+}
+#skill-tree-columns{display:flex;gap:16px;flex:1;width:100%;max-width:760px;overflow-y:auto;}
+.skill-col{
+  flex:1;background:rgba(10,10,24,.5);border-radius:10px;
+  border:1px solid #2a2a4a;padding:10px;display:flex;flex-direction:column;gap:8px;
+  min-width:0;
+}
+.skill-col h3{font-size:14px;text-align:center;padding:6px;border-radius:6px;margin:0;}
+.skill-node{
+  background:rgba(20,20,40,.7);border:1px solid #3a3a5a;border-radius:8px;
+  padding:8px 10px;display:flex;align-items:center;gap:8px;
+  transition:all .15s ease;cursor:default;
+}
+.skill-node .sk-icon{font-size:20px;flex-shrink:0;}
+.skill-node .sk-info{flex:1;min-width:0;}
+.skill-node .sk-name{font-size:12px;font-weight:700;color:#e8e8f0;}
+.skill-node .sk-desc{font-size:10px;color:#8a8aaa;margin-top:1px;}
+.skill-node .sk-ranks{display:flex;gap:2px;margin-top:3px;}
+.skill-node .sk-rank-dot{
+  width:8px;height:8px;border-radius:50%;border:1px solid #4a4a6a;
+  background:rgba(10,10,20,.5);
+}
+.skill-node .sk-rank-dot.filled{background:#ffd700;border-color:#ffd700;box-shadow:0 0 4px rgba(255,215,0,.3);}
+.skill-node .sk-btn{
+  flex-shrink:0;padding:3px 10px;font-size:11px;font-weight:700;border-radius:5px;
+  border:1px solid #5a5a3a;background:#2a2a1a;color:#ffd700;cursor:pointer;
+  transition:all .15s ease;white-space:nowrap;
+}
+.skill-node .sk-btn:hover{background:#3a3a2a;border-color:#ffd700;}
+.skill-node .sk-btn:disabled{opacity:.3;cursor:not-allowed;}
+.skill-node .sk-btn.maxed{color:#7ac;border-color:#3a5a5a;background:#1a2a2a;}
+
+/* ===== Equipment Screen ===== */
+#equipment-screen{padding:20px;gap:10px;}
+#equip-slots{display:flex;gap:16px;}
+.equip-slot{background:rgba(10,10,24,.6);border:1px solid #3a3a5a;border-radius:10px;padding:10px 14px;text-align:center;min-width:140px;}
+.es-label{font-size:13px;color:#7ac;display:block;margin-bottom:6px;}
+.es-item{background:rgba(20,20,40,.7);border:1px dashed #4a4a6a;border-radius:8px;padding:8px 6px;font-size:12px;min-height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s ease;word-break:break-all;text-align:center;}
+.es-item:hover{border-color:#7ac;background:rgba(30,30,60,.7);}
+.es-item.equipped{border-style:solid;border-color:#ffd700;box-shadow:0 0 8px rgba(255,215,0,.2);}
+#inventory-grid{display:flex;flex-wrap:wrap;gap:6px;max-width:600px;justify-content:center;max-height:160px;overflow-y:auto;}
+.inv-card{background:rgba(20,20,40,.7);border:1px solid #3a3a5a;border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer;transition:all .15s ease;text-align:center;min-width:80px;}
+.inv-card:hover{border-color:#ab47bc;background:rgba(30,30,60,.7);}
+.inv-card .ic-name{font-weight:700;color:#e8e8f0;}
+.inv-card .ic-rarity{font-size:10px;margin-top:1px;}
+.inv-card .ic-stats{font-size:10px;color:#8a8aaa;margin-top:2px;}
+#inv-count{font-size:13px;font-weight:400;color:#8a8aaa;margin-left:8px;}
+
+/* ===== Confirm Dialog ===== */
+#confirm-dialog{
+  position:absolute;inset:0;z-index:40;
+  background:rgba(10,10,30,.85);
+  display:flex;align-items:center;justify-content:center;
+  pointer-events:auto;
+}
+#confirm-dialog.hidden{display:none !important;}
+.confirm-inner{
+  background:rgba(20,20,45,.95);
+  border:2px solid #4a6a8a;border-radius:12px;
+  padding:24px 32px;text-align:center;
+  box-shadow:0 8px 32px rgba(0,0,0,.5),0 0 20px rgba(100,150,255,.15);
+  min-width:280px;max-width:360px;
+  pointer-events:auto;
+  position:relative;z-index:41;
+}
+.confirm-inner p{color:#ccd;font-size:16px;margin-bottom:20px;line-height:1.5;white-space:pre-line;}
+.confirm-btns{
+  display:flex;gap:14px;justify-content:center;
+}
+.confirm-btns .btn{padding:8px 24px;font-size:14px;pointer-events:auto;cursor:pointer;position:relative;z-index:42;}
 
 /* ===== Toast ===== */
 #toast{

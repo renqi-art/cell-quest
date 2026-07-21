@@ -410,6 +410,8 @@ class Player {
         }
       }
     }
+    // 补充地面检测（脚底在瓦片边界时getOverlapTiles可能漏掉）
+    if(!this.onGround&&this.vy>=0){const fr=Math.floor((this.y+this.h)/32);const fc1=Math.floor(this.x/32),fc2=Math.floor((this.x+this.w-1)/32);for(let c=fc1;c<=fc2;c++){if(level.solidAt(c,fr)){this.y=fr*32-this.h;this.vy=0;this.onGround=true;break;}}}
     // 临时平台碰撞
     for(const tp of Game.tempPlatforms){
       if(tp.expired) continue;
@@ -448,6 +450,7 @@ class Player {
       return;
     }
     this.health--;
+    Game.damageNumbers.push(new DamageNumber(this.x+this.w/2,this.y-6,'-1❤','#ff4444'));
     this.invincible = INVINCIBLE_FRAMES;
     Game.camera.shake = 8;
     Sfx.hit();
@@ -524,7 +527,7 @@ class Player {
     const cell = this.cell;
 
     // 无敌闪烁
-    if(this.invincible > 0 && Math.floor(this.invincible / 4) % 2 === 0) return;
+    if(this.invincible>0){const r=this.invincible>30?4:Math.max(1,Math.floor(this.invincible/8));if(Math.floor(this.invincible/r)%2===0)return;}
 
     // AoE buff光环
     if(this.aoeStomp > 0){
@@ -617,30 +620,33 @@ class Player {
     const r = this.w / 2;
 
     if(this.cellType === 1){
-      // 白细胞 - 使用 Aetherion 像素精灵图
-      if(Game.wbcSprite && Game.wbcSprite.complete && Game.wbcSprite.naturalWidth > 0){
-        const sprite = Game.wbcSprite;
-        const fw = sprite.naturalWidth / 4; // 每帧宽
-        const fh = sprite.naturalHeight / 4; // 每帧高
+      // ===== WBC 完整动作系统 v3 =====
+      // 状态判断
+      let actionState = 'idle';
+      if(this.swordTimer > 0) {
+        actionState = 'attack';
+      } else if(!this.onGround) {
+        actionState = 'jump';
+      } else if(this.crouching) {
+        actionState = 'crouch';
+      } else if(Game.keys.left || Game.keys.right || Math.abs(this.vx) > 1.2) {
+        actionState = 'walk';
+      }
 
-        // ===== 调试：强制固定 F[0,0] 单帧，测试抖动来源 =====
-        const col = 0;
-        const row = 0;
-
+      // 通用绘制：以 (px+w/2, py+h) 为脚底锚点，按朝向翻转
+      const drawAt = (sprite, fw, fh, dispH, offsetY=0) => {
+        const dispW = Math.floor(dispH * (fw / fh));
         ctx.save();
-        ctx.translate(px + this.w/2, py + this.h);
-        ctx.scale(this.facing, 1);
-
-        const drawW = this.w * 2.0;
-        const drawH = this.h * 2.0;
-        ctx.drawImage(
-          sprite,
-          col * fw, row * fh, fw, fh,
-          -drawW/2, -drawH, drawW, drawH
-        );
+        const ax = Math.floor(px + this.w / 2);
+        const ay = Math.floor(py + this.h) + offsetY;
+        ctx.translate(ax, ay);
+        // idle 用左右独立精灵图，不再翻转
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(sprite, 0, 0, fw, fh, Math.round(-dispW/2), Math.round(-dispH), dispW, dispH);
         ctx.restore();
-      } else {
-        // 精灵未加载时兜底：画原来的圆形
+      };
+
+      const drawPlaceholder = () => {
         ctx.fillStyle = cell.color;
         ctx.beginPath();
         for(let i=0;i<8;i++){
@@ -653,6 +659,94 @@ class Player {
         ctx.closePath(); ctx.fill();
         ctx.fillStyle = cell.nucleus;
         ctx.beginPath(); ctx.arc(cx, cy, r*0.4, 0, Math.PI*2); ctx.fill();
+      };
+
+      const TARGET_H = 80;
+
+      // ★ 待机：专用 idle 精灵表（按朝向选 left/right）
+      if(actionState === 'idle'){
+        const idleL = Game.wbcIdleLeft, idleR = Game.wbcIdleRight;
+        const useLeft = (this.facing === -1) && idleL && idleL.complete && idleL.naturalWidth > 0;
+        const useRight = idleR && idleR.complete && idleR.naturalWidth > 0;
+        if(useLeft){
+          // 呼吸：每 90 帧上浮 1px
+          const breath = (Math.floor(this.animT/90) % 2) ? -1 : 0;
+          drawAt(idleL, Game.wbcIdleFrameSize.w, Game.wbcIdleFrameSize.h, TARGET_H, breath);
+        } else if(useRight){
+          const breath = (Math.floor(this.animT/90) % 2) ? -1 : 0;
+          drawAt(idleR, Game.wbcIdleFrameSize.w, Game.wbcIdleFrameSize.h, TARGET_H, breath);
+        } else {
+          drawPlaceholder();
+        }
+      }
+      // ★ 蹲下：专用 crouch 精灵表
+      else if(actionState === 'crouch' && Game.wbcCrouch && Game.wbcCrouch.complete && Game.wbcCrouch.naturalWidth > 0){
+        drawAt(Game.wbcCrouch, Game.wbcCrouchFrameSize.w, Game.wbcCrouchFrameSize.h, TARGET_H);
+      }
+      // ★ 跳起：专用 jump 精灵表
+      else if(actionState === 'jump' && Game.wbcJump && Game.wbcJump.complete && Game.wbcJump.naturalWidth > 0){
+        drawAt(Game.wbcJump, Game.wbcJumpFrameSize.w, Game.wbcJumpFrameSize.h, TARGET_H);
+      }
+      // ★ 攻击：专用 attack 精灵表（按 facing 选 left/right）
+      else if(actionState === 'attack' && ((Game.wbcAttackRight && Game.wbcAttackRight.complete) || (Game.wbcAttackLeft && Game.wbcAttackLeft.complete))){
+        const useLeft = (this.facing === -1) && Game.wbcAttackLeft && Game.wbcAttackLeft.complete && Game.wbcAttackLeft.naturalWidth > 0;
+        const useRight = Game.wbcAttackRight && Game.wbcAttackRight.complete && Game.wbcAttackRight.naturalWidth > 0;
+        const atkSprite = useLeft ? Game.wbcAttackLeft : (useRight ? Game.wbcAttackRight : Game.wbcAttackLeft);
+        const atkFW = Game.wbcAttackFrameSize.w;
+        const atkFH = Game.wbcAttackFrameSize.h;
+        // sprite 435x372，人物身体大致在 sprite 中心，整体居中绘制（剑自然伸向前方）
+        ctx.save();
+        const ax = Math.floor(px + this.w / 2);
+        const ay = Math.floor(py + this.h);
+        ctx.translate(ax, ay);
+        ctx.imageSmoothingEnabled = false;
+        const dispH = TARGET_H;
+        const dispW = Math.floor(dispH * (atkFW / atkFH));
+        ctx.drawImage(atkSprite, 0, 0, atkFW, atkFH, Math.round(-dispW/2), Math.round(-dispH), dispW, dispH);
+        ctx.restore();
+      }
+      // ★ 走路：6 帧 walk 精灵表循环
+      else if(actionState === 'walk' && Game.wbcWalkRight && Game.wbcWalkRight.complete && Game.wbcWalkRight.naturalWidth > 0){
+        const frames = Game.wbcSpriteFrames.walk;
+        const fidx = Math.floor(this.animT / 3) % frames.length;
+        const col = frames[fidx];
+        const fw = Game.wbcWalkFrameSize.w;
+        const fh = Game.wbcWalkFrameSize.h;
+        const dispH = TARGET_H;
+        const dispW = Math.floor(dispH * (fw / fh));
+        ctx.save();
+        const ax = Math.floor(px + this.w / 2);
+        const ay = Math.floor(py + this.h);
+        ctx.translate(ax, ay);
+        if(this.facing === -1) ctx.scale(-1, 1);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(Game.wbcWalkRight, col*fw, 0, fw, fh, Math.round(-dispW/2), Math.round(-dispH), dispW, dispH);
+        ctx.restore();
+      }
+      // ★ 攻击/jump/crouch(无 fallback)/hurt：用 12 帧动作精灵表
+      else if(Game.wbcActions && Game.wbcActions.complete && Game.wbcActions.naturalWidth > 0){
+        const frames = Game.wbcSpriteFrames;
+        const frameList = frames[actionState] || frames.idle;
+        const tickDiv = (actionState === 'attack') ? 6 : 8;
+        const fidx = Math.floor(this.animT / tickDiv) % frameList.length;
+        const col = frameList[fidx];
+        const fw = Game.wbcActionFrameSize.w;
+        const fh = Game.wbcActionFrameSize.h;
+        const dispH = TARGET_H;
+        const dispW = Math.floor(dispH * (fw / fh));
+        const offsetY = 0;
+        ctx.save();
+        const ax = Math.floor(px + this.w / 2);
+        const ay = Math.floor(py + this.h) + offsetY;
+        ctx.translate(ax, ay);
+        if(this.facing === -1) ctx.scale(-1, 1);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(Game.wbcActions, col*fw, 0, fw, fh, Math.round(-dispW/2), Math.round(-dispH), dispW, dispH);
+        ctx.restore();
+      }
+      // 兜底圆形
+      else {
+        drawPlaceholder();
       }
     } else if(this.cellType === 2){
       // 血小板 - 使用 Aetherion 像素精灵图
@@ -738,7 +832,9 @@ class Player {
 
     // 眼睛（仅精灵未加载或无精灵的细胞需要画眼睛）
     const spriteLoaded = (
-      (this.cellType === 1 && Game.wbcSprite && Game.wbcSprite.complete && Game.wbcSprite.naturalWidth > 0) ||
+      (this.cellType === 1 && ((Game.wbcActions && Game.wbcActions.complete && Game.wbcActions.naturalWidth > 0) ||
+                                (Game.wbcWalkRight && Game.wbcWalkRight.complete && Game.wbcWalkRight.naturalWidth > 0) ||
+                                (Game.wbcIdleRight && Game.wbcIdleRight.complete && Game.wbcIdleRight.naturalWidth > 0))) ||
       (this.cellType === 2 && Game.pltSprite && Game.pltSprite.complete && Game.pltSprite.naturalWidth > 0) ||
       (this.cellType === 3 && Game.rbcSprite && Game.rbcSprite.complete && Game.rbcSprite.naturalWidth > 0)
     );
@@ -1166,12 +1262,11 @@ class Boss {
 
 // ===== 道具 =====
 class Item {
-  constructor(x, y, type){
-    this.x = x; this.y = y;
-    this.w = 16; this.h = 16;
-    this.type = type;  // 'shield' | 'oxygen' | 'complement' | 'coin' | 'memory' | 'food' | 'drink' | 'nutrition'
-    this.alive = true;
-    this.animT = 0;
+  constructor(x, y, type, extra){
+    this.x = x; this.y = y; this.w = 16; this.h = 16;
+    this.type = type; this.alive = true; this.animT = 0;
+    this.xpValue = (type==='xp')?(extra||10):0;
+    this.equipId = (type==='equipment')?(extra||''):'';
   }
 
   update(player){
@@ -1191,14 +1286,14 @@ class Item {
         player.complementAmmo += COMPLEMENT_AMMO;
         showToast('补体弹药 +' + COMPLEMENT_AMMO);
       } else if(this.type === 'coin'){
-        Game.globalEnergy = Math.min(MAX_ENERGY, Game.globalEnergy + COIN_ENERGY);
+        Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + COIN_ENERGY);
         Sfx.coin();
       } else if(this.type === 'food'){
-        Game.globalEnergy = Math.min(MAX_ENERGY, Game.globalEnergy + FOOD_ENERGY);
+        Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + FOOD_ENERGY);
         Sfx.pickup();
         showToast('进食！能量 +' + FOOD_ENERGY);
       } else if(this.type === 'drink'){
-        Game.globalEnergy = Math.min(MAX_ENERGY, Game.globalEnergy + DRINK_ENERGY);
+        Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + DRINK_ENERGY);
         Sfx.coin();
         showToast('喝水！能量 +' + DRINK_ENERGY);
       } else if(this.type === 'memory'){
@@ -1214,10 +1309,10 @@ class Item {
           Game.stats.items--;
           return;
         }
-        Game.globalEnergy = Math.min(MAX_ENERGY, Game.globalEnergy + NUTRITION_ENERGY);
+        Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + NUTRITION_ENERGY + getSkillLevel('rbc','nutritionBonus')*10);
         Sfx.pickup();
-        showToast('营养包！能量 +' + NUTRITION_ENERGY);
-      }
+        showToast('营养包！能量 +' + (NUTRITION_ENERGY+getSkillLevel('rbc','nutritionBonus')*10));
+      } else if(this.type==='xp'){Game.xp+=this.xpValue;Sfx.coin();spawnParticles(this.x+this.w/2,this.y+this.h/2,'#ffd700',8,1.5);while(Game.playerLevel<MAX_LEVEL&&Game.xp>=xpForLevel(Game.playerLevel+1)){Game.playerLevel++;Game.skillPoints+=SKILL_POINTS_PER_LEVEL;Game.globalEnergy=getMaxEnergy();const effHp=player.maxHealth+getEquipStat('maxHp');if(player.health<effHp)player.health=effHp;Sfx.complete();spawnParticles(player.x+player.w/2,player.y+player.h/2,'#ffd700',24,3);showToast('⚡ LEVEL UP! Lv.'+Game.playerLevel+'\n获得'+SKILL_POINTS_PER_LEVEL+'技能点！');}updateHUD();saveGame();return;}else if(this.type==='equipment'){if(Game.inventory.length>=20){showToast('背包已满！');this.alive=true;Game.stats.items--;return;}Game.inventory.push(this.equipId);const eq=findEquip(this.equipId);showToast('获得装备！\n'+(eq?eq.name:this.equipId)+' ['+(eq?RARITY_NAMES[eq.rarity]:'')+']');saveGame();}
       spawnParticles(this.x+this.w/2, this.y+this.h/2, this.color(), 16, 2.5);
       updateHUD();
     }
@@ -1230,6 +1325,8 @@ class Item {
     if(this.type === 'food') return C.food;
     if(this.type === 'drink') return C.drink;
     if(this.type === 'memory') return C.memory;
+    if(this.type === 'xp') return '#ffaa00';
+    if(this.type === 'equipment'){const eq=findEquip(this.equipId);return eq?eq.color:'#ffd700';}
     if(this.type === 'nutrition') return C.nutrition;
     return C.complement;
   }
@@ -1302,7 +1399,7 @@ class Item {
       ctx.beginPath(); ctx.arc(px+6, py+6, 2.5, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 7px sans-serif'; ctx.textAlign='center';
       ctx.fillText('营', px+8, py+11);
-    } else {
+    } else if(this.type==='xp'){const p=Math.sin(this.animT*0.15)*2;ctx.beginPath();ctx.arc(px+8,py+8,7+p,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffdd44';ctx.beginPath();ctx.arc(px+8,py+8,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 6px sans-serif';ctx.textAlign='center';ctx.fillText('XP',px+8,py+11);}else if(this.type==='equipment'){const eq=findEquip(this.equipId);const rc=eq?RARITY_COLORS[eq.rarity]:'#fff';ctx.fillStyle=this.color();ctx.beginPath();ctx.moveTo(px+8,py+1);ctx.lineTo(px+15,py+8);ctx.lineTo(px+8,py+15);ctx.lineTo(px+1,py+8);ctx.closePath();ctx.fill();ctx.strokeStyle=rc;ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold 6px sans-serif';ctx.textAlign='center';ctx.fillText('装',px+8,py+11);} else {
       // 补体：星形
       ctx.beginPath();
       for(let i=0;i<10;i++){
@@ -1392,6 +1489,9 @@ class Particle {
     ctx.restore();
   }
 }
+
+// ===== 伤害数字 =====
+class DamageNumber{constructor(x,y,v,c='#ffdd44'){this.x=x;this.y=y;this.value=v;this.color=c;this.life=35;this.maxLife=35;this.vy=-1.5;}update(){this.y+=this.vy;this.life--;}draw(ctx,cX){const a=Math.min(1,this.life/15);ctx.save();ctx.globalAlpha=a;ctx.fillStyle=this.color;ctx.font='bold 13px monospace';ctx.textAlign='center';ctx.fillText(String(this.value),Math.round(this.x-cX),Math.round(this.y));ctx.restore();}}
 
 // ===== 临时平台（血小板凝血） =====
 class TempPlatform {
@@ -1515,6 +1615,11 @@ function spawnParticles(x, y, color, count, spread){
     ));
   }
 }
+
+// 敌人击杀奖励
+function rewardKill(enemy,level,dmg){if(dmg)Game.damageNumbers.push(new DamageNumber(enemy.x+enemy.w/2,enemy.y-6,'-'+dmg,enemy.type==='staph'?'#ffd700':C.strep));const xpT=enemy.isMini?'staphMini':(enemy.isLarge?'staphLarge':enemy.type);level.items.push(new Item(enemy.x+enemy.w/2-8,enemy.y+enemy.h/2-8,'xp',XP_PER_KILL[xpT]||10));tryDropEquip(enemy,level);}
+function tryDropEquip(enemy,level){const dk=enemy.isMini?null:(enemy.type==='boss'?'boss':(enemy.isLarge?'staphLarge':enemy.type));if(!dk)return;const p=EQUIPMENT_DROPS[dk];if(!p)return;if(Math.random()<(dk==='boss'?1:(enemy.isLarge?0.18:0.06))){const eid=p[Math.floor(Math.random()*p.length)];level.items.push(new Item(enemy.x+enemy.w/2-8,enemy.y+enemy.h/2-8,'equipment',eid));const eq=findEquip(eid);if(eq)spawnParticles(enemy.x+enemy.w/2,enemy.y,eq.color,10,2);}}
+function rewardBossKill(boss,dmg){if(dmg)Game.damageNumbers.push(new DamageNumber(boss.x+boss.w/2,boss.y-10,'-'+dmg,C.bossBar));Game.level.items.push(new Item(boss.x+boss.w/2-8,boss.y+boss.h/2-8,'xp',XP_PER_KILL.boss));tryDropEquip({type:'boss'},Game.level);}
 
 // 炎症区内细菌死亡 → 生成脓液地块
 function spawnPusIfNeeded(enemy){

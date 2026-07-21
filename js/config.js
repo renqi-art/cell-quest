@@ -120,6 +120,61 @@ const SWORD_COST     = 5;    // 能量消耗
 const SWORD_COOLDOWN = 25;   // 冷却帧数
 const SWORD_DURATION = 12;   // 挥剑动画帧数
 
+// ===== XP 经验与等级 =====
+const XP_BASE=100,XP_GROWTH=1.5,MAX_LEVEL=30,SKILL_POINTS_PER_LEVEL=1;
+const XP_PER_KILL={staph:10,staphLarge:30,staphMini:5,strep:20,boss:200};
+function xpForLevel(lv){return Math.floor(XP_BASE*Math.pow(XP_GROWTH,lv-1));}
+
+// ===== 技能树 =====
+const SKILL_TREES={
+wbc:{name:'白细胞战斗树',color:'#f0ede0',icon:'⚔️',nodes:[
+{id:'damagePlus',name:'攻击强化',desc:'挥剑/踩踏伤害+1/级',maxRank:3,icon:'⚔️'},
+{id:'dashCooldown',name:'疾步',desc:'突进冷却-5帧/级',maxRank:3,icon:'💨'},
+{id:'swordRange',name:'剑刃加长',desc:'挥剑范围+10px/级',maxRank:3,icon:'📏'},
+{id:'slamRadius',name:'震荡波',desc:'跳劈半径+15px/级',maxRank:3,icon:'💥'},
+]},
+plt:{name:'血小板支援树',color:'#ff8a8a',icon:'🛡️',nodes:[
+{id:'bridgeCost',name:'高效凝血',desc:'搭桥能耗-3/级',maxRank:3,icon:'🔧'},
+{id:'bridgeDuration',name:'持久平台',desc:'平台持续+90帧/级',maxRank:3,icon:'⏱️'},
+{id:'shieldDuration',name:'强化护盾',desc:'护盾持续+120帧/级',maxRank:3,icon:'🛡️'},
+{id:'healOnBridge',name:'愈疗桥接',desc:'搭桥时恢复1心/级',maxRank:2,icon:'💚'},
+]},
+rbc:{name:'红细胞生存树',color:'#d93025',icon:'🔋',nodes:[
+{id:'energyDrain',name:'节能代谢',desc:'失血能耗-15%/级',maxRank:3,icon:'🔋'},
+{id:'oxyFieldPower',name:'领域强化',desc:'氧气领域效果+20%/级',maxRank:3,icon:'🌀'},
+{id:'maxEnergy',name:'能量扩容',desc:'最大能量+15/级',maxRank:2,icon:'💎'},
+{id:'nutritionBonus',name:'营养吸收',desc:'营养包额外恢复+10/级',maxRank:3,icon:'🍎'},
+]}};
+function getSkillLevel(cell,skillId){const t=Game.skills[cell];return(t&&t[skillId]!=null)?t[skillId]:0;}
+function unlockSkill(cell,skillId){const t=Game.skills[cell];const n=SKILL_TREES[cell].nodes.find(n=>n.id===skillId);if(!n||t[skillId]>=n.maxRank||Game.skillPoints<1)return false;Game.skillPoints--;t[skillId]++;saveGame();Sfx.pickup();return true;}
+function getMaxEnergy(){return MAX_ENERGY+getSkillLevel('rbc','maxEnergy')*15;}
+
+// ===== 装备系统 =====
+const EQUIPMENT_DB=[
+{id:'ab_sword',slot:'weapon',name:'抗体剑',rarity:1,stats:{atk:2},color:'#e8e8f0'},
+{id:'lysozyme_blade',slot:'weapon',name:'溶菌酶刃',rarity:1,stats:{atk:3},color:'#ffe082'},
+{id:'complement_blade',slot:'weapon',name:'补体刃',rarity:2,stats:{atk:4},color:'#ab47bc'},
+{id:'defensin_spear',slot:'weapon',name:'防御素矛',rarity:2,stats:{atk:5},color:'#64b5f6'},
+{id:'phage_lance',slot:'weapon',name:'吞噬之矛',rarity:3,stats:{atk:6,spd:1},color:'#00e5ff'},
+{id:'perforin_sword',slot:'weapon',name:'穿孔素剑',rarity:3,stats:{atk:8},color:'#ff5252'},
+{id:'membrane_vest',slot:'armor',name:'细胞膜背心',rarity:1,stats:{def:1},color:'#81c784'},
+{id:'collagen_mail',slot:'armor',name:'胶原蛋白甲',rarity:1,stats:{def:1,maxHp:1},color:'#a5d6a7'},
+{id:'complement_shield',slot:'armor',name:'补体盾',rarity:2,stats:{def:2,maxHp:1},color:'#4fc3f7'},
+{id:'mucin_armor',slot:'armor',name:'黏蛋白铠',rarity:2,stats:{def:2,maxHp:2},color:'#90caf9'},
+{id:'lymph_armor',slot:'armor',name:'淋巴铠甲',rarity:3,stats:{def:4,maxHp:2},color:'#ffd700'},
+{id:'cytokine_ring',slot:'accessory',name:'细胞因子戒指',rarity:1,stats:{maxEnergy:10},color:'#ce93d8'},
+{id:'chemokine_charm',slot:'accessory',name:'趋化因子坠',rarity:1,stats:{maxEnergy:15},color:'#e1bee7'},
+{id:'memory_amulet',slot:'accessory',name:'记忆护符',rarity:2,stats:{maxEnergy:20},color:'#e0b0ff'},
+{id:'tlr_medal',slot:'accessory',name:'TLR勋章',rarity:2,stats:{maxEnergy:25},color:'#b39ddb'},
+{id:'stem_talisman',slot:'accessory',name:'干细胞护符',rarity:3,stats:{maxEnergy:30,maxHp:1},color:'#ff8a80'},
+];
+const RARITY_NAMES=['','普通','稀有','传说'],RARITY_COLORS=['','#aaa','#ab47bc','#ffd700'];
+const EQUIPMENT_DROPS={boss:['phage_lance','lymph_armor','stem_talisman','perforin_sword'],staphLarge:['complement_blade','complement_shield','memory_amulet','defensin_spear','mucin_armor','tlr_medal'],strep:['ab_sword','membrane_vest','cytokine_ring','lysozyme_blade','collagen_mail','chemokine_charm']};
+function findEquip(id){return EQUIPMENT_DB.find(e=>e.id===id);}
+function getEquipStat(s){let t=0;for(const sl of['weapon','armor','accessory']){const e=findEquip(Game.equipment[sl]);if(e&&e.stats[s])t+=e.stats[s];}return t;}
+function equipItem(eid){const e=findEquip(eid);if(!e)return false;const i=Game.inventory.indexOf(eid);if(i<0)return false;const o=Game.equipment[e.slot];if(o)Game.inventory.push(o);Game.equipment[e.slot]=eid;Game.inventory.splice(i,1);saveGame();Sfx.pickup();return true;}
+function unequipItem(slot){const id=Game.equipment[slot];if(!id)return false;if(Game.inventory.length>=20){showToast('背包已满！');return false;}Game.inventory.push(id);Game.equipment[slot]=null;saveGame();return true;}
+
 // ===== 速通 =====
 const SPEEDRUN_KEY = 'cellQuest_bestTime_1';
 
@@ -209,8 +264,8 @@ const CELLS = {
 // ===== 关卡配置（5关插槽） =====
 const LEVEL_CONFIGS = [
   { id:1, name:'擦伤', icon:'🩹', desc:'新手教学关。学习移动、跳跃、细胞切换、踩踏细菌、血小板搭桥。', bg:[C.sky1,C.sky3] },
-  { id:2, name:'肺泡迷宫', icon:'🫁', desc:'气体交换之地，多路径探索。', bg:['#1a2a3a','#3a6a8a'], locked:true },
-  { id:3, name:'血管奔流', icon:'🩸', desc:'血流冲击，高速通道。', bg:['#2a0a1a','#5a1a3a'], locked:true },
+  { id:2, name:'肺泡迷宫', icon:'🫁', desc:'呼吸系统·链球菌滋生·浮动气泡平台。', bg:['#1a2a3a','#3a6a8a'] },
+  { id:3, name:'血管奔流', icon:'🩸', desc:'循环系统·失血潮涌·Boss守卫。', bg:['#2a0a1a','#5a1a3a'] },
   { id:4, name:'淋巴结',   icon:'⚪', desc:'免疫中枢，强敌环伺。', bg:['#1a1a2a','#3a3a5a'], locked:true },
   { id:5, name:'Boss感染', icon:'☠️', desc:'终极威胁，击败感染源。', bg:['#2a0a0a','#6a0a0a'], locked:true },
 ];
@@ -220,7 +275,7 @@ const Game = {
   state: 'menu',           // menu | hub | playing | paused | complete | dead
   levelIndex: 0,           // 当前关卡索引 (0-4)
   // 全局进度
-  unlocked: [true, false, false, false, false],
+  unlocked: [true, true, true, false, false],
   completed: [false, false, false, false, false],
   stars:     [0, 0, 0, 0, 0],
   globalEnergy: 100,
@@ -278,6 +333,11 @@ const Game = {
   knowledgeShown: { wbc:false, rbc:false, plt:false },
   // 全敌击杀通关条件
   allEnemiesDead: false,
+  renderAlpha: 0,
+  // RPG系统
+  playerLevel:1,xp:0,skillPoints:0,damageNumbers:[],
+  skills:{wbc:{damagePlus:0,dashCooldown:0,swordRange:0,slamRadius:0},plt:{bridgeCost:0,bridgeDuration:0,shieldDuration:0,healOnBridge:0},rbc:{energyDrain:0,oxyFieldPower:0,maxEnergy:0,nutritionBonus:0}},
+  equipment:{weapon:null,armor:null,accessory:null},inventory:[],
 };
 
 // ===== 存档系统 =====
@@ -288,6 +348,8 @@ function saveGame(){
       completed:Game.completed,
       stars:Game.stars,
       globalEnergy:Game.globalEnergy,
+      playerLevel:Game.playerLevel,xp:Game.xp,skillPoints:Game.skillPoints,
+      skills:Game.skills,equipment:Game.equipment,inventory:Game.inventory,saveVersion:2,
     }));
   }catch(e){}
 }
@@ -300,6 +362,12 @@ function loadGame(){
       Game.completed = d.completed || Game.completed;
       Game.stars = d.stars || Game.stars;
       Game.globalEnergy = d.globalEnergy != null ? d.globalEnergy : 100;
+      Game.playerLevel = d.playerLevel || d.level || 1;
+      Game.xp = d.xp || 0; Game.skillPoints = d.skillPoints || 0;
+      Game.skills = d.skills || {wbc:{damagePlus:0,dashCooldown:0,swordRange:0,slamRadius:0},plt:{bridgeCost:0,bridgeDuration:0,shieldDuration:0,healOnBridge:0},rbc:{energyDrain:0,oxyFieldPower:0,maxEnergy:0,nutritionBonus:0}};
+      Game.equipment = d.equipment || {weapon:null,armor:null,accessory:null}; Game.inventory = d.inventory || [];
+      while(Game.unlocked.length<5)Game.unlocked.push(true);
+      Game.unlocked[1]=true; Game.unlocked[2]=true;
     }
   }catch(e){}
 }
