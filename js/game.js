@@ -1269,6 +1269,37 @@ function init(){
   Game.rbcSpriteFrames = { idle: [0,1], run: [4,5,6,7], jump: [8,9,10,11], attack: [12,13,14,15] };
   Game.rbcFrameSize = { w: 256, h: 256 }; // 每帧在1024x1024图中的大小
 
+  // RBC 走路专用精灵表 - v7（v6 朝右走 + 水平镜像得朝左走，R/L 完全镜像对齐）
+  Game.rbcWalkRight = new Image();
+  Game.rbcWalkRight.src = 'images/sprites/rbc-walk-right-v1.png?v=8';
+  Game.rbcWalkRight.onload = function(){ console.log('[RBC] 右走v7加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.rbcWalkLeft = new Image();
+  Game.rbcWalkLeft.src = 'images/sprites/rbc-walk-left-v1.png?v=8';
+  Game.rbcWalkLeft.onload = function(){ console.log('[RBC] 左走v7加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.rbcWalkFrameSize = { w: 256, h: 372 };
+  Game.rbcWalkSpriteFrames = [0, 1, 2, 3, 4, 5];  // 6 帧循环
+
+  // RBC idle 待机精灵表 - 用户提供（朝右 + 朝左镜像），按 walk 人物大小对齐（头y=1, 脚y=340）
+  Game.rbcIdleRight = new Image();
+  Game.rbcIdleRight.src = 'images/sprites/rbc-idle-right-v1.png?v=2';
+  Game.rbcIdleRight.onload = function(){ console.log('[RBC] 右idle加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.rbcIdleLeft = new Image();
+  Game.rbcIdleLeft.src = 'images/sprites/rbc-idle-left-v1.png?v=2';
+  Game.rbcIdleLeft.onload = function(){ console.log('[RBC] 左idle加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.rbcIdleFrameSize = { w: 256, h: 372 };
+
+  // RBC 跳起精灵图 - 用户提供
+  Game.rbcJump = new Image();
+  Game.rbcJump.src = 'images/sprites/rbc-jump-v1.png?v=1';
+  Game.rbcJump.onload = function(){ console.log('[RBC] 跳起加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.rbcJumpFrameSize = { w: 1727, h: 2157 };
+
+  // RBC 蹲下精灵图 - 用户提供
+  Game.rbcCrouch = new Image();
+  Game.rbcCrouch.src = 'images/sprites/rbc-crouch-v1.png?v=1';
+  Game.rbcCrouch.onload = function(){ console.log('[RBC] 蹲下加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.rbcCrouchFrameSize = { w: 1436, h: 2303 };
+
   loadGame();
   setupInput();
 

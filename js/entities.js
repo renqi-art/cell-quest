@@ -793,7 +793,84 @@ class Player {
       }
     } else {
       // 红细胞 - 使用 R-07 像素精灵图
-      if(Game.rbcSprite && Game.rbcSprite.complete && Game.rbcSprite.naturalWidth > 0){
+      // ★ 蹲下：优先于走路判断
+      if(this.crouching && this.onGround && Game.rbcCrouch && Game.rbcCrouch.complete && Game.rbcCrouch.naturalWidth > 0){
+        const cfw = Game.rbcCrouchFrameSize.w;
+        const cfh = Game.rbcCrouchFrameSize.h;
+        const cdispH = 74;
+        const cdispW = Math.floor(cdispH * (cfw / cfh));
+        ctx.save();
+        const cax = Math.floor(px + this.w / 2);
+        const cay = Math.floor(py + this.h);
+        ctx.translate(cax, cay);
+        if(this.facing === 1) ctx.scale(-1, 1);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(Game.rbcCrouch, 0, 0, cfw, cfh, Math.round(-cdispW/2), Math.round(-cdispH), cdispW, cdispH);
+        ctx.restore();
+      }
+      // ★ 走路用 v1 6 帧 walk 精灵表循环（视频提取）
+      else if(this.onGround && (Game.keys.left || Game.keys.right || Math.abs(this.vx) > 0.5) && Game.rbcWalkLeft && Game.rbcWalkLeft.complete && Game.rbcWalkLeft.naturalWidth > 0){
+        // 逐帧角色bbox数据（在256x372源帧内），用于对齐消除抖动 + 脚贴地
+        // [cx, bottom] — cx: 角色质心X, bottom: 角色bbox底部Y
+        const RBC_D = [[94.5,345],[105.0,340],[119.0,344],[131.0,343],[144.5,340],[156.5,344]];
+        const fw = Game.rbcWalkFrameSize.w;
+        const fh = Game.rbcWalkFrameSize.h;
+        const frames = Game.rbcWalkSpriteFrames;
+        const fidx = Math.floor(this.animT / 4) % frames.length;
+        const col = frames[fidx];
+        const dispH = 80;
+        const dispW = Math.floor(dispH * (fw / fh));
+        const scale = dispH / fh;
+        const d = RBC_D[fidx];
+        // 水平对齐：角色质心对齐锚点
+        const alignX = Math.round((fw/2 - d[0]) * (dispW / fw));
+        // 垂直对齐：角色脚底贴地（补偿帧底部空白）
+        const alignY = Math.round((fh - d[1]) * scale);
+        ctx.save();
+        const ax = Math.floor(px + this.w / 2);
+        const ay = Math.floor(py + this.h);
+        ctx.translate(ax, ay);
+        // 左走精灵图：面朝左。往右走时水平翻转
+        if(this.facing === 1) ctx.scale(-1, 1);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(Game.rbcWalkLeft, col*fw, 0, fw, fh, Math.round(-dispW/2) + alignX, Math.round(-dispH) + alignY, dispW, dispH);
+        ctx.restore();
+      } else if(Game.rbcIdleRight && Game.rbcIdleRight.complete && Game.rbcIdleRight.naturalWidth > 0 && this.onGround && Math.abs(this.vx) <= 0.5){
+        // ★ 用户提供的 idle 待机图（带左右朝向，呼吸效果）
+        const idleL = Game.rbcIdleLeft, idleR = Game.rbcIdleRight;
+        const useLeft = (this.facing === -1) && idleL && idleL.complete && idleL.naturalWidth > 0;
+        const idleSprite = useLeft ? idleL : idleR;
+        const ifw = Game.rbcIdleFrameSize.w;
+        const ifh = Game.rbcIdleFrameSize.h;
+        const idispH = 80;
+        const idispW = Math.floor(idispH * (ifw / ifh));
+        const breath = (Math.floor(this.animT/90) % 2) ? -1 : 0;
+        // 角色bbox底部在源帧y=342，帧高372 → 补偿30px空白让脚贴地
+        const idleFootY = Math.round((ifh - 342) * (idispH / ifh));
+        ctx.save();
+        const iax = Math.floor(px + this.w / 2);
+        const iay = Math.floor(py + this.h) + breath;
+        ctx.translate(iax, iay);
+        // idle 用左右独立精灵图，不再翻转
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(idleSprite, 0, 0, ifw, ifh, Math.round(-idispW/2), Math.round(-idispH) + idleFootY, idispW, idispH);
+        ctx.restore();
+      } else if(!this.onGround && Game.rbcJump && Game.rbcJump.complete && Game.rbcJump.naturalWidth > 0){
+        // ★ 用户提供的跳起精灵图（单帧）
+        const jfw = Game.rbcJumpFrameSize.w;
+        const jfh = Game.rbcJumpFrameSize.h;
+        // 对齐 walk/idle 角色视觉大小：walk 帧372角色~344显示为74px → 跳起帧2157角色2157显示为74px
+        const jdispH = 74;
+        const jdispW = Math.floor(jdispH * (jfw / jfh));
+        ctx.save();
+        const jax = Math.floor(px + this.w / 2);
+        const jay = Math.floor(py + this.h);
+        ctx.translate(jax, jay);
+        if(this.facing === 1) ctx.scale(-1, 1);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(Game.rbcJump, 0, 0, jfw, jfh, Math.round(-jdispW/2), Math.round(-jdispH), jdispW, jdispH);
+        ctx.restore();
+      } else if(Game.rbcSprite && Game.rbcSprite.complete && Game.rbcSprite.naturalWidth > 0){
         const sprite = Game.rbcSprite;
         const fw = sprite.naturalWidth / 4;
         const fh = sprite.naturalHeight / 4;
@@ -802,7 +879,7 @@ class Player {
         const frames = Game.rbcSpriteFrames;
         let frameList = frames.idle;
         if(!this.onGround) frameList = frames.jump;
-        else if(Math.abs(this.vx) > 0.5) frameList = frames.run;
+        // 在地面且不移动 = idle；走路已用 v1 精灵表
         const fidx = Math.floor(this.animT / 6) % frameList.length;
         const frameNum = frameList[fidx];
         const col = frameNum % 4;

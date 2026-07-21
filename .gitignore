@@ -7,3 +7,12 @@ Thumbs.db
 
 .vercel
 .env*
+
+# RBC sprite backups / work-in-progress
+images/sprites/*-bak.png
+images/sprites/*-bug.png
+images/sprites/*-old-bad.png
+images/sprites/rbc-walk-unstripped*
+images/sprites/rbc-walk-sheet-*
+images/sprites/anim/
+output/
