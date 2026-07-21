@@ -54,20 +54,6 @@ class Player {
     const cell = this.cell;
     this.animT++;
 
-    // ===== 血液循环：动脉加速 + 肺泡粒子 =====
-    if(this.cellType === 3){
-      const alveoliStart = 41*TILE, heartStart = 63*TILE, arteryStart = 76*TILE, tissueEnd = 96*TILE;
-      // 动脉区下坡微加速（仅地面，不强制推动）
-      if(this.x >= arteryStart && this.x < tissueEnd && this.onGround && !k.left && !k.right){
-        if(this.vx < MOVE_MAX * 0.5) this.vx = MOVE_MAX * 0.5;
-      }
-      // 肺泡气体交换粒子
-      if(this.x >= alveoliStart && this.x < heartStart && Game.frame % 30 === 0){
-        spawnParticles(this.x + this.w/2, this.y + this.h/2, '#81d4fa', 3, 1);
-        spawnParticles(this.x + this.w/2, this.y + this.h/2, '#aaa', 2, 0.8);
-      }
-    }
-
     // ===== 突进状态 =====
     if(this.dashTimer > 0){
       this.dashTimer--;
@@ -190,20 +176,6 @@ class Player {
     // ===== 碰撞移动 =====
     this.x += this.vx;
     this.collideX(level);
-    
-    // ? 方块顶击检测
-    if(this.vy < 0 && Game.qBlocks){
-      for(const qb of Game.qBlocks){
-        if(qb.used) continue;
-        if(this.x + this.w > qb.x + 2 && this.x < qb.x + qb.w - 2 &&
-           this.y < qb.y + qb.h && this.y + this.h > qb.y){
-          qb.hit();
-          this.vy = 0;
-          break;
-        }
-      }
-    }
-    
     this.y += this.vy;
     const wasGround = this.onGround;
     this.onGround = false;
@@ -213,20 +185,6 @@ class Player {
     if(this.onGround && !wasGround){
       this.coyote = COYOTE_FRAMES;
       this.jumpsLeft = 1;
-      // 碎裂平台：落地触发抖动 (Cat Mario 式陷阱)
-      const feetC = Math.floor((this.x + this.w/2) / TILE);
-      const feetR = Math.floor((this.y + this.h) / TILE);
-      if(level.grid[feetR] && level.grid[feetR][feetC] === '_'){
-        level.triggerCrumble(feetC, feetR);
-      }
-      const leftC = Math.floor(this.x / TILE);
-      const rightC = Math.floor((this.x + this.w - 1) / TILE);
-      if(leftC !== feetC && level.grid[feetR] && level.grid[feetR][leftC] === '_'){
-        level.triggerCrumble(leftC, feetR);
-      }
-      if(rightC !== feetC && rightC !== leftC && level.grid[feetR] && level.grid[feetR][rightC] === '_'){
-        level.triggerCrumble(rightC, feetR);
-      }
     }
     if(this.onGround) this.coyote = COYOTE_FRAMES;
 
@@ -442,28 +400,6 @@ class Player {
   collideY(level){
     const tiles = level.getOverlapTiles(this);
     for(const t of tiles){
-      // V 弹簧方块：站上去超级弹跳
-      if(t.tile === 'V'){
-        if(this.vy > 0){
-          this.y = t.row * TILE - this.h;
-          this.vy = JUMP_VEL * 1.8; // 超级弹跳
-          this.onGround = false;
-          this.jumpsLeft = 1;
-          Sfx.jump();
-          spawnParticles(this.x + this.w/2, this.y + this.h, '#4a9a6a', 10, 3);
-        }
-        continue;
-      }
-      // J 左心室泵：弹射
-      if(t.tile === 'J' && this.vy > 0){
-        this.y = t.row * TILE - this.h;
-        this.vy = JUMP_VEL * 1.6; // 强力弹射
-        this.onGround = false;
-        Sfx.jump();
-        spawnParticles(this.x + this.w/2, this.y + this.h, '#ff6060', 14, 3);
-        showToast('🚀 左心室泵血！');
-        continue;
-      }
       if(level.solidTile(t.tile)){
         if(this.vy > 0){
           this.y = t.row * TILE - this.h;
@@ -1150,8 +1086,7 @@ class Enemy {
     this.y += this.vy;
     this.onGround = false;
 
-    // 碰撞（flyAway敌人不碰地面）
-    if(!this.flyAway){
+    // 碰撞
     const tiles = level.getOverlapTiles(this);
     for(const t of tiles){
       if(level.solidTile(t.tile)){
@@ -1160,7 +1095,6 @@ class Enemy {
           this.vy = 0; this.onGround = true;
         }
       }
-    }
     }
 
     // 玩家碰撞
@@ -1408,35 +1342,16 @@ class Item {
   constructor(x, y, type, extra){
     this.x = x; this.y = y; this.w = 16; this.h = 16;
     this.type = type; this.alive = true; this.animT = 0;
-    this.vy = 0; this.vx = 0; // ATP 弹出物理
     this.xpValue = (type==='xp')?(extra||10):0;
     this.equipId = (type==='equipment')?(extra||''):'';
   }
 
   update(player){
     this.animT++;
-    // ATP 道具重力 + 平台碰撞 + 水平移动
-    if(this.type === 'atp' && (this.vy !== 0 || this.vx !== 0)){
-      this.vy += GRAVITY;
-      this.y += this.vy;
-      this.x += this.vx;
-      this.vx *= 0.98; // 摩擦力
-      // 检测脚下是否有实体瓦片
-      const level = Game.level;
-      if(level){
-        const col = Math.floor((this.x + this.w/2) / TILE);
-        const row = Math.floor((this.y + this.h) / TILE);
-        if(row >= 0 && row < 15 && level.solidAt(col, row)){
-          this.y = row * TILE - this.h;
-          this.vy = 0;
-        }
-      }
-    }
     if(!this.alive) return;
     if(rectOverlap(this, player)){
       this.alive = false;
       Game.stats.items++;
-      if(this.type !== 'atp') Game.itemsCollected++; // ATP不计数
       Sfx.pickup();
       if(this.type === 'shield'){
         player.shield = SHIELD_DURATION;
@@ -1463,10 +1378,6 @@ class Item {
         Sfx.memory();
         showToast('★ 发现记忆细胞！\n免疫记忆已记录');
         showMemoryCard();
-      } else if(this.type === 'atp'){
-        Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + ATP_PICKUP);
-        Sfx.coin();
-        showToast('ATP +' + ATP_PICKUP + '！');
       } else if(this.type === 'nutrition'){
         // 营养包：仅红细胞可收集
         if(player.cellType !== 3){
@@ -1491,10 +1402,9 @@ class Item {
     if(this.type === 'food') return C.food;
     if(this.type === 'drink') return C.drink;
     if(this.type === 'memory') return C.memory;
+    if(this.type === 'xp') return '#ffaa00';
+    if(this.type === 'equipment'){const eq=findEquip(this.equipId);return eq?eq.color:'#ffd700';}
     if(this.type === 'nutrition') return C.nutrition;
-    if(this.type === 'atp') return '#ffd700';
-    if(this.type==='xp') return '#ffaa00';
-    if(this.type==='equipment'){const eq=findEquip(this.equipId);return eq?eq.color:'#ffd700';}
     return C.complement;
   }
 
@@ -1558,20 +1468,6 @@ class Item {
       ctx.beginPath(); ctx.arc(px+8, py+8, 4, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 7px sans-serif'; ctx.textAlign='center';
       ctx.fillText('M', px+8, py+11);
-    } else if(this.type === 'atp'){
-      // ATP：优先使用图片
-      const atpImg = Game.atpImg;
-      if(atpImg && atpImg.complete && atpImg.naturalWidth > 0){
-        const s = 20 + Math.sin(this.animT * 0.15) * 2;
-        ctx.drawImage(atpImg, px - 4, py - 4, s, s);
-      } else {
-        const pulse = Math.sin(this.animT * 0.15) * 2;
-        ctx.beginPath(); ctx.arc(px+8, py+8, 6+pulse, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#ff8c00';
-        ctx.beginPath(); ctx.arc(px+5, py+6, 2, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 6px monospace'; ctx.textAlign='center';
-        ctx.fillText('ATP', px+8, py+12);
-      }
     } else if(this.type === 'nutrition'){
       // 营养包：粉色圆球 + 十字标记
       const pulse = Math.sin(this.animT * 0.1) * 1.5;

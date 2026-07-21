@@ -1,11 +1,11 @@
-/* 第 0 关：血液循环 */
-const LEVEL_0 = {
-    name: '血液循环',
-    width: 135,
-    cellType: 3,
-    winCondition: WIN_COLLECT_ALL,
-    sky: [C.sky2, '#e8a0a0'],
-    map: [
+/* 血液循环 */
+const LEVEL_builtin_0 = {
+  name: '血液循环',
+  width: 135,
+  cellType: 3,
+  winCondition: WIN_COLLECT_ALL,
+  sky: [C.sky2, '#e8a0a0'],
+  map: [
       "                                                                                                                                       ",
       "                                                                                                                                       ",
       "                                                                                                                                       ",
@@ -21,21 +21,21 @@ const LEVEL_0 = {
       "#####################################################################################################################################",
       "#####################################################################################################################################",
       "#####################################################################################################################################",
-    ],
-    floatPlatforms: [],
-    pipeSpawners: [
-      { col:7,  row:9, dir:'up', trigger:'contact', type:'staph' },
-      { col:27, row:9, dir:'up', trigger:'proximity', range:4, cooldown:240, type:'strep' },
-      { col:83, row:6, dir:'up', trigger:'proximity', range:4, cooldown:260, type:'strep' },
-      { col:125, row:7, dir:'up', trigger:'proximity', range:4, cooldown:300, type:'strep' },
-    ],
-    tutorials: [
-      { x: 200, useCurrent: true, body: '红细胞从组织出发！\n管道里藏有细菌 踩上去会飞出！\n高处的？方块用头顶弹出ATP' },
-      { x: 700, useCurrent: true, body: '进入静脉！向上回流\n小心管道中钻出的链球菌' },
-      { x: 1400, useCurrent: true, body: '肺部毛细血管网！气体交换' },
-      { x: 2000, useCurrent: true, body: '经过心脏！体循环的起点' },
-      { x: 2500, useCurrent: true, body: '动脉高速通道！下坡快速前进' },
-      { x: 3100, useCurrent: true, body: '到达终点！收集全部物品通过大门！' },
-    ],
-    knowledgeCards: [],
+  ],
+  floatPlatforms: [],
+  pipeSpawners: [
+    { col:7, row:9, dir:'up', trigger:'contact' },
+    { col:27, row:9, dir:'up', trigger:'proximity', type:'strep', range:4, cooldown:240 },
+    { col:83, row:6, dir:'up', trigger:'proximity', type:'strep', range:4, cooldown:260 },
+    { col:125, row:7, dir:'up', trigger:'proximity', type:'strep', range:4, cooldown:300 }
+  ],
+  tutorials: [
+    { x:200, useCurrent:true, body:'红细胞从组织出发！\n管道里藏有细菌 踩上去会飞出！\n高处的？方块用头顶弹出ATP' },
+    { x:700, useCurrent:true, body:'进入静脉！向上回流\n小心管道中钻出的链球菌' },
+    { x:1400, useCurrent:true, body:'肺部毛细血管网！气体交换' },
+    { x:2000, useCurrent:true, body:'经过心脏！体循环的起点' },
+    { x:2500, useCurrent:true, body:'动脉高速通道！下坡快速前进' },
+    { x:3100, useCurrent:true, body:'到达终点！收集全部物品通过大门！' }
+  ],
+  knowledgeCards: [],
 };

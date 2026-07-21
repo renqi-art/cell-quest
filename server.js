@@ -82,7 +82,13 @@ const server = http.createServer((req, res) => {
 
   try {
     const data = fs.readFileSync(filePath);
-    res.writeHead(200, { 'Content-Type': mime[ext] || 'text/plain' });
+    const headers = {
+      'Content-Type': mime[ext] || 'text/plain',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    };
+    res.writeHead(200, headers);
     res.end(data);
   } catch {
     res.writeHead(404);
