@@ -1525,7 +1525,7 @@ class Item {
           // ATP 使用图片
           const atpImg = Game.atpImg;
           if(atpImg && atpImg.complete && atpImg.naturalWidth > 0){
-            ctx.drawImage(atpImg, px - 2, py - 2, 20, 20);
+            ctx.drawImage(atpImg, px + 2, py + 2, 12, 12);
           } else {
             ctx.fillStyle = '#ffd700';
             ctx.beginPath(); ctx.arc(px+8, py+8, 7, 0, Math.PI*2); ctx.fill();
