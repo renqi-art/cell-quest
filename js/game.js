@@ -163,12 +163,12 @@ class Level {
   solidAt(col, row){
     if(col<0 || row<0 || row>=this.grid.length) return false;
     if(!this.grid[row] || col>=this.grid[row].length) return false;
+    // ? 方块始终有碰撞体积（顶完也不消失）
+    if(Game.qBlocks.some(qb => qb.x/TILE === col && qb.y/TILE === row)) return true;
     const ch = this.grid[row][col];
     if(!this.solidTile(ch)) return false;
     // 碎裂平台崩解后不实心
     if(ch === '_' && this.isCrumbleGone(col, row)) return false;
-    // ? 方块始终有碰撞体积（顶完也不消失）
-    if(Game.qBlocks.some(qb => qb.x/TILE === col && qb.y/TILE === row)) return true;
     return true;
   }
 
