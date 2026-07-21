@@ -1292,7 +1292,7 @@ function init(){
   Game.rbcJump = new Image();
   Game.rbcJump.src = 'images/sprites/rbc-jump-v1.png?v=1';
   Game.rbcJump.onload = function(){ console.log('[RBC] 跳起加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
-  Game.rbcJumpFrameSize = { w: 1727, h: 2157 };
+  Game.rbcJumpFrameSize = { w: 275, h: 372 };
 
   // RBC 蹲下精灵图 - 用户提供
   Game.rbcCrouch = new Image();

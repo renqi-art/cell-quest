@@ -856,19 +856,19 @@ class Player {
         ctx.drawImage(idleSprite, 0, 0, ifw, ifh, Math.round(-idispW/2), Math.round(-idispH) + idleFootY, idispW, idispH);
         ctx.restore();
       } else if(!this.onGround && Game.rbcJump && Game.rbcJump.complete && Game.rbcJump.naturalWidth > 0){
-        // ★ 用户提供的跳起精灵图（单帧）
+        // ★ 用户提供的跳起精灵图（单帧，已缩放到与walk同等像素密度，372px高含上下留白）
         const jfw = Game.rbcJumpFrameSize.w;
         const jfh = Game.rbcJumpFrameSize.h;
-        // 对齐 walk/idle 角色视觉大小：walk 帧372角色~344显示为74px → 跳起帧2157角色2157显示为74px
-        const jdispH = 74;
+        const jdispH = 80;
         const jdispW = Math.floor(jdispH * (jfw / jfh));
         ctx.save();
+        // 空中状态：居中对齐碰撞盒，避免锚在脚底导致的视觉抖动
         const jax = Math.floor(px + this.w / 2);
-        const jay = Math.floor(py + this.h);
+        const jay = Math.floor(py + this.h / 2);
         ctx.translate(jax, jay);
         if(this.facing === 1) ctx.scale(-1, 1);
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(Game.rbcJump, 0, 0, jfw, jfh, Math.round(-jdispW/2), Math.round(-jdispH), jdispW, jdispH);
+        ctx.drawImage(Game.rbcJump, 0, 0, jfw, jfh, Math.round(-jdispW/2), Math.round(-jdispH/2), jdispW, jdispH);
         ctx.restore();
       } else if(Game.rbcSprite && Game.rbcSprite.complete && Game.rbcSprite.naturalWidth > 0){
         const sprite = Game.rbcSprite;
