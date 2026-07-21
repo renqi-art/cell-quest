@@ -1380,7 +1380,7 @@ class Item {
       this.vy += GRAVITY;
       this.y += this.vy;
       this.x += this.vx;
-      this.vx *= 0.98;
+      this.vx *= 0.995;
       const level = Game.level;
       if(level){
         const col = Math.floor((this.x + this.w/2) / TILE);
@@ -1525,7 +1525,7 @@ class Item {
           // ATP 使用图片
           const atpImg = Game.atpImg;
           if(atpImg && atpImg.complete && atpImg.naturalWidth > 0){
-            ctx.drawImage(atpImg, px, py, 16, 16);
+            ctx.drawImage(atpImg, px - 2, py - 2, 20, 20);
           } else {
             ctx.fillStyle = '#ffd700';
             ctx.beginPath(); ctx.arc(px+8, py+8, 7, 0, Math.PI*2); ctx.fill();
