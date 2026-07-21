@@ -1523,6 +1523,7 @@ class Item {
       ctx.fillText('营', px+8, py+11);
     } else if(this.type === 'atp'){
           // ATP 使用图片
+          if(!this._logged){ console.log('DRAW ATP at', px, py); this._logged = true; }
           const atpImg = Game.atpImg;
           if(atpImg && atpImg.complete && atpImg.naturalWidth > 0){
             ctx.drawImage(atpImg, px + 2, py + 2, 12, 12);
