@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Cell Quest 地图编辑器</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI','Microsoft YaHei',monospace;background:#0a0a18;color:#e8e8f0;display:flex;height:100vh;overflow:hidden}
+.palette{width:220px;background:#111420;border-right:2px solid #2a2a4a;padding:8px;overflow-y:auto;flex-shrink:0}
+.palette h3{font-size:13px;color:#7ac;margin:8px 0 6px;border-bottom:1px solid #2a2a4a;padding-bottom:4px}
+.palette h3:first-child{margin-top:0}
+.tile{display:flex;align-items:center;gap:8px;padding:5px 8px;margin:2px 0;border-radius:6px;cursor:pointer;font-size:12px;border:2px solid transparent;transition:all .15s}
+.tile:hover{background:rgba(255,255,255,.05)}
+.tile.active{border-color:#ffd700;background:rgba(255,215,0,.1)}
+.tile .preview{width:24px;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px}
+.tile .label{flex:1}
+.toolbar{padding:8px;background:#111420;border-bottom:1px solid #2a2a4a;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.toolbar button,.toolbar select{padding:6px 14px;background:#1a1a2e;border:1px solid #3a3a5a;color:#e8e8f0;border-radius:6px;cursor:pointer;font-size:12px}
+.toolbar button:hover{background:#2a2a4e;border-color:#e94560}
+.toolbar .sep{color:#3a3a5a;margin:0 4px}
+.toolbar input{background:#1a1a2e;border:1px solid #3a3a5a;color:#fff;padding:6px;border-radius:6px;font-size:12px}
+.main-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.grid-wrap{flex:1;overflow:auto;padding:8px}
+.grid-wrap canvas{image-rendering:pixelated}
+.col-header{display:flex;padding-left:32px;font-size:9px;color:#4a4a6a;height:16px}
+.col-header span{width:16px;text-align:center;flex-shrink:0}
+.info{height:28px;background:#111420;border-top:1px solid #2a2a4a;display:flex;align-items:center;padding:0 12px;font-size:11px;color:#7ac;gap:16px}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:99;align-items:center;justify-content:center}
+.modal.show{display:flex}
+.modal-box{background:#111420;border:1px solid #4a6aaa;border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto}
+.modal-box h2{font-size:16px;color:#ffd700;margin-bottom:12px}
+.modal-box textarea{width:100%;height:200px;background:#0a0a18;border:1px solid #3a3a5a;color:#aac;font-family:monospace;font-size:11px;padding:12px;border-radius:8px;resize:vertical}
+.modal-box button{margin-top:8px}
+/* 管道刷怪 & 知识卡片条目 */
+.config-item{background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;padding:6px 8px;margin:3px 0;font-size:11px;display:flex;align-items:center;gap:4px}
+.config-item span{flex:1;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.config-item button{font-size:10px;padding:2px 6px;border:1px solid #3a3a5a;border-radius:4px;cursor:pointer;background:#2a2a4a;color:#aaa;flex-shrink:0}
+.config-item button:hover{color:#fff;border-color:#7ac}
+.config-item button.del:hover{color:#f66;border-color:#f66}
+.config-item .tag{font-size:9px;padding:1px 4px;border-radius:3px;background:#2a3a2a;color:#7ac;flex-shrink:0}
+.palette .btn-add{width:100%;margin:4px 0;padding:5px;font-size:11px;background:#2a3a2a;border:1px dashed #4a7a4a;color:#7ac;border-radius:5px;cursor:pointer;text-align:center}
+.palette .btn-add:hover{background:#3a4a3a}
+/* 行内编辑表单 */
+.inline-form{background:#0d0d20;border:1px solid #4a6aaa;border-radius:8px;padding:8px;margin:4px 0}
+.inline-form label{font-size:10px;color:#7ac;display:block;margin-top:4px}
+.inline-form label:first-child{margin-top:0}
+.inline-form input,.inline-form select,.inline-form textarea{width:100%;background:#0a0a18;border:1px solid #3a3a5a;color:#fff;font-size:11px;padding:4px 6px;border-radius:4px;margin-top:2px}
+.inline-form textarea{height:60px;resize:vertical}
+.inline-form .btn-row{display:flex;gap:4px;margin-top:6px}
+.inline-form .btn-row button{flex:1;font-size:10px;padding:4px;border:1px solid #3a3a5a;border-radius:4px;cursor:pointer;background:#2a2a4a;color:#aaa}
+.inline-form .btn-row button.ok{color:#7ac;border-color:#4a7a4a}
+.inline-form .btn-row button.ok:hover{background:#3a4a3a}
+</style>
+</head>
+<body oncontextmenu="return false">
+
+<div class="palette" id="palette"></div>
+
+<div class="main-area">
+  <div class="toolbar">
+    <button onclick="newMap()">新建</button>
+    <select id="levelSelect" onchange="loadPreset(this.value)">
+      <option value="">加载现有关卡...</option>
+    </select>
+    <button onclick="loadPresetList()" title="刷新关卡列表">🔄</button>
+    <button onclick="resetLevel()" style="background:#6a3a1a;border-color:#9a5a2a">🔄 重置</button>
+    <span class="sep">|</span>
+    <span>宽:</span><input type="number" id="mapWidth" value="135" min="20" max="200" style="width:60px">
+    <span>关卡名:</span><input type="text" id="levelName" value="新关卡" style="width:120px">
+    <span class="sep">|</span>
+    <button onclick="exportMap()" style="background:#e94560;border-color:#ff6b6b">导出</button>
+    <button onclick="saveLevel()" style="background:#e94560;border-color:#ff6b6b;font-weight:700">💾 保存到关卡文件</button>
+    <button onclick="saveToGame()" style="background:#4a6aaa;border-color:#6a8acc;font-weight:700">🎮 保存为自定义关卡</button>
+    <span id="customActions" style="display:none">
+      <button onclick="saveCurrentCustom()" style="background:#2a6a2a;border-color:#4a8a4a;font-weight:700">💾 更新自定义关卡</button>
+      <button onclick="deleteCurrentCustom()" style="background:#8a2a2a;border-color:#aa4a4a">🗑 删除</button>
+    </span>
+    <button onclick="importMap()">导入</button>
+  </div>
+  <div class="col-header" id="colHeader"></div>
+  <div class="grid-wrap" id="gridWrap"></div>
+  <div class="info" id="info">
+    操作：左键拖动画笔 | 右键拖动擦除 | Ctrl+滚轮缩放 | 点击管道(p)瓦片添加刷怪配置
+  </div>
+  <div class="info" style="font-size:10px;color:#555;border-top:none;padding-top:0">
+    💡 右侧面板可管理管道刷怪 & 知识卡片
+  </div>
+</div>
+
+<div class="modal" id="exportModal">
+  <div class="modal-box">
+    <h2>导出关卡文件</h2>
+    <textarea id="exportText" readonly></textarea><br>
+    <button onclick="copyExport()">复制</button>
+    <button onclick="saveLevel();document.getElementById('exportModal').classList.remove('show')">💾 保存文件</button>
+    <button onclick="document.getElementById('exportModal').classList.remove('show')">关闭</button>
+  </div>
+</div>
+
+<div class="modal" id="importModal">
+  <div class="modal-box">
+    <h2>导入（粘贴 const LEVEL_X = { ... }; 内容）</h2>
+    <textarea id="importText" placeholder="粘贴导出的关卡数据..."></textarea><br>
+    <button onclick="doImport()">导入</button>
+    <button onclick="document.getElementById('importModal').classList.remove('show')">关闭</button>
+  </div>
+</div>
+
+<div class="modal" id="iconPickerModal">
+  <div class="modal-box" style="text-align:center">
+    <h2>选择关卡图标</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:16px 0" id="iconPickerGrid"></div>
+    <input type="text" id="customLevelName" placeholder="输入关卡名称..." style="width:100%;margin:8px 0;padding:8px;background:#0a0a18;border:1px solid #3a3a5a;color:#fff;border-radius:6px">
+    <br>
+    <button onclick="doSaveToGame()" style="background:#4a6aaa;font-weight:700">✅ 保存</button>
+    <button onclick="document.getElementById('iconPickerModal').classList.remove('show')">取消</button>
+  </div>
+</div>
+
+<script>
+// ── 瓦片定义 ──
+const TILES = [
+  {ch:' ',name:'空气', color:'rgba(0,0,0,0)', text:''},
+  {ch:'#',name:'地面', color:'#6b2030', text:'#'},
+  {ch:'=',name:'平台', color:'#7a2a3a', text:'='},
+  {ch:'p',name:'管道', color:'#1a5c2a', text:'p'},
+  {ch:'o',name:'金币', color:'#ffd700', text:'o'},
+  {ch:'?',name:'?方块', color:'#ffd700', text:'?'},
+  {ch:'F',name:'终点门', color:'#ffd700', text:'F'},
+  {ch:'P',name:'出生点', color:'#4fc3f7', text:'P'},
+  {ch:'C',name:'存档点', color:'#9c6ade', text:'C'},
+  {ch:'g',name:'葡萄球菌', color:'#ff9500', text:'g'},
+  {ch:'G',name:'大型葡萄球菌', color:'#ff6600', text:'G'},
+  {ch:'t',name:'链球菌', color:'#76c043', text:'t'},
+  {ch:'b',name:'Boss', color:'#8b0000', text:'b'},
+  {ch:'B',name:'失血区', color:'#c41828', text:'B'},
+  {ch:'S',name:'痂皮', color:'#8a5a2a', text:'S'},
+  {ch:'^',name:'尖刺', color:'#888899', text:'^'},
+  {ch:'V',name:'弹簧', color:'#2a6a4a', text:'V'},
+  {ch:'J',name:'泵', color:'#c04040', text:'J'},
+  {ch:'H',name:'隐藏墙', color:'#3a2a4a', text:'H'},
+  {ch:'D',name:'护盾', color:'#4fc3f7', text:'D'},
+  {ch:'O',name:'氧气瓶', color:'#81d4fa', text:'O'},
+  {ch:'n',name:'营养包', color:'#e91e63', text:'n'},
+  {ch:'f',name:'食物', color:'#ff8c42', text:'f'},
+  {ch:'d',name:'饮料', color:'#42c8ff', text:'d'},
+  {ch:'a',name:'ATP', color:'#ffd700', text:'a'},
+  {ch:'*',name:'记忆细胞', color:'#ce93d8', text:'*'},
+  {ch:'M',name:'补体', color:'#ab47bc', text:'M'},
+];
+
+let currentTile = '#';
+let grid = [];
+let mapWidth = 135;
+let mapHeight = 15;
+let cellSize = 20;
+let isDragging = false;
+let lastCell = null;
+let eraseMode = false;
+let snapshot = null;
+
+// 编辑器可编辑的配置数组
+let editorPipeSpawners = [];  // [{col, row, dir, trigger, type, range, cooldown, interval}]
+let editorKnowledgeCards = []; // [{x, y, key, title, text}]
+let editorTutorials = [];      // [{x, useCurrent, body}]
+let editingPsIdx = -1;  // 正在编辑的管道刷怪索引
+let editingKcIdx = -1;  // 正在编辑的知识卡片索引
+let currentCustomIdx = -1; // 当前加载的自定义关卡索引（-1 = 无）
+
+const colorMap = Object.fromEntries(TILES.map(t=>[t.ch,t.color]));
+const textMap = Object.fromEntries(TILES.map(t=>[t.ch,t.text]));
+
+// ── Init ──
+function init(){
+  renderPalette();
+  newMap();
+  loadPresetList();
+}
+function renderPalette(){
+  let html = '<h3>瓦片面板</h3>';
+  html += TILES.map(t=>`<div class="tile${t.ch===currentTile?' active':''}" onclick="selectTile('${t.ch===' '?'&nbsp;':t.ch}')" title="${t.name}">
+    <div class="preview" style="background:${t.color};color:#fff">${t.text}</div>
+    <div class="label">${t.name}</div></div>`).join('');
+  // 管道刷怪面板
+  html += '<h3>🪠 管道刷怪</h3>';
+  html += '<div style="font-size:10px;color:#666;margin-bottom:4px">Shift+点击地图上的 <b>p</b> 瓦片添加</div>';
+  html += '<div id="pipeSpawnerList"></div>';
+  if(editingPsIdx === -1){
+    html += '<div class="btn-add" onclick="startAddPipeSpawner()">+ 添加管道刷怪</div>';
+  }
+  // 知识卡片面板
+  html += '<h3>📝 知识卡片</h3>';
+  html += '<div style="font-size:10px;color:#666;margin-bottom:4px">触发位置为像素 x 坐标</div>';
+  html += '<div id="knowledgeCardList"></div>';
+  if(editingKcIdx === -1){
+    html += '<div class="btn-add" onclick="startAddKnowledgeCard()">+ 添加知识卡片</div>';
+  }
+  document.getElementById('palette').innerHTML = html;
+  renderPipeSpawnerList();
+  renderKnowledgeCardList();
+}
+function selectTile(ch){
+  currentTile = ch;
+  renderPalette();
+}
+
+// ── 配置数据序列化 ──
+function buildExtraStr(){
+  const lines = [];
+  if(editorPipeSpawners.length > 0){
+    const items = editorPipeSpawners.map(ps => {
+      let s = `{ col:${ps.col}, row:${ps.row}, dir:'${ps.dir||'up'}', trigger:'${ps.trigger||'timer'}'`;
+      if(ps.type && ps.type !== 'staph') s += `, type:'${ps.type}'`;
+      if(ps.range) s += `, range:${ps.range}`;
+      if(ps.cooldown) s += `, cooldown:${ps.cooldown}`;
+      if(ps.interval) s += `, interval:${ps.interval}`;
+      s += ' }';
+      return s;
+    });
+    lines.push('  pipeSpawners: [\n    ' + items.join(',\n    ') + '\n  ],');
+  } else {
+    lines.push('  pipeSpawners: [],');
+  }
+  // tutorials 仍保留原始字符串（编辑器暂不提供 UI 编辑）
+  if(editorTutorials.length > 0){
+    const items = editorTutorials.map(t=>{
+      let s = `{ x:${t.x}`;
+      if(t.useCurrent) s += `, useCurrent:true`;
+      s += `, body:'${t.body.replace(/\n/g,'\\n').replace(/'/g,"\\'")}' }`;
+      return s;
+    });
+    lines.push('  tutorials: [\n    ' + items.join(',\n    ') + '\n  ],');
+  } else {
+    lines.push('  tutorials: [],');
+  }
+  if(editorKnowledgeCards.length > 0){
+    const items = editorKnowledgeCards.map(kc=>{
+      let s = `{ x:${kc.x}`;
+      if(kc.y !== undefined) s += `, y:${kc.y}`;
+      s += `, key:'${kc.key}', title:'${kc.title.replace(/'/g,"\\'")}', text:'${kc.text.replace(/\n/g,'\\n').replace(/'/g,"\\'")}' }`;
+      return s;
+    });
+    lines.push('  knowledgeCards: [\n    ' + items.join(',\n    ') + '\n  ],');
+  } else {
+    lines.push('  knowledgeCards: [],');
+  }
+  return lines.join('\n') + '\n';
+}
+
+// ── Grid ──
+function newMap(w,h){
+  w = w || parseInt(document.getElementById('mapWidth').value) || 135;
+  h = h || 15;
+  mapWidth = w; mapHeight = h;
+  grid = Array.from({length:h}, ()=>Array(w).fill(' '));
+  snapshot = grid.map(r=>[...r]);
+  document.getElementById('levelSelect').value = '';
+  document.getElementById('levelName').value = '自定义关卡';
+  editorPipeSpawners = [];
+  editorKnowledgeCards = [];
+  editorTutorials = [];
+  editingPsIdx = -1;
+  editingKcIdx = -1;
+  currentCustomIdx = -1;
+  document.getElementById('customActions').style.display = 'none';
+  draw();
+}
+function resetLevel(){
+  if(!snapshot){ alert('没有可重置的备份'); return; }
+  if(!confirm('确定要重置当前关卡？所有未保存修改将丢失。')) return;
+  mapWidth = snapshot[0].length;
+  mapHeight = snapshot.length;
+  grid = snapshot.map(r=>[...r]);
+  document.getElementById('mapWidth').value = mapWidth;
+  draw();
+  alert('已重置（配置数组保留）');
+}
+function resizeMap(){
+  const w = parseInt(document.getElementById('mapWidth').value) || 135;
+  if(w === mapWidth) return;
+  const newGrid = Array.from({length:mapHeight}, ()=>Array(w).fill(' '));
+  for(let r=0;r<mapHeight;r++)
+    for(let c=0;c<Math.min(w,mapWidth);c++)
+      newGrid[r][c] = grid[r][c]?.[c] || ' ';
+  grid = newGrid; mapWidth = w;
+  draw();
+}
+
+function draw(){
+  const canvas = document.getElementById('gridCanvas');
+  if(!canvas){
+    const c = document.createElement('canvas');
+    c.id = 'gridCanvas';
+    c.style.cursor = 'crosshair';
+    c.onmousedown = (e)=>{
+      if(e.shiftKey){
+        // Shift+click on 'p' tile → add pipe spawner
+        const cell = getCell(e);
+        if(cell && grid[cell.row][cell.col] === 'p'){
+          e.preventDefault();
+          startAddPipeSpawner(cell.col, cell.row);
+          return;
+        }
+      }
+      if(e.button === 2){ e.preventDefault(); eraseMode = true; }
+      else eraseMode = false;
+      isDragging = true;
+      const cell = getCell(e);
+      if(cell){
+        grid[cell.row][cell.col] = eraseMode ? ' ' : currentTile;
+        lastCell = cell;
+        draw();
+      }
+    };
+    c.onmousemove = (e)=>{
+      if(!isDragging) return;
+      const cell = getCell(e);
+      if(cell && !(cell.row===lastCell?.row && cell.col===lastCell?.col)){
+        grid[cell.row][cell.col] = eraseMode ? ' ' : currentTile;
+        lastCell = cell;
+        draw();
+        updateInfo(cell);
+      }
+    };
+    window.addEventListener('mouseup',()=>{ isDragging = false; lastCell = null; });
+    c.onwheel = handleWheel;
+    document.getElementById('gridWrap').innerHTML = '';
+    document.getElementById('gridWrap').appendChild(c);
+  }
+  const c = document.getElementById('gridCanvas');
+  const w = mapWidth * cellSize + 32;
+  const h = mapHeight * cellSize + 32;
+  c.width = w; c.height = h;
+  c.style.width = w + 'px'; c.style.height = h + 'px';
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0a0a18';
+  ctx.fillRect(0,0,w,h);
+
+  for(let r=0;r<mapHeight;r++){
+    for(let c=0;c<mapWidth;c++){
+      const x = 16 + c * cellSize;
+      const y = 16 + r * cellSize;
+      const ch = grid[r]?.[c] || ' ';
+      ctx.fillStyle = (r+c)%2===0 ? '#0d0d20' : '#101025';
+      ctx.fillRect(x,y,cellSize,cellSize);
+      if(ch !== ' '){
+        ctx.fillStyle = colorMap[ch] || '#555';
+        ctx.fillRect(x+1,y+1,cellSize-2,cellSize-2);
+        if(textMap[ch]){
+          ctx.fillStyle = '#fff';
+          ctx.font = `${cellSize-4}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.fillText(textMap[ch], x + cellSize/2, y + cellSize - 4);
+        }
+      }
+      // 管道刷怪标记：管道上方显示小圆点
+      const hasPs = editorPipeSpawners.find(ps=>ps.col===c && ps.row===r);
+      if(ch==='p' && hasPs){
+        ctx.fillStyle = hasPs.trigger==='contact'?'#f66':hasPs.trigger==='proximity'?'#fa0':'#ff0';
+        ctx.beginPath(); ctx.arc(x+cellSize/2, y+4, 3, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.strokeStyle = '#1a1a30';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x,y,cellSize,cellSize);
+    }
+  }
+  ctx.fillStyle = '#4a4a6a';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  for(let r=0;r<mapHeight;r++){
+    ctx.fillText(r, 14, 16 + r*cellSize + cellSize/2 + 3);
+  }
+  let header = '';
+  for(let c=0;c<mapWidth;c++){
+    header += c%10===0 ? `<span style="color:#7ac">${c}</span>` : '<span></span>';
+  }
+  document.getElementById('colHeader').innerHTML = header;
+}
+
+function getCell(e){
+  const c = document.getElementById('gridCanvas');
+  const rect = c.getBoundingClientRect();
+  const scaleX = c.width / rect.width;
+  const scaleY = c.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+  const col = Math.floor((mx - 16) / cellSize);
+  const row = Math.floor((my - 16) / cellSize);
+  if(col<0||col>=mapWidth||row<0||row>=mapHeight) return null;
+  return {row,col};
+}
+function handleWheel(e){
+  e.preventDefault();
+  if(e.ctrlKey || e.metaKey){
+    cellSize = Math.max(6, Math.min(40, cellSize + (e.deltaY>0?-2:2)));
+    draw();
+  }
+}
+function updateInfo(cell){
+  document.getElementById('info').textContent = 
+    `行列(${cell.row},${cell.col}) | 瓦片: ${TILES.find(t=>t.ch===grid[cell.row][cell.col])?.name||'空气'} | 宽${mapWidth}×高${mapHeight} | 缩放${cellSize}px`;
+}
+
+// ===== 管道刷怪编辑器 =====
+function renderPipeSpawnerList(){
+  const el = document.getElementById('pipeSpawnerList');
+  if(!el) return;
+  if(editingPsIdx >= 0){
+    const ps = editingPsIdx < editorPipeSpawners.length ? editorPipeSpawners[editingPsIdx] : {col:'',row:'',trigger:'timer',type:'staph',dir:'up',cooldown:'',range:'',interval:''};
+    el.innerHTML = `<div class="inline-form">
+      <label>列 (col)</label><input type="number" id="psCol" value="${ps.col||''}" min="0" max="${mapWidth-1}">
+      <label>行 (row)</label><input type="number" id="psRow" value="${ps.row||''}" min="0" max="${mapHeight-1}">
+      <label>触发方式</label>
+      <select id="psTrigger">
+        <option value="timer" ${ps.trigger==='timer'?'selected':''}>timer 定时</option>
+        <option value="proximity" ${ps.trigger==='proximity'?'selected':''}>proximity 接近</option>
+        <option value="contact" ${ps.trigger==='contact'?'selected':''}>contact 踩中</option>
+      </select>
+      <label>敌人类型</label>
+      <select id="psType">
+        <option value="staph" ${ps.type==='staph'?'selected':''}>葡萄球菌 staph</option>
+        <option value="strep" ${ps.type==='strep'?'selected':''}>链球菌 strep</option>
+        <option value="staphLarge" ${ps.type==='staphLarge'?'selected':''}>大型葡萄球菌</option>
+      </select>
+      <label>方向</label><select id="psDir"><option value="up" ${ps.dir==='up'?'selected':''}>上</option><option value="down" ${ps.dir==='down'?'selected':''}>下</option></select>
+      <label>冷却帧 (cooldown, timer用)</label><input type="number" id="psCooldown" value="${ps.cooldown||''}" min="0" placeholder="180">
+      <label>接近范围格子 (range, proximity用)</label><input type="number" id="psRange" value="${ps.range||''}" min="1" placeholder="4">
+      <label>间隔帧 (interval, timer用)</label><input type="number" id="psInterval" value="${ps.interval||''}" min="1" placeholder="300">
+      <div class="btn-row">
+        <button class="ok" onclick="savePipeSpawner()">✅ 保存</button>
+        <button onclick="cancelPipeSpawner()">取消</button>
+      </div>
+    </div>`;
+    return;
+  }
+  if(editorPipeSpawners.length === 0){
+    el.innerHTML = '<div style="font-size:10px;color:#555">暂无管道刷怪</div>';
+    return;
+  }
+  el.innerHTML = editorPipeSpawners.map((ps,i)=>`<div class="config-item">
+    <span class="tag">${ps.trigger}</span>
+    <span>(${ps.col},${ps.row}) ${ps.type}</span>
+    <button onclick="editPipeSpawner(${i})">✏️</button>
+    <button class="del" onclick="deletePipeSpawner(${i})">✕</button>
+  </div>`).join('');
+}
+function startAddPipeSpawner(col, row){
+  editingPsIdx = editorPipeSpawners.length;
+  editorPipeSpawners.push({col:col||0, row:row||0, trigger:'timer', type:'staph', dir:'up'});
+  renderPalette();
+  draw();
+}
+function editPipeSpawner(idx){
+  editingPsIdx = idx;
+  renderPalette();
+}
+function cancelPipeSpawner(){
+  // 如果是新增的空条目，移除
+  if(editingPsIdx === editorPipeSpawners.length - 1 && !editorPipeSpawners[editingPsIdx].col && !editorPipeSpawners[editingPsIdx].row){
+    editorPipeSpawners.pop();
+  }
+  editingPsIdx = -1;
+  renderPalette();
+  draw();
+}
+function savePipeSpawner(){
+  const ps = {
+    col: parseInt(document.getElementById('psCol').value) || 0,
+    row: parseInt(document.getElementById('psRow').value) || 0,
+    trigger: document.getElementById('psTrigger').value,
+    type: document.getElementById('psType').value,
+    dir: document.getElementById('psDir').value,
+  };
+  const cd = parseInt(document.getElementById('psCooldown').value);
+  if(cd > 0) ps.cooldown = cd;
+  const rng = parseInt(document.getElementById('psRange').value);
+  if(rng > 0) ps.range = rng;
+  const ival = parseInt(document.getElementById('psInterval').value);
+  if(ival > 0) ps.interval = ival;
+  editorPipeSpawners[editingPsIdx] = ps;
+  editingPsIdx = -1;
+  renderPalette();
+  draw();
+}
+function deletePipeSpawner(idx){
+  if(!confirm(`删除管道刷怪 (${editorPipeSpawners[idx].col},${editorPipeSpawners[idx].row})？`)) return;
+  editorPipeSpawners.splice(idx, 1);
+  renderPalette();
+  draw();
+}
+
+// ===== 知识卡片编辑器 =====
+function renderKnowledgeCardList(){
+  const el = document.getElementById('knowledgeCardList');
+  if(!el) return;
+  if(editingKcIdx >= 0){
+    const kc = editingKcIdx < editorKnowledgeCards.length ? editorKnowledgeCards[editingKcIdx] : {x:'',y:'',key:'wbc',title:'',text:''};
+    el.innerHTML = `<div class="inline-form">
+      <label>触发位置 x (像素)</label><input type="number" id="kcX" value="${kc.x||''}" min="0" placeholder="200">
+      <label>触发高度 y (像素，可选)</label><input type="number" id="kcY" value="${kc.y||''}" min="0" placeholder="留空=不限制">
+      <label>细胞类型</label>
+      <select id="kcKey">
+        <option value="wbc" ${kc.key==='wbc'?'selected':''}>白细胞 WBC</option>
+        <option value="rbc" ${kc.key==='rbc'?'selected':''}>红细胞 RBC</option>
+        <option value="plt" ${kc.key==='plt'?'selected':''}>血小板 PLT</option>
+      </select>
+      <label>标题</label><input type="text" id="kcTitle" value="${kc.title||''}" placeholder="卡片标题">
+      <label>正文（\\n 换行）</label><textarea id="kcText" placeholder="卡片正文内容...">${kc.text||''}</textarea>
+      <div class="btn-row">
+        <button class="ok" onclick="saveKnowledgeCard()">✅ 保存</button>
+        <button onclick="cancelKnowledgeCard()">取消</button>
+      </div>
+    </div>`;
+    return;
+  }
+  if(editorKnowledgeCards.length === 0){
+    el.innerHTML = '<div style="font-size:10px;color:#555">暂无知识卡片</div>';
+    return;
+  }
+  el.innerHTML = editorKnowledgeCards.map((kc,i)=>`<div class="config-item">
+    <span class="tag">${kc.key||'?'}</span>
+    <span>x=${kc.x} ${kc.title||'(无标题)'}</span>
+    <button onclick="editKnowledgeCard(${i})">✏️</button>
+    <button class="del" onclick="deleteKnowledgeCard(${i})">✕</button>
+  </div>`).join('');
+}
+function startAddKnowledgeCard(){
+  editingKcIdx = editorKnowledgeCards.length;
+  editorKnowledgeCards.push({x:0, key:'wbc', title:'', text:''});
+  renderPalette();
+}
+function editKnowledgeCard(idx){
+  editingKcIdx = idx;
+  renderPalette();
+}
+function cancelKnowledgeCard(){
+  if(editingKcIdx === editorKnowledgeCards.length - 1 && !editorKnowledgeCards[editingKcIdx].x && !editorKnowledgeCards[editingKcIdx].title){
+    editorKnowledgeCards.pop();
+  }
+  editingKcIdx = -1;
+  renderPalette();
+}
+function saveKnowledgeCard(){
+  const kc = {
+    x: parseInt(document.getElementById('kcX').value) || 0,
+    key: document.getElementById('kcKey').value,
+    title: document.getElementById('kcTitle').value.trim(),
+    text: document.getElementById('kcText').value.trim(),
+  };
+  const yVal = parseInt(document.getElementById('kcY').value);
+  if(yVal > 0) kc.y = yVal;
+  editorKnowledgeCards[editingKcIdx] = kc;
+  editingKcIdx = -1;
+  renderPalette();
+}
+function deleteKnowledgeCard(idx){
+  if(!confirm(`删除知识卡片「${editorKnowledgeCards[idx].title||'(无标题)'}」？`)) return;
+  editorKnowledgeCards.splice(idx, 1);
+  renderPalette();
+}
+
+// ── Export / Import ──
+function exportMap(){
+  const name = document.getElementById('levelName').value || '新关卡';
+  const w = mapWidth;
+  const lines = grid.map(row => `      "${row.join('')}",`);
+  const extras = buildExtraStr();
+  const code = `/* ${name} */\nconst LEVEL_X = {\n  name: '${name}',\n  width: ${w},\n  cellType: 3,\n  winCondition: WIN_COLLECT_ALL,\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};`;
+  document.getElementById('exportText').value = code;
+  document.getElementById('exportModal').classList.add('show');
+}
+function copyExport(){
+  const ta = document.getElementById('exportText');
+  ta.select();
+  document.execCommand('copy');
+  alert('已复制！');
+}
+async function saveLevel(){
+  const name = document.getElementById('levelName').value || '新关卡';
+  const fileId = document.getElementById('levelSelect').value;
+  const presets = ['level0_blood','level1_wbc','level2_alveoli','level3_vessel','level4_lymph','level5_boss'];
+  const levelNum = fileId !== '' ? fileId : presets.length;
+  const fileName = fileId !== '' ? presets[parseInt(fileId)] : ('level' + levelNum + '_custom');
+  const lines = grid.map(row => `      "${row.join('')}",`);
+  const extras = buildExtraStr();
+  const code = `/* ${name} */\nconst LEVEL_${levelNum} = {\n  name: '${name}',\n  width: ${mapWidth},\n  cellType: 3,\n  winCondition: WIN_COLLECT_ALL,\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};\n`;
+  try{
+    const r = await fetch('/save', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({filename: fileName + '.js', code})
+    });
+    const j = await r.json();
+    if(j.ok){
+      alert(`✅ ${fileName}.js 已保存！刷新游戏即可看到修改`);
+    } else {
+      alert('❌ 保存失败: ' + j.error);
+    }
+  }catch(e){
+    alert('❌ 保存失败: ' + e.message);
+  }
+}
+
+// ===== 保存为自定义关卡到 localStorage =====
+let selectedIcon = '🗺️';
+const GAME_ICONS = [
+  '🗺️','⚔️','🧪','🦠','🧬','💉','🩸','🫁','❤️',
+  '🧠','🦴','💪','🔬','⭐','🎮','🏆','🎯','💎',
+];
+function saveToGame(){
+  const nameEl = document.getElementById('customLevelName');
+  nameEl.value = document.getElementById('levelName').value || '自定义关卡';
+  const grid = document.getElementById('iconPickerGrid');
+  grid.innerHTML = '';
+  GAME_ICONS.forEach(ico => {
+    const btn = document.createElement('div');
+    btn.style.cssText = 'width:44px;height:44px;border-radius:8px;background:#2a2a4a;border:2px solid #3a3a5a;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;transition:all .12s';
+    btn.textContent = ico;
+    btn.onclick = ()=>{
+      selectedIcon = ico;
+      document.querySelectorAll('#iconPickerGrid div').forEach(d => d.style.borderColor='#3a3a5a');
+      btn.style.borderColor = '#ffd700';
+      btn.style.background = '#4a3a1a';
+      btn.style.boxShadow = '0 0 8px rgba(255,215,0,.3)';
+    };
+    if(ico === '🗺️'){
+      btn.style.borderColor = '#ffd700';
+      btn.style.background = '#4a3a1a';
+    }
+    grid.appendChild(btn);
+  });
+  selectedIcon = '🗺️';
+  document.getElementById('iconPickerModal').classList.add('show');
+}
+function doSaveToGame(){
+  const name = document.getElementById('customLevelName').value.trim() || '自定义关卡';
+  const mapRows = grid.map(row => row.join(''));
+  const levelData = {
+    name, width: mapWidth, cellType: 3, winCondition: 'collectAll',
+    sky: ['#7a2a3e','#e8a0a0'], map: mapRows,
+    floatPlatforms: [], pipeSpawners: editorPipeSpawners,
+    tutorials: editorTutorials, knowledgeCards: editorKnowledgeCards,
+    icon: selectedIcon, desc: '由玩家在地图编辑器中创建',
+  };
+  try{
+    const raw = localStorage.getItem('cellQuest_customLevels');
+    const levels = raw ? JSON.parse(raw) : [];
+    levels.push(levelData);
+    localStorage.setItem('cellQuest_customLevels', JSON.stringify(levels));
+    document.getElementById('iconPickerModal').classList.remove('show');
+    alert(`✅ "${name}" 已保存为自定义关卡！\n刷新游戏主页即可在关卡选择中看到。`);
+  }catch(e){
+    alert('❌ 保存失败: ' + e.message);
+  }
+}
+function importMap(){
+  document.getElementById('importModal').classList.add('show');
+}
+function doImport(){
+  const text = document.getElementById('importText').value;
+  const mapMatch = text.match(/map:\s*\[([\s\S]*?)\],/);
+  if(!mapMatch){alert('未找到 map 数组');return;}
+  const rows = mapMatch[1].match(/"([^"]*)"/g);
+  if(!rows){alert('无法解析地图行');return;}
+  const mapRows = rows.map(l=>l.slice(1,-1));
+  mapWidth = mapRows[0].length;
+  mapHeight = mapRows.length;
+  grid = mapRows.map(r=>r.split(''));
+  document.getElementById('mapWidth').value = mapWidth;
+  const nameMatch = text.match(/name:\s*'([^']+)'/);
+  if(nameMatch) document.getElementById('levelName').value = nameMatch[1];
+  parseExtraConfig(text);
+  draw();
+  document.getElementById('importModal').classList.remove('show');
+}
+
+// ── Load preset ──
+let _customLevelCache = [];  // 缓存从 localStorage 加载的自定义关卡
+
+async function loadPresetList(){
+  const sel = document.getElementById('levelSelect');
+  // 保留第一个 option (占位)
+  sel.innerHTML = '<option value="">加载现有关卡...</option>';
+  const files = ['level0_blood','level1_wbc','level2_alveoli','level3_vessel','level4_lymph','level5_boss'];
+  const names = ['血液循环','擦伤','肺泡迷宫','血管奔流','淋巴结','Boss感染'];
+  for(let i=0;i<files.length;i++){
+    try{
+      const r = await fetch(`js/levels/${files[i]}.js`);
+      const code = await r.text();
+      sel.innerHTML += `<option value="builtin_${i}">第${i}关: ${names[i]}</option>`;
+      sel.dataset['code_builtin_'+i] = code;
+    }catch(e){}
+  }
+  // 加载自定义关卡
+  _customLevelCache = [];
+  try{
+    const raw = localStorage.getItem('cellQuest_customLevels');
+    if(raw){
+      _customLevelCache = JSON.parse(raw);
+      _customLevelCache.forEach((lvl, i) => {
+        const name = lvl.name || '自定义关卡';
+        sel.innerHTML += `<option value="custom_${i}">📝 ${name}</option>`;
+      });
+    }
+  }catch(e){}
+  if(_customLevelCache.length === 0){
+    sel.innerHTML += '<option disabled>— 无自定义关卡 —</option>';
+  }
+}
+function loadPreset(idx){
+  if(idx==='') return;
+  if(idx.startsWith('builtin_')){
+    const key = 'code_' + idx;
+    const code = document.getElementById('levelSelect').dataset[key];
+    if(code){
+      currentCustomIdx = -1;
+      document.getElementById('customActions').style.display = 'none';
+      doImportRaw(code);
+    }
+  } else if(idx.startsWith('custom_')){
+    const ci = parseInt(idx.split('_')[1]);
+    if(ci >= 0 && ci < _customLevelCache.length){
+      loadCustomPreset(ci);
+    }
+  }
+}
+
+// 从自定义关卡加载
+function loadCustomPreset(ci){
+  const lvl = _customLevelCache[ci];
+  mapWidth = lvl.width || 135;
+  mapHeight = lvl.map ? lvl.map.length : 15;
+  grid = lvl.map ? lvl.map.map(r => r.padEnd(mapWidth, ' ').split('')) : Array.from({length:mapHeight},()=>Array(mapWidth).fill(' '));
+  snapshot = grid.map(r=>[...r]);
+  document.getElementById('mapWidth').value = mapWidth;
+  document.getElementById('levelName').value = lvl.name || '自定义关卡';
+  editorPipeSpawners = lvl.pipeSpawners || [];
+  editorKnowledgeCards = lvl.knowledgeCards || [];
+  editorTutorials = lvl.tutorials || [];
+  editingPsIdx = -1;
+  editingKcIdx = -1;
+  currentCustomIdx = ci;
+  document.getElementById('customActions').style.display = 'inline';
+  renderPalette();
+  draw();
+}
+
+// 编辑自定义关卡（在当前编辑器内容基础上更新）
+function saveCustomPreset(ci){
+  const lvl = _customLevelCache[ci];
+  lvl.name = document.getElementById('levelName').value || lvl.name;
+  lvl.width = mapWidth;
+  lvl.map = grid.map(r=>r.join(''));
+  lvl.pipeSpawners = editorPipeSpawners;
+  lvl.tutorials = editorTutorials;
+  lvl.knowledgeCards = editorKnowledgeCards;
+  try{
+    localStorage.setItem('cellQuest_customLevels', JSON.stringify(_customLevelCache));
+    alert(`✅ 自定义关卡「${lvl.name}」已更新！`);
+  }catch(e){
+    alert('❌ 保存失败: ' + e.message);
+  }
+}
+
+// 删除自定义关卡（从编辑器）
+function deleteCustomPreset(ci){
+  const name = _customLevelCache[ci].name || '自定义关卡';
+  if(!confirm(`确定删除「${name}」？\n此操作不可撤销。`)) return;
+  _customLevelCache.splice(ci, 1);
+  try{
+    localStorage.setItem('cellQuest_customLevels', JSON.stringify(_customLevelCache));
+    currentCustomIdx = -1;
+    document.getElementById('customActions').style.display = 'none';
+    alert(`✅「${name}」已删除`);
+    loadPresetList();
+    newMap();
+  }catch(e){
+    alert('❌ 删除失败: ' + e.message);
+  }
+}
+
+// 工具栏按钮：更新当前加载的自定义关卡
+function saveCurrentCustom(){
+  if(currentCustomIdx < 0 || currentCustomIdx >= _customLevelCache.length) return;
+  saveCustomPreset(currentCustomIdx);
+}
+function deleteCurrentCustom(){
+  if(currentCustomIdx < 0 || currentCustomIdx >= _customLevelCache.length) return;
+  deleteCustomPreset(currentCustomIdx);
+}
+function doImportRaw(text){
+  const mapMatch = text.match(/map:\s*\[([\s\S]*?)\],/);
+  if(!mapMatch) return;
+  const rows = mapMatch[1].match(/"([^"]*)"/g);
+  if(!rows) return;
+  const mapRows = rows.map(l=>l.slice(1,-1));
+  mapWidth = mapRows[0].length;
+  mapHeight = mapRows.length;
+  grid = mapRows.map(r=>r.split(''));
+  snapshot = grid.map(r=>[...r]);
+  document.getElementById('mapWidth').value = mapWidth;
+  const nameMatch = text.match(/name:\s*'([^']+)'/);
+  if(nameMatch) document.getElementById('levelName').value = nameMatch[1];
+  parseExtraConfig(text);
+  draw();
+}
+
+// 从关卡源码中解析 pipeSpawners / tutorials / knowledgeCards 为 JS 数组
+function parseExtraConfig(text){
+  editorPipeSpawners = [];
+  editorKnowledgeCards = [];
+  editorTutorials = [];
+  editingPsIdx = -1;
+  editingKcIdx = -1;
+
+  // 安全 eval：构造 JS 表达式并求值
+  function safeEvalArray(key){
+    const re = new RegExp(key + ':\\s*(\\[[\\s\\S]*?\\])\\s*[,\\x7D]');
+    const m = text.match(re);
+    if(!m || m[1].trim() === '[]') return null;
+    try{
+      // 用 eval 解析 JS 字面量数组
+      return eval('(' + m[1] + ')');
+    }catch(e){
+      console.warn('parseExtraConfig: failed to eval ' + key, e);
+      return null;
+    }
+  }
+
+  const ps = safeEvalArray('pipeSpawners');
+  if(ps) editorPipeSpawners = ps;
+  const tut = safeEvalArray('tutorials');
+  if(tut) editorTutorials = tut;
+  const kc = safeEvalArray('knowledgeCards');
+  if(kc) editorKnowledgeCards = kc;
+
+  renderPalette();
+}
+
+init();
+</script>
+</body>
+</html>
