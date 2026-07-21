@@ -1502,9 +1502,6 @@ function init(){
   $('btn-start').onclick = ()=>{ Sfx.init(); showHub(); $('game-container').focus(); };
   $('btn-menu-back').onclick = ()=>{ showMenu(); };
   $('btn-hub-pedia').onclick = ()=>{ showPedia(); };
-  $('btn-hub-settings').onclick = ()=>{
-    showToast('⚙️ 设置功能开发中...');
-  };
   $('btn-pedia-close').onclick = ()=>{ closePedia(); };
   $('btn-pedia-wbc').onclick = ()=>{ showCharDetail('wbc'); };
   $('btn-pedia-rbc').onclick = ()=>{ showCharDetail('rbc'); };
@@ -1518,12 +1515,6 @@ function init(){
   $('btn-bubble-skip').onclick = ()=>{ skipAllTutorials(); };
   // 记忆卡片关闭
   $('btn-memory-close').onclick = ()=>{ closeMemoryCard(); };
-  // 技能树
-  $('btn-hub-settings').onclick = ()=>{ openSkillTree(); };
-  $('btn-skill-close').onclick = ()=>{ closeSkillTree(); };
-  // 装备
-  $('btn-hub-equip').onclick = ()=>{ openEquipment(); };
-  $('btn-equip-close').onclick = ()=>{ closeEquipment(); };
   // 确认框
   let confirmCallback=null;
   window.showConfirm=(msg,onYes)=>{Game.paused=true;$('confirm-msg').textContent=msg;$('confirm-dialog').classList.remove('hidden');confirmCallback=onYes;};
