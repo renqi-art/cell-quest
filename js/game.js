@@ -20,12 +20,6 @@ class Level {
     this.miniSpawnArea = mapData.miniSpawnArea || null;
     this.miniSpawnTimer = 0;
     this.knowledgeCards = mapData.knowledgeCards || [];
-    this.pipeSpawners = mapData.pipeSpawners || [];
-    this.pipeTimers = this.pipeSpawners.map(() => 0);
-    this.pipeCooldowns = this.pipeSpawners.map(() => 0);
-    this.pipeTriggered = this.pipeSpawners.map(() => false);
-    // 碎裂平台 (Cat Mario 式陷阱)
-    this.crumblePlatforms = [];
     this.load();
     this.loadFloatPlatforms(mapData);
   }
@@ -48,7 +42,7 @@ class Level {
       for(let c=0;c<this.width;c++){
         const ch = line[c] || ' ';
         switch(ch){
-          case '#': case '=': case 'S': case 'B': case '^': case 'V': case 'J': case 'p':
+          case '#': case '=': case 'S': case 'B': case '^':
             arr.push(ch); break;
           case 'P':
             this.playerSpawn = {x:c*TILE, y:r*TILE};
@@ -95,23 +89,6 @@ class Level {
           case '*':
             this.items.push(new Item(c*TILE+8, r*TILE+8, 'memory'));
             arr.push(' '); break;
-          case '?':
-            Game.qBlocks.push(new QBlock(c*TILE, r*TILE));
-            arr.push(' '); break;
-          case 'X':
-            Game.qBlocks.push(new QBlock(c*TILE, r*TILE, true));
-            arr.push(' '); break;
-          case 'H':
-            arr.push('H'); break;
-          case 'F':
-            this.finish = {x:c*TILE, y:r*TILE, col:c, row:r};
-            arr.push(' '); break;
-          case 'a':
-            this.items.push(new Item(c*TILE+4, r*TILE+4, 'atp'));
-            arr.push(' '); break;
-          case '_':
-            this.crumblePlatforms.push({x:c*TILE, y:r*TILE, col:c, row:r, state:'solid', timer:0});
-            arr.push('_'); break;
           default:
             arr.push(' ');
         }
@@ -120,54 +97,12 @@ class Level {
     }
   }
 
-  solidTile(ch){ return ch==='#'||ch==='='||ch==='S'||ch==='B'||ch==='p'||ch==='_'; }
-
-  // 碎裂平台：检查指定位置是否已崩解（已崩解则不实心）
-  isCrumbleGone(col, row){
-    for(const cp of this.crumblePlatforms){
-      if(cp.col === col && cp.row === row && cp.state === 'gone') return true;
-    }
-    return false;
-  }
-
-  // 触发碎裂平台抖动
-  triggerCrumble(col, row){
-    for(const cp of this.crumblePlatforms){
-      if(cp.col === col && cp.row === row && cp.state === 'solid'){
-        cp.state = 'shaking';
-        cp.timer = CRUMBLE_SHAKE_FRAMES;
-        return;
-      }
-    }
-  }
-
-  updateCrumblePlatforms(){
-    for(const cp of this.crumblePlatforms){
-      if(cp.state === 'shaking'){
-        cp.timer--;
-        if(cp.timer <= 0){
-          cp.state = 'gone';
-          cp.timer = CRUMBLE_RESPAWN_FRAMES;
-          spawnParticles(cp.x + TILE/2, cp.y + TILE/2, C.crumbleShake, 12, 3);
-        }
-      } else if(cp.state === 'gone'){
-        cp.timer--;
-        if(cp.timer <= 0){
-          cp.state = 'solid';
-          cp.timer = 0;
-        }
-      }
-    }
-  }
+  solidTile(ch){ return ch==='#'||ch==='='||ch==='S'||ch==='B'; }
 
   solidAt(col, row){
     if(col<0 || row<0 || row>=this.grid.length) return false;
     if(!this.grid[row] || col>=this.grid[row].length) return false;
-    const ch = this.grid[row][col];
-    if(!this.solidTile(ch)) return false;
-    // 碎裂平台崩解后不实心
-    if(ch === '_' && this.isCrumbleGone(col, row)) return false;
-    return true;
+    return this.solidTile(this.grid[row][col]);
   }
 
   solidAtPX(x, y, w, h){
@@ -240,58 +175,6 @@ class Level {
     spawnParticles(spawnCol*TILE + TILE/2, 13*TILE, C.miniStaph, 8, 1.5);
   }
 
-  // ===== 管道刷怪 =====
-  updatePipeSpawns(player){
-    for(let i=0;i<this.pipeSpawners.length;i++){
-      const ps = this.pipeSpawners[i];
-      const px = ps.col * TILE;
-      const dx = Math.abs(px - player.x);
-      if(dx > CW * 1.5) continue;
-      
-      // Cooldown tick
-      if(this.pipeCooldowns[i] > 0){ this.pipeCooldowns[i]--; continue; }
-      
-      const trigger = ps.trigger || 'timer';
-      if(trigger === 'proximity'){
-        const range = (ps.range || 5) * TILE;
-        if(dx < range && !this.pipeTriggered[i]){
-          this.pipeTriggered[i] = true;
-          this.spawnPipeEnemy(ps, i);
-        }
-        if(dx > range * 1.5) this.pipeTriggered[i] = false;
-      } else if(trigger === 'contact'){
-        // 踩上管道才出怪
-        const px2 = ps.col * TILE;
-        const py2 = ps.row * TILE;
-        if(Math.abs(player.x - px2) < TILE * 1.2 && 
-           player.y + player.h > py2 - 4 && player.y + player.h < py2 + TILE &&
-           !this.pipeTriggered[i]){
-          this.pipeTriggered[i] = true;
-          this.spawnPipeEnemy(ps, i);
-        }
-        if(Math.abs(player.x - px2) > TILE * 3) this.pipeTriggered[i] = false;
-      } else {
-        this.pipeTimers[i]++;
-        if(this.pipeTimers[i] < (ps.interval || 300)) continue;
-        this.pipeTimers[i] = 0;
-        this.spawnPipeEnemy(ps, i);
-      }
-    }
-  }
-  
-  spawnPipeEnemy(ps, i){
-    const ex = ps.col * TILE + TILE/2;
-    const ey = ps.row * TILE - 8;
-    const enemy = new Enemy(ps.col * TILE + 4, ey, ps.type || 'staph');
-    enemy.vy = ps.trigger === 'contact' ? -9 : -5; // contact: 飞出天际
-    enemy.flyAway = ps.trigger === 'contact';      // 不落地
-    this.enemies.push(enemy);
-    spawnParticles(ex, ey, ps.type==='strep'?C.strep:C.staph, 8, 3);
-    if(ps.trigger === 'proximity' || ps.trigger === 'contact'){
-      this.pipeCooldowns[i] = ps.cooldown || 180;
-    }
-  }
-
   draw(ctx, camX){
     const startCol=Math.max(0,Math.floor(camX/TILE));
     const endCol=Math.min(this.width-1, Math.ceil((camX+CW)/TILE));
@@ -303,7 +186,7 @@ class Level {
       }
     }
     for(const cp of this.checkpoints) this.drawCheckpoint(ctx, cp, camX);
-    if(this.finish) this.drawGate(ctx, camX);
+    if(this.finish) this.drawFinish(ctx, camX);
   }
 
   drawTile(ctx, ch, x, y, col, row){
@@ -364,69 +247,6 @@ class Level {
           ctx.closePath(); ctx.fill();
         }
         break;
-      case 'V':
-        // 弹簧方块：绿色弹跳垫
-        ctx.fillStyle = '#2a6a4a';
-        ctx.fillRect(x, y, TILE, TILE);
-        ctx.fillStyle = '#4acd6a';
-        ctx.fillRect(x+2, y+TILE-8, TILE-4, 8);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('▲', x + TILE/2, y + TILE - 4);
-        ctx.fillText('SPRING', x + TILE/2, y + TILE/2);
-        break;
-      case 'J':
-        // 左心室泵跳板：红色弹跳垫
-        ctx.fillStyle = '#c04040';
-        ctx.fillRect(x, y, TILE, TILE);
-        ctx.fillStyle = '#ff6060';
-        ctx.fillRect(x+2, y+TILE-6, TILE-4, 6);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('PUMP', x + TILE/2, y + TILE/2);
-        break;
-      case 'p':
-        // 血管管道：暗绿色圆柱
-        ctx.fillStyle = '#1a5c2a';
-        ctx.fillRect(x+2, y, TILE-4, TILE);
-        ctx.fillStyle = '#2a8c3a';
-        ctx.fillRect(x+2, y, TILE-4, 4);
-        ctx.fillRect(x+2, y, 6, TILE);
-        ctx.fillStyle = '#0d3d15';
-        ctx.fillRect(x+TILE-8, y, 6, TILE);
-        break;
-      case 'H':
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = C.hiddenWall;
-        ctx.fillRect(x, y, TILE, TILE);
-        ctx.globalAlpha = 0.15;
-        ctx.fillStyle = C.hiddenWallHint;
-        ctx.fillRect(x+4, y+4, TILE-8, TILE-8);
-        ctx.globalAlpha = 1;
-        break;
-      case '_':
-        // 碎裂平台：检查状态
-        { const cp = this.crumblePlatforms.find(p => p.col === col && p.row === row);
-          if(cp && cp.state === 'gone') break; // 已崩解不绘制
-          const shaking = cp && cp.state === 'shaking';
-          const shakeX = shaking ? Math.sin(cp.timer * 0.8) * 3 : 0;
-          ctx.fillStyle = shaking ? C.crumbleShake : C.crumble;
-          ctx.fillRect(x + shakeX, y, TILE, TILE);
-          ctx.fillStyle = shaking ? '#ffcc66' : C.crumbleTop;
-          ctx.fillRect(x + shakeX, y, TILE, 4);
-          // 抖动时画裂纹
-          if(shaking){
-            ctx.strokeStyle = '#000';
-            ctx.lineWidth = 1.5;
-            ctx.globalAlpha = 0.7;
-            ctx.beginPath();
-            ctx.moveTo(x+4, y+4); ctx.lineTo(x+10, y+20); ctx.lineTo(x+18, y+8);
-            ctx.lineTo(x+26, y+24);
-            ctx.stroke();
-            ctx.globalAlpha = 1;
-          }
-        }
-        break;
     }
   }
 
@@ -435,63 +255,35 @@ class Level {
     const t=Game.frame*0.05;
     const col = cp.active ? C.checkpointActive : C.checkpoint;
     ctx.save();
+    ctx.globalAlpha=0.3+Math.sin(t)*0.15;
     ctx.fillStyle=col;
-    ctx.beginPath(); ctx.arc(x,y,10,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x,y,16,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.fillStyle=col;
+    ctx.beginPath(); ctx.arc(x,y,8,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='#fff';
-    ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
-    ctx.fillText(cp.active?'✓':'C', x, y+5);
+    ctx.font='bold 10px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(cp.active?'✓':'◎', x, y+4);
     ctx.restore();
   }
 
-  drawGate(ctx, camX){
-    const x = Math.round(this.finish.x) - Math.round(camX);
-    const y = this.finish.y;
-    const t = Game.frame * 0.06;
-    const winMet = (Game.winCondition === WIN_KILL_ALL && Game.allEnemiesDead)
-                || (Game.winCondition === WIN_COLLECT_ALL && Game.itemsCollected >= Game.totalItems);
-    
+  drawFinish(ctx, camX){
+    const x=Math.round(this.finish.x) - Math.round(camX), y=this.finish.y;
+    const t=Game.frame*0.08;
     ctx.save();
-    if(winMet){
-      // 门打开：金色光柱 + 门板向两侧滑开
-      const openAmt = Math.min(1, (Game.frame % 120) / 30); // 渐开动画
-      // 光柱
-      const grad = ctx.createLinearGradient(x+TILE/2, y-60, x+TILE/2, y+TILE);
-      grad.addColorStop(0, 'rgba(255,215,0,0)');
-      grad.addColorStop(0.5, C.gateGlow);
-      grad.addColorStop(1, 'rgba(255,215,0,0.7)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(x, y-60, TILE, TILE+60);
-      // 左门板
-      ctx.fillStyle = C.gateOpen;
-      ctx.fillRect(x + 2 - openAmt * TILE/2, y, TILE/2 - 2, TILE);
-      // 右门板
-      ctx.fillRect(x + TILE/2 + openAmt * TILE/2, y, TILE/2 - 2, TILE);
-      // 顶部门楣
-      ctx.fillStyle = C.gateOpen;
-      ctx.fillRect(x+2, y-4, TILE-4, 8);
-      // 脉冲光环
-      ctx.globalAlpha = 0.3 + Math.sin(t*2)*0.15;
-      ctx.strokeStyle = C.gateOpen;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x+1, y, TILE-2, TILE);
-      ctx.globalAlpha = 1;
-    } else {
-      // 门锁着：深色门 + 锁图标
-      ctx.fillStyle = C.gateLocked;
-      ctx.fillRect(x+2, y, TILE-4, TILE);
-      ctx.fillStyle = '#6a4a0a';
-      ctx.fillRect(x+4, y+2, TILE-8, TILE-4);
-      // 锁
-      ctx.fillStyle = '#ffd700';
-      ctx.font = 'bold 14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('🔒', x+TILE/2, y+TILE/2+5);
-      // 条件提示
-      ctx.fillStyle = '#ffd700';
-      ctx.font = '9px sans-serif';
-      const hint = Game.winCondition === WIN_KILL_ALL ? '消灭全部敌人' : '收集全部物品';
-      ctx.fillText(hint, x+TILE/2, y-6);
-    }
+    const grad=ctx.createLinearGradient(x+TILE/2, y-100, x+TILE/2, y+TILE);
+    grad.addColorStop(0, 'rgba(255,215,0,0)');
+    grad.addColorStop(0.5, 'rgba(255,215,0,0.3)');
+    grad.addColorStop(1, 'rgba(255,215,0,0.6)');
+    ctx.fillStyle=grad;
+    ctx.fillRect(x-4, y-100, TILE+8, TILE+100);
+    ctx.globalAlpha=0.6+Math.sin(t)*0.2;
+    ctx.fillStyle=C.finish;
+    ctx.fillRect(x+4, y-10, TILE-8, TILE+10);
+    ctx.globalAlpha=1;
+    ctx.fillStyle='#fff';
+    ctx.font='bold 10px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('愈合', x+TILE/2, y+TILE/2);
     ctx.restore();
   }
 }
@@ -531,7 +323,12 @@ function setupInput(){
       Game.keys[KEY_MAP[e.key]] = true;
       e.preventDefault();
     }
-    // v2: 角色切换已移除，细胞由关卡锁定
+    if(Game.state==='playing' && !Game.tutorialPause && !Game.memoryCardOpen && !Game.paused){
+      if(e.key==='1') Game.player.switchCell(1);
+      if(e.key==='2') Game.player.switchCell(2);
+      if(e.key==='3') Game.player.switchCell(3);
+    }
+    // 记忆卡片：Space/Enter/Escape 关闭
     if(Game.memoryCardOpen && (e.key===' '||e.key==='Enter'||e.key==='Escape')){
       closeMemoryCard();
       e.preventDefault();
@@ -647,7 +444,6 @@ function update(){
 
   if(Game.memoryCardOpen){
     Game.prevKeys = {...Game.keys};
-    if(Game.camera.shake > 0) Game.camera.shake = 0;
     return;
   }
   if(Game.tutorialPause){
@@ -661,10 +457,6 @@ function update(){
 
   const p = Game.player;
   const lvl = Game.level;
-
-  // v2: ATP 基础代谢消耗
-  Game.globalEnergy -= PASSIVE_DRAIN;
-  if(Game.globalEnergy < 0) Game.globalEnergy = 0;
 
   // 开局出血期（前8秒持续缓慢扣能量）
   if(Game.bleedingTimer < BLEEDING_PHASE_FRAMES){
@@ -701,16 +493,9 @@ function update(){
   }
 
   // 敌人更新
-  const prevKills = Game.stats.kills;
   for(const e of lvl.enemies) e.update(lvl, p);
   // 清除死亡敌人（保留非迷你死亡敌人用于重生）
   lvl.enemies = lvl.enemies.filter(e => e.alive || !e.isMini);
-
-  // v2: 击杀回能
-  const killedThisFrame = Game.stats.kills - prevKills;
-  if(killedThisFrame > 0){
-    Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + killedThisFrame * KILL_ATP_SMALL);
-  }
 
   // Boss更新
   if(Game.boss) Game.boss.update(lvl, p);
@@ -739,9 +524,6 @@ function update(){
   for(const pt of Game.pusTiles) pt.update();
   Game.pusTiles = Game.pusTiles.filter(pt=>!pt.expired);
 
-  // 碎裂平台更新
-  lvl.updateCrumblePlatforms();
-
   // 浮动平台更新
   for(const fp of Game.floatPlatforms) fp.update();
 
@@ -751,8 +533,6 @@ function update(){
   for(const dn of Game.damageNumbers)dn.update();Game.damageNumbers=Game.damageNumbers.filter(dn=>dn.life>0);
   // 迷你敌人刷新
   lvl.updateMiniSpawn(p);
-  // 管道刷怪
-  lvl.updatePipeSpawns(p);
 
   // 存档点检测
   for(const cp of lvl.checkpoints){
@@ -766,13 +546,11 @@ function update(){
     }
   }
 
-  // 终点门检测
-  if(lvl.finish && p.x+p.w > lvl.finish.x+2 && p.x < lvl.finish.x+TILE-2 &&
+  // 终点检测（需消灭全部敌人+Boss）
+  if(lvl.finish && p.x+p.w > lvl.finish.x+4 && p.x < lvl.finish.x+TILE-4 &&
      p.y+p.h > lvl.finish.y && p.y < lvl.finish.y+TILE){
-    if(Game.winCondition === WIN_KILL_ALL && !Game.allEnemiesDead){
-      showToast('还有细菌未消灭！\n请清除全部敌人后再进入大门');
-    } else if(Game.winCondition === WIN_COLLECT_ALL && Game.itemsCollected < Game.totalItems){
-      showToast(`还有物品未收集！\n已收集 ${Game.itemsCollected}/${Game.totalItems}`);
+    if(!Game.allEnemiesDead){
+      showToast('还有细菌未消灭！\n请清除全部敌人后再到达终点');
     } else {
       levelComplete();
       return;
@@ -843,7 +621,6 @@ function render(){
   if(Game.player) Game.player.draw(ctx, camX);
   for(const pa of Game.particles) pa.draw(ctx, camX);
   for(const dn of Game.damageNumbers) dn.draw(ctx, camX);
-  for(const qb of Game.qBlocks) qb.draw(ctx, camX);
   ctx.restore();
 
   // 潮汐状态指示器 (屏幕顶部)
@@ -965,30 +742,6 @@ function updateHUD(){
   if(memIcon){
     memIcon.classList.toggle('found', Game.stats.foundMemory);
   }
-
-  // v2: 通关目标显示
-  const objEl = $('objective-display');
-  if(objEl){
-    if(Game.winCondition === WIN_KILL_ALL){
-      const alive = (Game.level.enemies.filter(e=>e.alive).length) + (Game.boss&&Game.boss.alive?1:0);
-      objEl.textContent = alive === 0 ? '⚔️ ✓' : `⚔️ ${alive}`;
-      objEl.style.color = alive === 0 ? '#66ff66' : '#ff6b6b';
-    } else if(Game.winCondition === WIN_COLLECT_ALL){
-      const done = Game.itemsCollected >= Game.totalItems;
-      objEl.textContent = `📦 ${Game.itemsCollected}/${Game.totalItems}`;
-      objEl.style.color = done ? '#66ff66' : '#ffd700';
-    }
-  }
-
-  // v2: 动态底栏
-  const ctrlEl = $('hud-controls');
-  if(ctrlEl && Game.player){
-    if(Game.player.cellType === 1){
-      ctrlEl.innerHTML = '<span><kbd>←→</kbd>移动</span> <span class="sep">|</span> <span><kbd>空格</kbd>跳跃</span> <span class="sep">|</span> <span><kbd>↓</kbd>下蹲</span> <span class="sep">|</span> <span><kbd>E</kbd>挥剑</span> <span class="sep">|</span> <span><kbd>Shift</kbd>突进</span>';
-    } else {
-      ctrlEl.innerHTML = '<span><kbd>←→</kbd>移动</span> <span class="sep">|</span> <span><kbd>空格</kbd>跳跃</span> <span class="sep">|</span> <span><kbd>↓</kbd>下蹲</span>';
-    }
-  }
 }
 
 // ===== 头像：使用角色设计原画裁切图 =====
@@ -1062,9 +815,6 @@ function dismissTutorial(){
   } else {
     Game.tutorialPause = false;
   }
-  // 清除 jump 键状态，防止关闭对话框的 Space/Enter 被消费为跳跃输入（空中卡住 bug）
-  Game.keys.jump = false;
-  if(Game.player) Game.player.jumpBuffer = 0;
 }
 
 function skipAllTutorials(){
@@ -1171,8 +921,6 @@ function showMenu(){
 
 function showHub(){
   Game.state = 'hub';
-  // 刷新自定义关卡（编辑器可能新保存了关卡）
-  refreshCustomLevels();
   $('main-menu').classList.add('hidden');
   $('hub-screen').classList.remove('hidden');
   $('hud').classList.remove('active');
@@ -1200,95 +948,39 @@ function renderHubCellIntros(){
 function renderLevelGrid(){
   const grid = $('level-grid');
   grid.innerHTML = '';
-  const configs = buildLevelConfigs();
-  for(let i=0; i < configs.length; i++){
-    const cfg = configs[i];
+  for(let i=0;i<5;i++){
+    const cfg = LEVEL_CONFIGS[i];
     const card = document.createElement('div');
     const isLocked = !Game.unlocked[i];
-    const isCustom = cfg._isCustom;
-    const cellLabel = cfg.cellType === 1 ? '⚪WBC' : cfg.cellType === 3 ? '🔴RBC' : '';
 
     let innerHTML = '';
 
     if(isLocked){
       innerHTML += `
-        <div class="lv-header">${isCustom ? '<span class="custom-badge">自定义</span>???' : '第'+i+'关'}</div>
+        <div class="lv-header">第${i+1}关</div>
         <div class="lock-overlay">🔒</div>
         <div class="lv-icon-wrap"><div class="lv-icon">${cfg.icon}</div></div>
         <div class="lv-name">???</div>
       `;
     } else {
-      const customNum = i - 6 + 1;
       innerHTML += `
-        <div class="lv-header">${isCustom ? '<span class="custom-badge">自订#'+customNum+'</span>'+cfg.name : '第'+i+'关: '+cfg.name} <small>${cellLabel}</small></div>
+        <div class="lv-header">第${i+1}关: ${cfg.name}</div>
         <div class="lv-icon-wrap"><div class="lv-icon">${cfg.icon}</div></div>
         <div class="lv-name">${cfg.name}</div>
         ${Game.completed[i] ? `<div class="stars">${'★'.repeat(Game.stars[i])}${'☆'.repeat(3-Game.stars[i])}</div>` : ''}
-        ${isCustom ? `<button class="btn-icon-pick" data-idx="${i}" title="更换图标" onclick="event.stopPropagation();pickCustomIcon(${i})">🎨</button><button class="btn-level-delete" data-idx="${i}" title="删除此关卡" onclick="event.stopPropagation();deleteCustomLevelCard(${i})">✕</button>` : ''}
       `;
     }
 
-    card.className = 'level-card' + (isLocked ? ' locked' : '') + (isCustom ? ' custom' : '');
+    card.className = 'level-card' + (isLocked ? ' locked' : '');
     card.innerHTML = innerHTML;
     card.title = isLocked ? '未解锁' : cfg.desc;
 
     if(!isLocked){
-      card.onclick = ()=>LoadLevel(i);
+      card.onclick = ()=>LoadLevel(i+1);
     }
 
     grid.appendChild(card);
   }
-}
-
-// 删除自定义关卡（从主页）
-function deleteCustomLevelCard(idx){
-  const ci = idx - 6; // custom index within the array
-  if(ci < 0) return;
-  const levels = loadCustomLevels();
-  if(ci >= levels.length) return;
-  const name = levels[ci].name || '自定义关卡';
-  if(!confirm(`确定要删除「${name}」吗？\n此操作不可撤销。`)) return;
-  deleteCustomLevel(ci);
-  refreshCustomLevels();
-  renderLevelGrid();
-  showToast(`已删除「${name}」`);
-}
-function pickCustomIcon(idx){
-  const levels = loadCustomLevels();
-  const ci = idx - 6; // custom index within the array
-  if(ci < 0 || ci >= levels.length) return;
-
-  // 弹出图标选择器
-  const overlay = document.createElement('div');
-  overlay.className = 'icon-picker-overlay';
-  overlay.onclick = (e)=>{ if(e.target === overlay) overlay.remove(); };
-  const box = document.createElement('div');
-  box.className = 'icon-picker-box';
-  box.innerHTML = '<h3>选择关卡图标</h3>';
-  const iconGrid = document.createElement('div');
-  iconGrid.className = 'icon-picker-grid';
-  CUSTOM_LEVEL_ICONS.forEach(ico => {
-    const btn = document.createElement('div');
-    btn.className = 'icon-picker-item' + (ico.id === levels[ci].icon ? ' selected' : '');
-    btn.title = ico.label;
-    btn.textContent = ico.id;
-    btn.onclick = (e)=>{
-      e.stopPropagation();
-      setCustomLevelIcon(ci, ico.id);
-      refreshCustomLevels();
-      renderLevelGrid();
-      overlay.remove();
-    };
-    iconGrid.appendChild(btn);
-  });
-  box.appendChild(iconGrid);
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'btn';
-  closeBtn.textContent = '关闭';
-  closeBtn.onclick = ()=> overlay.remove();
-  box.appendChild(closeBtn);
-  overlay.appendChild(box);
-  document.body.appendChild(overlay);
 }
 
 function togglePause(){
@@ -1313,8 +1005,7 @@ function levelComplete(){
   Sfx.complete();
   const idx = Game.levelIndex;
   Game.completed[idx] = true;
-  const configs = buildLevelConfigs();
-  if(idx + 1 < configs.length) Game.unlocked[idx + 1] = true;
+  if(idx + 1 < 5) Game.unlocked[idx + 1] = true;
 
   // 星级评定
   const energyPct = Game.globalEnergy / getMaxEnergy();
@@ -1337,7 +1028,7 @@ function levelComplete(){
   }
   saveGame();
 
-  $('complete-level-name').textContent = buildLevelConfigs()[idx].name;
+  $('complete-level-name').textContent = LEVEL_CONFIGS[idx].name;
   $('stat-kills').textContent = Game.stats.kills;
   $('stat-items').textContent = Game.stats.items;
   $('stat-energy').textContent = Math.round(Game.globalEnergy);
@@ -1377,12 +1068,12 @@ function backToHub(){
 
 // ===== 关卡加载（通用入口函数） =====
 function LoadLevel(n){
-  const idx = n; // v2: 0-based index
-  if(idx < 0 || idx >= buildLevelConfigs().length) return false;
-  if(!Game.unlocked[idx]){
+  if(n < 1 || n > 5) return false;
+  if(!Game.unlocked[n-1]){
     showToast('关卡未解锁！');
     return false;
   }
+  const idx = n - 1;
   const mapData = LEVEL_MAPS[idx];
   if(!mapData.map || mapData.map.length === 0){
     showToast('该关卡正在建设中...');
@@ -1390,18 +1081,11 @@ function LoadLevel(n){
   }
 
   Game.levelIndex = idx;
-  Game.qBlocks = [];
   Game.level = new Level(mapData);
   Game.player = new Player(Game.level.playerSpawn.x, Game.level.playerSpawn.y);
-  // v2: 关卡锁定细胞类型
-  const cfg = buildLevelConfigs()[idx];
-  Game.player.cellType = cfg.cellType || 1;
-  Game.winCondition = cfg.winCondition || WIN_KILL_ALL;
-  Game.itemsCollected = 0;
-  Game.totalItems = Game.level.items.length;
-  Game.particles = [];Game.damageNumbers = [];
   Game.player.checkpointX = Game.level.playerSpawn.x;
   Game.player.checkpointY = Game.level.playerSpawn.y;
+  Game.particles = [];Game.damageNumbers = [];
   Game.tempPlatforms = [];
   Game.projectiles = [];
   Game.camera = {x:0, y:0, shake:0};
@@ -1452,7 +1136,7 @@ function LoadLevel(n){
 
   // 低能量惩罚提示
   if(Game.globalEnergy < LOW_ENERGY){
-    showToast('⚠ 能量不足！移动速度降低');
+    showToast('⚠ 能量不足！移动速度降低，无法搭桥');
   }
 
   Game.state = 'playing';
@@ -1495,10 +1179,6 @@ function init(){
   // 预加载游戏场景背景图
   Game.bgImg = new Image();
   Game.bgImg.src = 'images/game-bg.png';
-
-  // ATP 能量图像
-  Game.atpImg = new Image();
-  Game.atpImg.src = 'images/atp.png';
 
   // ===== WBC 完整动作精灵系统 v3 =====
   // 动作精灵表（12帧：idle/walk/crouch/jump/attack/side/back/special）
