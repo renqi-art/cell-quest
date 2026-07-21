@@ -1376,7 +1376,7 @@ class Item {
     if(rectOverlap(this, player)){
       this.alive = false;
       Game.stats.items++;
-      if(this.type !== 'atp') Game.itemsCollected++; // ATP不计数
+      if(this.type !== 'atp') Game.itemsCollected++;
       Sfx.pickup();
       if(this.type === 'shield'){
         player.shield = SHIELD_DURATION;
