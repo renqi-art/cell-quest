@@ -167,6 +167,8 @@ class Level {
     if(!this.solidTile(ch)) return false;
     // 碎裂平台崩解后不实心
     if(ch === '_' && this.isCrumbleGone(col, row)) return false;
+    // ? 方块始终有碰撞体积（顶完也不消失）
+    if(Game.qBlocks.some(qb => qb.x/TILE === col && qb.y/TILE === row)) return true;
     return true;
   }
 
