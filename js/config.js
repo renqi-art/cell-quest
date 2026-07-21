@@ -47,6 +47,10 @@ const TIDE_WARN_FRAMES = 30;   // 潮涌前预警变色帧数
 const FLOAT_SPEED = 0.035;     // 角速度
 const FLOAT_RANGE = 32;        // 上下浮动半幅(px)
 
+// ===== 碎裂平台（踩踏后崩解，Cat Mario 式陷阱）=====
+const CRUMBLE_SHAKE_FRAMES = 45;  // 0.75 秒抖动预警
+const CRUMBLE_RESPAWN_FRAMES = 240; // 4 秒后重生
+
 // ===== 白细胞突进 =====
 const DASH_COST     = 10;
 const DASH_SPEED    = 7;
@@ -101,11 +105,28 @@ const BRIDGE_TIDE_PAUSE = 120;      // 2秒
 const HEALING_START_COL = 55;
 const HEALING_END_COL = 75;
 
-// ===== 道具能量 =====
-const COIN_ENERGY   = 10;  // 金币恢复能量
-const FOOD_ENERGY   = 25;  // 食物恢复能量
-const DRINK_ENERGY  = 15;  // 饮料恢复能量
-const NUTRITION_ENERGY = 30; // 营养包恢复能量（仅红细胞可收集）
+// ===== 道具能量（v2: ATP 统一能源，以下均废弃改为 0）=====
+const COIN_ENERGY   = 0;   // 金币不再提供能量
+const FOOD_ENERGY   = 0;   // 食物不再提供能量
+const DRINK_ENERGY  = 0;   // 饮料不再提供能量
+const NUTRITION_ENERGY = 0; // 营养包不再提供能量（仅作收集计数）
+
+// ===== ATP 能源系统 =====
+const PASSIVE_DRAIN = 0.015;   // 基础代谢消耗/帧
+const RBC_OXY_REGEN = 0.06;    // RBC 氧气领域回能/帧
+const KILL_ATP_SMALL = 15;     // 普通敌人击杀 +ATP
+const KILL_ATP_LARGE = 30;     // 大型敌人击杀 +ATP
+const KILL_ATP_BOSS  = 100;    // Boss 击杀 +ATP
+const QBLOCK_ATP     = 15;     // ? 方块掉落 ATP
+const ATP_PICKUP     = 20;     // ATP 拾取物
+
+// ===== 关卡细胞锁定 & 通关条件 =====
+const WIN_KILL_ALL = 'killAll';
+const WIN_COLLECT_ALL = 'collectAll';
+
+// ===== ? 方块 =====
+const QBLOCK_BOUNCE_FRAMES = 12;
+const QBLOCK_BOUNCE_AMT = 8;
 
 // ===== Boss =====
 const BOSS_HP    = 10;
@@ -178,6 +199,57 @@ function unequipItem(slot){const id=Game.equipment[slot];if(!id)return false;if(
 // ===== 速通 =====
 const SPEEDRUN_KEY = 'cellQuest_bestTime_1';
 
+// ===== 自定义关卡系统 =====
+const CUSTOM_LEVEL_ICONS = [
+  { id:'🗺️', label:'地图' }, { id:'⚔️', label:'战斗' }, { id:'🧪', label:'实验' },
+  { id:'🦠', label:'细菌' }, { id:'🧬', label:'DNA' }, { id:'💉', label:'注射' },
+  { id:'🩸', label:'血液' }, { id:'🫁', label:'肺部' }, { id:'❤️', label:'心脏' },
+  { id:'🧠', label:'大脑' }, { id:'🦴', label:'骨骼' }, { id:'💪', label:'肌肉' },
+  { id:'🔬', label:'显微镜' }, { id:'⭐', label:'星星' }, { id:'🎮', label:'游戏' },
+  { id:'🏆', label:'奖杯' }, { id:'🎯', label:'靶心' }, { id:'💎', label:'钻石' },
+];
+
+function loadCustomLevels(){
+  try{
+    const raw = localStorage.getItem('cellQuest_customLevels');
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return [];
+}
+function saveCustomLevels(levels){
+  try{ localStorage.setItem('cellQuest_customLevels', JSON.stringify(levels)); }catch(e){}
+}
+function addCustomLevel(levelData, icon){
+  const levels = loadCustomLevels();
+  levelData.icon = icon || '🗺️';
+  levelData.createdAt = Date.now();
+  levels.push(levelData);
+  saveCustomLevels(levels);
+  return levels.length - 1;
+}
+function deleteCustomLevel(idx){
+  const levels = loadCustomLevels();
+  levels.splice(idx, 1);
+  saveCustomLevels(levels);
+}
+function updateCustomLevel(idx, levelData){
+  const levels = loadCustomLevels();
+  if(idx >= 0 && idx < levels.length){
+    levelData.icon = levelData.icon || levels[idx].icon || '🗺️';
+    levelData.createdAt = levels[idx].createdAt || Date.now();
+    levels[idx] = levelData;
+    saveCustomLevels(levels);
+  }
+}
+function setCustomLevelIcon(idx, icon){
+  const levels = loadCustomLevels();
+  if(idx >= 0 && idx < levels.length){
+    levels[idx].icon = icon;
+    saveCustomLevels(levels);
+  }
+}
+
+
 // ===== 调色板 =====
 const C = {
   // 天空
@@ -231,6 +303,14 @@ const C = {
   boss:'#8b0000', bossDark:'#5a0000', bossEye:'#ff1744', bossBar:'#ff3030',
   // 挥剑
   sword:'#fff9c4', swordGlow:'#fff59d',
+  // ? 方块
+  qBlock:'#ffd700', qBlockEmpty:'#6a5a30',
+  // 隐藏墙
+  hiddenWall:'#3a2a4a', hiddenWallHint:'#5a4a6a',
+  // 终点门
+  gateLocked:'#8b6914', gateOpen:'#ffd700', gateGlow:'rgba(255,215,0,0.4)',
+  // 碎裂平台
+  crumble:'#8a6a3a', crumbleTop:'#aa8a4a', crumbleShake:'#ffaa44',
 };
 
 // ===== 三细胞定义 =====
@@ -261,23 +341,19 @@ const CELLS = {
   },
 };
 
-// ===== 关卡配置（5关插槽） =====
-const LEVEL_CONFIGS = [
-  { id:1, name:'擦伤', icon:'🩹', desc:'新手教学关。学习移动、跳跃、细胞切换、踩踏细菌、血小板搭桥。', bg:[C.sky1,C.sky3] },
-  { id:2, name:'肺泡迷宫', icon:'🫁', desc:'呼吸系统·链球菌滋生·浮动气泡平台。', bg:['#1a2a3a','#3a6a8a'] },
-  { id:3, name:'血管奔流', icon:'🩸', desc:'循环系统·失血潮涌·Boss守卫。', bg:['#2a0a1a','#5a1a3a'] },
-  { id:4, name:'淋巴结',   icon:'⚪', desc:'免疫中枢，强敌环伺。', bg:['#1a1a2a','#3a3a5a'], locked:true },
-  { id:5, name:'Boss感染', icon:'☠️', desc:'终极威胁，击败感染源。', bg:['#2a0a0a','#6a0a0a'], locked:true },
-];
+// ===== 关卡配置（动态生成，含自定义关卡）=====
+// 注意：使用 buildLevelConfigs() 获取完整列表（定义在 levels.js）
+// 旧的 LEVEL_CONFIGS 常量已由 buildLevelConfigs() 替代
+
 
 // ===== 全局游戏状态 =====
 const Game = {
   state: 'menu',           // menu | hub | playing | paused | complete | dead
-  levelIndex: 0,           // 当前关卡索引 (0-4)
+  levelIndex: 0,           // 当前关卡索引 (0-5)
   // 全局进度
-  unlocked: [true, true, true, false, false],
-  completed: [false, false, false, false, false],
-  stars:     [0, 0, 0, 0, 0],
+  unlocked: [true, true, true, true, true, true],
+  completed: [false, false, false, false, false, false],
+  stars:     [0, 0, 0, 0, 0, 0],
   globalEnergy: 100,
   // 运行时
   keys: {},
@@ -333,6 +409,14 @@ const Game = {
   knowledgeShown: { wbc:false, rbc:false, plt:false },
   // 全敌击杀通关条件
   allEnemiesDead: false,
+  // v2: 关卡细胞锁定
+  winCondition: null,
+  itemsCollected: 0,
+  totalItems: 0,
+  // ? 方块
+  qBlocks: [],
+  // ATP 图片
+  atpImg: null,
   renderAlpha: 0,
   // RPG系统
   playerLevel:1,xp:0,skillPoints:0,damageNumbers:[],
@@ -366,8 +450,14 @@ function loadGame(){
       Game.xp = d.xp || 0; Game.skillPoints = d.skillPoints || 0;
       Game.skills = d.skills || {wbc:{damagePlus:0,dashCooldown:0,swordRange:0,slamRadius:0},plt:{bridgeCost:0,bridgeDuration:0,shieldDuration:0,healOnBridge:0},rbc:{energyDrain:0,oxyFieldPower:0,maxEnergy:0,nutritionBonus:0}};
       Game.equipment = d.equipment || {weapon:null,armor:null,accessory:null}; Game.inventory = d.inventory || [];
-      while(Game.unlocked.length<5)Game.unlocked.push(true);
-      Game.unlocked[1]=true; Game.unlocked[2]=true;
+      // 扩容到当前实际关卡数 + 自定义关卡
+      const total = buildLevelConfigs().length;
+      while(Game.unlocked.length < total) Game.unlocked.push(true);
+      while(Game.completed.length < total) Game.completed.push(false);
+      while(Game.stars.length < total) Game.stars.push(0);
+      if(Game.unlocked.length > total) Game.unlocked.splice(total);
+      if(Game.completed.length > total) Game.completed.splice(total);
+      if(Game.stars.length > total) Game.stars.splice(total);
     }
   }catch(e){}
 }
