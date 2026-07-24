@@ -61,10 +61,28 @@ body{
   border:1px solid #3a3a5a;font-size:13px;font-weight:600;
 }
 #cell-badge .dot{width:12px;height:12px;border-radius:50%;border:1px solid rgba(255,255,255,.2);}
-#hearts{display:flex;gap:3px;}
-.heart{width:20px;height:18px;position:relative;filter:drop-shadow(0 0 3px rgba(255,50,80,.4));}
-.heart svg{width:100%;height:100%;}
-.heart.empty svg path{fill:#3a1520;stroke:#4a2030;}
+#health-bar-wrap{display:flex;flex-direction:column;gap:2px;align-items:flex-start;min-width:100px;}
+#health-bar{
+  width:100px;height:12px;
+  background:rgba(20,8,12,.7);
+  border:1px solid #6a2030;
+  border-radius:6px;
+  overflow:hidden;
+  box-shadow:0 0 4px rgba(0,0,0,.5) inset;
+}
+#health-bar-fill{
+  height:100%;
+  background:linear-gradient(90deg, #ff4757 0%, #ff6b8a 50%, #ffb3c0 100%);
+  width:100%;
+  transition:width .3s ease;
+  box-shadow:0 0 6px rgba(255,71,87,.6);
+}
+#health-bar-fill.low{background:linear-gradient(90deg, #c0392b 0%, #e74c3c 100%);animation:pulse 1s ease-in-out infinite;}
+#health-bar-fill.critical{background:linear-gradient(90deg, #922b21 0%, #c0392b 100%);animation:pulse .5s ease-in-out infinite;}
+#health-text{
+  font-size:10px;color:#ffb3c0;font-family:monospace;font-weight:700;
+  text-shadow:0 0 4px rgba(255,71,87,.5);
+}
 #hud-tr{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
 #objective-display{
   font-size:14px;font-weight:700;padding:3px 10px;border-radius:6px;
@@ -137,6 +155,33 @@ body{
   padding:1px 5px;font-size:10px;font-family:monospace;
 }
 #hud-bottom .sep{color:#4a4a6a;}
+
+/* ===== 技能槽（WBC 1/2/3/4）===== */
+#skill-bar{display:flex;gap:8px;align-items:center;margin-left:auto;}
+.skill-slot{
+  position:relative;width:44px;height:44px;
+  background:#1a1a2a;border:2px solid #3a3a5a;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:default;overflow:hidden;transition:border-color .2s ease;
+}
+.skill-slot.ready{border-color:#ffd700;box-shadow:0 0 6px rgba(255,215,0,.4);}
+.skill-slot.cooling{opacity:.7;}
+.skill-icon{font-size:22px;line-height:1;pointer-events:none;}
+.skill-key{
+  position:absolute;top:1px;left:3px;
+  font-size:9px;color:#aaa;font-family:monospace;pointer-events:none;
+}
+.skill-cooldown{
+  position:absolute;inset:0;
+  background:rgba(10,10,30,.7);
+  display:none;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;color:#fff;font-family:monospace;
+}
+.skill-slot.cooling .skill-cooldown{display:flex;}
+.skill-charges{
+  position:absolute;bottom:1px;right:3px;
+  font-size:9px;color:#00e5ff;font-family:monospace;pointer-events:none;
+}
 
 /* ===== Overlays ===== */
 .overlay{
@@ -522,6 +567,22 @@ body{
 #death-flash{position:absolute;inset:0;background:rgba(255,30,30,.4);z-index:18;display:none;}
 #death-flash.active{display:block;animation:flash .4s ease;}
 @keyframes flash{from{opacity:.6;}to{opacity:0;}}
+
+/* ===== Death Panel ===== */
+#death-panel{z-index:45;background:rgba(10,10,18,.96);}
+#death-panel h1{font-size:28px;color:#ff4757;margin-bottom:4px;}
+#death-panel h3{font-size:18px;color:#ffd700;margin-bottom:4px;}
+#death-panel #death-msg{font-size:15px;color:#ccc;margin:8px 0;}
+.death-cells{display:flex;gap:14px;justify-content:center;align-items:center;margin:18px 0;}
+.death-cell-avatar{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 0 6px rgba(255,71,87,.5));transition:filter .3s ease,opacity .3s ease;}
+.death-cell-avatar.lost{filter:grayscale(1) brightness(.4) drop-shadow(0 0 4px rgba(80,80,100,.3));opacity:.5;}
+.death-cell-count{font-size:42px;font-weight:700;color:#fff;font-family:'Courier New',monospace;text-shadow:0 0 8px rgba(255,71,87,.6);transition:color .3s ease;}
+.death-cell-count.lost{color:#555;text-shadow:none;}
+/* 旧版兼容（如果别处用了 .death-cell-icon） */
+.death-cell-icon{width:28px;height:28px;border-radius:50%;border:2px solid #ff4757;transition:all .3s ease;}
+.death-cell-icon.alive{background:rgba(255,71,87,.4);box-shadow:0 0 8px rgba(255,71,87,.3);}
+.death-cell-icon.lost{background:rgba(80,80,100,.3);border-color:#555;box-shadow:none;}
+#btn-retry:disabled{opacity:.4;cursor:not-allowed;pointer-events:none;}
 
 /* ===== Equipment Screen ===== */
 #equipment-screen{padding:20px;gap:10px;}

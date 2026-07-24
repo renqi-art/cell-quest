@@ -13,8 +13,8 @@ class Player {
     this.crouching = false;
     this.facing = 1;
     this.cellType = 1;           // 1=WBC 2=PLT 3=RBC
-    this.health = 3;
-    this.maxHealth = 3;
+    this.health = 100;
+    this.maxHealth = 100;
     this.invincible = 0;
     this.coyote = 0;
     this.jumpBuffer = 0;
@@ -34,11 +34,26 @@ class Player {
     this.aoeStomp = 0;
     // 氧气领域计时
     this.oxyFieldTimer = 0;
+    // Boss溶血毒素贫血debuff
+    this.anemiaStacks = 0;
+    this.anemiaTimer = 0;
+    // 杀白细胞素锁定标记
+    this.leukocidinMarked = 0;
     // 脓液地块效果
     this.onPus = false;
     // 挥剑
     this.swordTimer = 0;
     this.swordCooldown = 0;
+    // ===== 新主动技能（WBC）=====
+    this.atk = WBC_BASE_ATK;          // 基础攻击力（装备会加成）
+    this.biteCooldown = 0;            // 技能1冷却
+    this.spitCooldown = 0;            // 技能2冷却
+    this.lanceCooldown = 0;           // 技能3冷却
+    this.pdashCharges = PDASH_CHARGES; // 技能4充能数
+    this.pdashCooldown = 0;           // 技能4充能恢复计时
+    this.pdashTimer = 0;              // 瞬突持续帧
+    this.pdashDir = 0;
+    this.invul = 0;                   // 不可选中（与 invincible 区分）
   }
 
   get cell(){ return CELLS[this.cellType]; }
@@ -110,6 +125,29 @@ class Player {
     // ===== 挥剑计时 =====
     if(this.swordTimer > 0) this.swordTimer--;
     if(this.swordCooldown > 0) this.swordCooldown--;
+
+    // ===== 新技能冷却计时 =====
+    if(this.biteCooldown > 0) this.biteCooldown--;
+    if(this.spitCooldown > 0) this.spitCooldown--;
+    if(this.lanceCooldown > 0) this.lanceCooldown--;
+    if(this.pdashCooldown > 0){
+      this.pdashCooldown--;
+      if(this.pdashCooldown === 0 && this.pdashCharges < PDASH_CHARGES){
+        this.pdashCharges++;
+        // 如果还有充能待恢复，重置计时器
+        if(this.pdashCharges < PDASH_CHARGES) this.pdashCooldown = PDASH_COOLDOWN;
+      }
+    }
+    if(this.pdashTimer > 0){
+      this.pdashTimer--;
+      // 瞬突中固定 vx
+      this.vx = this.pdashDir * 12;
+      if(this.pdashTimer === 0){
+        // 终点冲击波
+        this.pdashShockwave(level);
+      }
+    }
+    if(this.invul > 0) this.invul--;
 
     // ===== AoE踩踏buff计时 =====
     if(this.aoeStomp > 0) this.aoeStomp--;
@@ -280,6 +318,13 @@ class Player {
       if(this.cellType === 1) this.swordAttack(level);
       else if(this.cellType === 2) this.useBridge(level);
     }
+    // ===== WBC 新主动技能 1/2/3/4 =====
+    if(this.cellType === 1){
+      if(k.skill1 && !Game.prevKeys.skill1) this.phagocyticBite(level);
+      if(k.skill2 && !Game.prevKeys.skill2) this.oxidativeBurst(level);
+      if(k.skill3 && !Game.prevKeys.skill3) this.elastaseLance(level);
+      if(k.skill4 && !Game.prevKeys.skill4) this.bactericidalDash(level);
+    }
   }
 
   useDash(level){
@@ -399,6 +444,307 @@ class Player {
     updateHUD();
   }
 
+  // ===== 技能一：吞噬撕咬 (Phagocytic Bite) =====
+  // 单体爆发 + 斩杀回血
+  phagocyticBite(level){
+    if(this.biteCooldown > 0){ showToast('吞噬撕咬冷却中'); return; }
+    if(Game.globalEnergy < BITE_COST){ showToast('能量不足！'); return; }
+    Game.globalEnergy -= BITE_COST;
+    this.biteCooldown = BITE_COOLDOWN;
+    Sfx.dash();
+    const ax = this.x + this.w/2;
+    const ay = this.y + this.h/2;
+    // 找最近敌人
+    let target = null, targetBoss = null;
+    let minDist = BITE_RANGE;
+    for(const e of level.enemies){
+      if(!e.alive) continue;
+      const ex = e.x + e.w/2, ey = e.y + e.h/2;
+      const d = Math.hypot(ex - ax, ey - ay);
+      if(d < minDist){ minDist = d; target = e; }
+    }
+    if(Game.boss && Game.boss.alive){
+      const bx = Game.boss.x + Game.boss.w/2, by = Game.boss.y + Game.boss.h/2;
+      const d = Math.hypot(bx - ax, by - ay);
+      if(d < minDist * 2){ targetBoss = Game.boss; } // Boss 攻击范围放宽
+    }
+    if(!target && !targetBoss){ showToast('未找到目标'); return; }
+    // 计算伤害
+    const atk = this.atk;
+    let killed = false;
+    if(target){
+      const executeThreshold = target.maxHp * BITE_EXECUTE_PCT;
+      const isExecute = target.hp <= executeThreshold;
+      const dmg = isExecute ? Math.floor(atk * BITE_MULT * BITE_EXECUTE_MULT) : Math.floor(atk * BITE_MULT);
+      target.hp -= dmg;
+      spawnParticles(target.x + target.w/2, target.y + target.h/2, isExecute ? '#ff5252' : C.swordGlow, 14, 3);
+      DamageNumber && Game.damageNumbers.push(new DamageNumber(target.x + target.w/2, target.y, dmg, isExecute ? '#ff5252' : '#ffdd44'));
+      if(target.hp <= 0){
+        target.alive = false;
+        if(target.isLarge) target.split(level);
+        Game.stats.kills++;
+        spawnPusIfNeeded(target);
+        spawnParticles(target.x + target.w/2, target.y + target.h/2, target.type==='staph'?C.staph:C.strep, 14, 3);
+        killed = true;
+      }
+    }
+    if(targetBoss){
+      const b = targetBoss;
+      const executeThreshold = b.maxHp * BITE_EXECUTE_PCT;
+      const isExecute = b.hp <= executeThreshold;
+      const dmg = isExecute ? Math.floor(atk * BITE_MULT * BITE_EXECUTE_MULT) : Math.floor(atk * BITE_MULT);
+      b.hp -= dmg;
+      b.flashTimer = 8;
+      spawnParticles(b.x + b.w/2, b.y + b.h/2, isExecute ? '#ff5252' : C.swordGlow, 16, 3.5);
+      Game.damageNumbers.push(new DamageNumber(b.x + b.w/2, b.y, dmg, isExecute ? '#ff5252' : '#ffdd44'));
+      if(b.hp <= 0){
+        b.alive = false;
+        Game.stats.kills++;
+        spawnParticles(b.x + b.w/2, b.y + b.h/2, C.boss, 30, 5);
+        spawnParticles(b.x + b.w/2, b.y + b.h/2, C.bossEye, 20, 4);
+        Sfx.complete();
+        showToast('Boss 已击杀！');
+        killed = true;
+      }
+    }
+    // 击杀回血
+    if(killed){
+      const heal = Math.ceil(this.maxHealth * BITE_HEAL_PCT);
+      this.health = Math.min(this.maxHealth, this.health + heal);
+      spawnParticles(this.x + this.w/2, this.y + this.h/2, C.heal || '#66ff66', 16, 2);
+      showToast('吞噬撕咬！击杀回血 +' + heal);
+    } else {
+      showToast(isExecute ? '斩杀！' : '吞噬撕咬！');
+    }
+    updateHUD();
+  }
+
+  // ===== 技能二：活性氧喷吐 (Oxidative Burst Spit) =====
+  // 60°扇形 AOE + DOT + 防御降
+  oxidativeBurst(level){
+    if(this.spitCooldown > 0){ showToast('活性氧喷吐冷却中'); return; }
+    if(Game.globalEnergy < SPIT_COST){ showToast('能量不足！'); return; }
+    Game.globalEnergy -= SPIT_COST;
+    this.spitCooldown = SPIT_COOLDOWN;
+    Sfx.shoot();
+    const ax = this.x + this.w/2;
+    const ay = this.y + this.h/2;
+    const dirX = this.facing;
+    const halfAngle = (SPIT_RANGE_DEG / 2) * Math.PI / 180;
+    const range = SPIT_RANGE_M * METER;
+    const atk = this.atk;
+    const initialDmg = Math.floor(atk * SPIT_MULT);
+    const dotPerFrame = Math.floor(atk * SPIT_DOT_MULT / 60 * 10) / 10; // 每帧伤害（粗略）
+    const totalDotPerSec = atk * SPIT_DOT_MULT; // 每秒
+    const affected = []; // 记录命中目标，统一加 DOT
+    // 敌人
+    for(const e of level.enemies){
+      if(!e.alive) continue;
+      const ex = e.x + e.w/2, ey = e.y + e.h/2;
+      const dx = ex - ax, dy = ey - ay;
+      const dist = Math.hypot(dx, dy);
+      if(dist > range) continue;
+      // 朝向必须是前方
+      const dot = (dx * dirX) / (dist || 1);
+      if(dot < Math.cos(halfAngle)) continue;
+      e.hp -= initialDmg;
+      spawnParticles(ex, ey, '#ffeb3b', 8, 2);
+      Game.damageNumbers.push(new DamageNumber(ex, ey - 8, initialDmg, '#ffeb3b'));
+      e.dotTimer = SPIT_DOT_DUR;
+      e.dotPerSec = Math.floor(totalDotPerSec);
+      e.defDebuff = SPIT_DEF_DEBUFF;
+      e.defDebuffTimer = SPIT_DOT_DUR;
+      affected.push(e);
+      if(e.hp <= 0){
+        e.alive = false;
+        if(e.isLarge) e.split(level);
+        Game.stats.kills++;
+        spawnPusIfNeeded(e);
+        spawnParticles(ex, ey, '#ffeb3b', 12, 3);
+      }
+    }
+    // Boss
+    if(Game.boss && Game.boss.alive){
+      const b = Game.boss;
+      const bx = b.x + b.w/2, by = b.y + b.h/2;
+      const dx = bx - ax, dy = by - ay;
+      const dist = Math.hypot(dx, dy);
+      if(dist <= range * 1.5){ // Boss 范围放宽
+        const dot = (dx * dirX) / (dist || 1);
+        if(dot >= Math.cos(halfAngle)){
+          b.hp -= initialDmg;
+          b.flashTimer = 8;
+          spawnParticles(bx, by, '#ffeb3b', 14, 3);
+          Game.damageNumbers.push(new DamageNumber(bx, by - 8, initialDmg, '#ffeb3b'));
+          b.dotTimer = SPIT_DOT_DUR;
+          b.dotPerSec = Math.floor(totalDotPerSec);
+          b.defDebuff = SPIT_DEF_DEBUFF;
+          b.defDebuffTimer = SPIT_DOT_DUR;
+          affected.push(b);
+          if(b.hp <= 0){
+            b.alive = false;
+            Game.stats.kills++;
+            spawnParticles(bx, by, C.boss, 30, 5);
+            spawnParticles(bx, by, C.bossEye, 20, 4);
+            Sfx.complete();
+            showToast('Boss 已击杀！');
+          }
+        }
+      }
+    }
+    showToast('活性氧喷吐！命中 ' + affected.length + ' 个目标');
+    updateHUD();
+  }
+
+  // ===== 技能三：弹性蛋白酶贯枪 (Elastase Lance) =====
+  // 直线穿透 + 破甲 + 对生物膜/血盾加伤
+  elastaseLance(level){
+    if(this.lanceCooldown > 0){ showToast('弹性蛋白酶贯枪冷却中'); return; }
+    if(Game.globalEnergy < LANCE_COST){ showToast('能量不足！'); return; }
+    Game.globalEnergy -= LANCE_COST;
+    this.lanceCooldown = LANCE_COOLDOWN;
+    Sfx.shoot();
+    const ax = this.x + this.w/2;
+    const ay = this.y + this.h/2;
+    const dirX = this.facing;
+    const range = LANCE_RANGE_M * METER;
+    const halfWidth = (LANCE_WIDTH_M * METER) / 2;
+    const atk = this.atk;
+    const baseDmg = Math.floor(atk * LANCE_MULT);
+    // 直线矩形范围判定
+    const inLance = (tx, ty) => {
+      const dx = (tx - ax) * dirX; // 前方距离
+      const dy = Math.abs(ty - ay);
+      return dx > 0 && dx < range && dy < halfWidth;
+    };
+    // 敌人
+    let hits = 0;
+    for(const e of level.enemies){
+      if(!e.alive) continue;
+      const ex = e.x + e.w/2, ey = e.y + e.h/2;
+      if(!inLance(ex, ey)) continue;
+      // 加伤判定（Boss 生物膜/血盾；普通敌人也算 +50%）
+      const bonusMult = (e.biofilmActive || e.shieldActive) ? LANCE_BONUS_MULT : 1;
+      const dmg = Math.floor(baseDmg * bonusMult);
+      e.hp -= dmg;
+      spawnParticles(ex, ey, '#80deea', 10, 2.5);
+      Game.damageNumbers.push(new DamageNumber(ex, ey - 8, dmg, '#80deea'));
+      e.defPen = LANCE_DEF_PEN;
+      e.defPenTimer = LANCE_DEF_DUR;
+      hits++;
+      if(e.hp <= 0){
+        e.alive = false;
+        if(e.isLarge) e.split(level);
+        Game.stats.kills++;
+        spawnPusIfNeeded(e);
+        spawnParticles(ex, ey, '#80deea', 14, 3);
+      }
+    }
+    // Boss
+    if(Game.boss && Game.boss.alive){
+      const b = Game.boss;
+      const bx = b.x + b.w/2, by = b.y + b.h/2;
+      if(inLance(bx, by) || inLance(b.x + b.w/4, by) || inLance(b.x + b.w*3/4, by)){
+        const bonusMult = (b.biofilmActive || b.shieldActive) ? LANCE_BONUS_MULT : 1;
+        const dmg = Math.floor(baseDmg * bonusMult);
+        b.hp -= dmg;
+        b.flashTimer = 8;
+        spawnParticles(bx, by, '#80deea', 16, 3.5);
+        Game.damageNumbers.push(new DamageNumber(bx, by - 8, dmg, '#80deea'));
+        b.defPen = LANCE_DEF_PEN;
+        b.defPenTimer = LANCE_DEF_DUR;
+        hits++;
+        if(b.hp <= 0){
+          b.alive = false;
+          Game.stats.kills++;
+          spawnParticles(bx, by, C.boss, 30, 5);
+          spawnParticles(bx, by, C.bossEye, 20, 4);
+          Sfx.complete();
+          showToast('Boss 已击杀！');
+        }
+      }
+    }
+    // 视觉：直线特效（粒子轨迹）
+    for(let i = 0; i < 12; i++){
+      const px = ax + dirX * (range * i / 12);
+      spawnParticles(px, ay + (Math.random() - 0.5) * halfWidth, '#80deea', 4, 1.5);
+    }
+    showToast('弹性蛋白酶贯枪！穿透 ' + hits + ' 个目标' + (hits ? ' + 破甲' : ''));
+    updateHUD();
+  }
+
+  // ===== 技能四：杀菌渗透·瞬突 (Bactericidal Permeability Dash) =====
+  // 突进 + 终点冲击波 + 击退 + 不可选中 + 2层充能
+  bactericidalDash(level){
+    if(this.pdashCharges <= 0){ showToast('瞬突充能耗尽'); return; }
+    if(Game.globalEnergy < PDASH_COST){ showToast('能量不足！'); return; }
+    if(this.pdashTimer > 0) return; // 正在突进中
+    Game.globalEnergy -= PDASH_COST;
+    this.pdashCharges--;
+    if(this.pdashCharges === PDASH_CHARGES - 1 || this.pdashCooldown === 0){
+      this.pdashCooldown = PDASH_COOLDOWN; // 启动充能恢复计时
+    }
+    this.pdashTimer = 18; // 0.3秒冲刺
+    this.pdashDir = this.facing;
+    this.invul = PDASH_INVUL;
+    Sfx.dash();
+    spawnParticles(this.x + this.w/2, this.y + this.h/2, '#00e5ff', 14, 2);
+    showToast('杀菌渗透·瞬突！剩余充能 ' + this.pdashCharges + '/' + PDASH_CHARGES);
+    updateHUD();
+  }
+
+  // 瞬突终点冲击波
+  pdashShockwave(level){
+    const ax = this.x + this.w/2;
+    const ay = this.y + this.h/2;
+    const r = PDASH_SHOCK_R;
+    const atk = this.atk;
+    const dmg = Math.floor(atk * PDASH_MULT);
+    spawnParticles(ax, ay, '#00e5ff', 24, 4);
+    Sfx.hit();
+    // 敌人
+    for(const e of level.enemies){
+      if(!e.alive) continue;
+      const ex = e.x + e.w/2, ey = e.y + e.h/2;
+      const d = Math.hypot(ex - ax, ey - ay);
+      if(d > r) continue;
+      e.hp -= dmg;
+      // 击退
+      const kbDir = ex > ax ? 1 : -1;
+      e.vx = kbDir * 6;  // 给敌人一个推力
+      e.knockbackTimer = 20; // 20帧击退
+      spawnParticles(ex, ey, '#00e5ff', 8, 2);
+      Game.damageNumbers.push(new DamageNumber(ex, ey - 8, dmg, '#00e5ff'));
+      if(e.hp <= 0){
+        e.alive = false;
+        if(e.isLarge) e.split(level);
+        Game.stats.kills++;
+        spawnPusIfNeeded(e);
+      }
+    }
+    // Boss
+    if(Game.boss && Game.boss.alive){
+      const b = Game.boss;
+      const bx = b.x + b.w/2, by = b.y + b.h/2;
+      const d = Math.hypot(bx - ax, by - ay);
+      if(d <= r * 1.3){
+        b.hp -= dmg;
+        b.flashTimer = 8;
+        spawnParticles(bx, by, '#00e5ff', 14, 3.5);
+        Game.damageNumbers.push(new DamageNumber(bx, by - 8, dmg, '#00e5ff'));
+        if(b.hp <= 0){
+          b.alive = false;
+          Game.stats.kills++;
+          spawnParticles(bx, by, C.boss, 30, 5);
+          spawnParticles(bx, by, C.bossEye, 20, 4);
+          Sfx.complete();
+          showToast('Boss 已击杀！');
+        }
+      }
+    }
+    updateHUD();
+  }
+
   collideX(level){
     const tiles = level.getOverlapTiles(this);
     for(const t of tiles){
@@ -474,8 +820,8 @@ class Player {
       updateHUD();
       return;
     }
-    this.health--;
-    Game.damageNumbers.push(new DamageNumber(this.x+this.w/2,this.y-6,'-1❤','#ff4444'));
+    this.health -= 5;
+    Game.damageNumbers.push(new DamageNumber(this.x+this.w/2,this.y-6,'-5','#ff4444'));
     this.invincible = INVINCIBLE_FRAMES;
     Game.camera.shake = 8;
     Sfx.hit();
@@ -490,11 +836,13 @@ class Player {
     Game.camera.shake = 12;
     spawnParticles(this.x+this.w/2, this.y+this.h/2, C.damage, 20, 3);
     Game.stats.deaths++;
-    this.x = this.checkpointX; this.y = this.checkpointY;
+
+    // 扣减细胞数
+    Game.cells--;
+    if(Game.cells < 0) Game.cells = 0;
+
+    // 清除 buff 和状态（但不重置玩家位置，由 retryFromDeath 处理）
     this.vx = 0; this.vy = 0;
-    this.health = this.maxHealth;
-    this.invincible = 60;
-    this.jumpsLeft = 1;
     this.dashTimer = 0; this.dashCooldown = 0;
     this.swordTimer = 0; this.swordCooldown = 0;
     this.aoeStomp = 0;
@@ -504,7 +852,10 @@ class Player {
     Game.oxyField = false;
     Game.pusTiles = [];
     level.respawnEnemies();
-    updateHUD();
+
+    // 显示死亡面板
+    Game.state = 'dead';
+    showDeathPanel();
   }
 
   stompEnemy(e, level){
@@ -984,6 +1335,14 @@ class Enemy {
     this.alive = true;
     this.animT = Math.random() * 100;
     this.spawnX = x; this.spawnY = y;
+    // ===== WBC 新技能附加状态 =====
+    this.dotTimer = 0;       // DOT 剩余帧
+    this.dotPerSec = 0;      // 每秒伤害
+    this.defDebuff = 0;      // 防御降低比例
+    this.defDebuffTimer = 0;
+    this.defPen = 0;         // 破甲比例
+    this.defPenTimer = 0;
+    this.knockbackTimer = 0; // 击退强制 vx 帧数
 
     if(type === 'staph'){
       if(isLarge){
@@ -1045,6 +1404,27 @@ class Enemy {
     if(!this.alive) return;
     this.animT++;
 
+    // ===== WBC 技能附加状态 tick =====
+    if(this.dotTimer > 0){
+      this.dotTimer--;
+      // 每秒扣血（60帧/秒）
+      if(this.dotTimer % 60 === 0 && this.dotPerSec > 0){
+        this.hp -= this.dotPerSec;
+        spawnParticles(this.x + this.w/2, this.y + this.h/2, '#ffeb3b', 4, 1);
+        if(this.hp <= 0){
+          this.alive = false;
+          if(this.isLarge) this.split(level);
+          Game.stats.kills++;
+          spawnPusIfNeeded(this);
+        }
+      }
+    }
+    if(this.defDebuffTimer > 0) this.defDebuffTimer--;
+    else this.defDebuff = 0;
+    if(this.defPenTimer > 0) this.defPenTimer--;
+    else this.defPen = 0;
+    if(this.knockbackTimer > 0) this.knockbackTimer--;
+
     if(this.type === 'staph'){
       // 葡萄球菌：仅在落地后巡逻
       if(!this.onGround){
@@ -1059,6 +1439,10 @@ class Enemy {
           this.dir *= -1;
         } else if(!level.solidAt(frontCol, checkRow) && this.onGround){
           this.dir *= -1;
+        }
+        // 巡逻范围限制（Boss召唤的小怪不会跑太远）
+        if(this.patrolRange && Math.abs(this.x - this.spawnX) > this.patrolRange){
+          this.dir = this.x > this.spawnX ? -1 : 1;
         }
       }
     } else {
@@ -1242,7 +1626,7 @@ class Enemy {
   }
 }
 
-// ===== Boss（终点大细菌） =====
+// ===== Boss（金黄色葡萄球菌，6技能） =====
 class Boss {
   constructor(x, y){
     this.x = x; this.y = y;
@@ -1254,14 +1638,50 @@ class Boss {
     this.vx = 0; this.vy = 0;
     this.onGround = false;
     this.flashTimer = 0;
-    this.spawnTimer = 0;
     this.spawnX = x; this.spawnY = y;
+    // ===== WBC 新技能附加状态 =====
+    this.dotTimer = 0;
+    this.dotPerSec = 0;
+    this.defDebuff = 0;
+    this.defDebuffTimer = 0;
+    this.defPen = 0;
+    this.defPenTimer = 0;
+    // 技能一：血盾
+    this.shieldHP = 0; this.shieldMaxHP = 0;
+    this.shieldActive = false;
+    this.shieldCooldown = 0;
+    this.stunTimer = 0;         // 破盾僵直
+    // 技能二：溶血环
+    this.ringWaves = [];        // [{x, y, r, maxR, active}]
+    this.ringCooldown = 0;
+    // 技能三：杀白细胞素
+    this.leukocidinCooldown = 0;
+    this.leukocidinCast = 0;    // 读条剩余帧
+    // 技能四：增殖
+    this.spawnTimer = 0;
+    // 技能五：毒休克
+    this.shockCooldown = 0;
+    this.shockCast = 0;         // 读条剩余帧
+    // 技能六：生物膜
+    this.biofilmActive = false;
+    this.biofilmRegenTimer = 0;
+    this.biofilmLastHit = 0;    // 上次被攻击的帧
+    // 遭遇触发
+    this.encountered = false;
   }
 
   reset(){
     this.x = this.spawnX; this.y = this.spawnY;
     this.hp = this.maxHp; this.alive = true;
-    this.flashTimer = 0; this.spawnTimer = 0;
+    this.flashTimer = 0;
+    this.shieldHP = 0; this.shieldMaxHP = 0; this.shieldActive = false;
+    this.shieldCooldown = 0; this.stunTimer = 0;
+    this.ringWaves = []; this.ringCooldown = 0;
+    this.leukocidinCooldown = 0; this.leukocidinCast = 0;
+    this.spawnTimer = 0;
+    this.shockCooldown = 0; this.shockCast = 0;
+    this.biofilmActive = false; this.biofilmRegenTimer = 0; this.biofilmLastHit = 0;
+    this.encountered = false;
     this.vx = 0; this.vy = 0;
   }
 
@@ -1270,20 +1690,49 @@ class Boss {
     this.animT++;
     if(this.flashTimer > 0) this.flashTimer--;
 
+    // ===== WBC 技能附加状态 tick =====
+    if(this.dotTimer > 0){
+      this.dotTimer--;
+      if(this.dotTimer % 60 === 0 && this.dotPerSec > 0){
+        this.hp -= this.dotPerSec;
+        spawnParticles(this.x + this.w/2, this.y + this.h/2, '#ffeb3b', 6, 1.5);
+        if(this.hp <= 0){
+          this.alive = false;
+          Game.stats.kills++;
+          spawnParticles(this.x + this.w/2, this.y + this.h/2, C.boss, 30, 5);
+          spawnParticles(this.x + this.w/2, this.y + this.h/2, C.bossEye, 20, 4);
+          Sfx.complete();
+          showToast('Boss 已击杀！');
+        }
+      }
+    }
+    if(this.defDebuffTimer > 0) this.defDebuffTimer--;
+    else this.defDebuff = 0;
+    if(this.defPenTimer > 0) this.defPenTimer--;
+    else this.defPen = 0;
+
+    // 第一次被击打后才激活技能（由 takeDamage 触发 encounter）
+
+    // 破盾僵直：不移动
+    if(this.stunTimer > 0){
+      this.stunTimer--;
+      // 僵直期间毒休克读条被打断
+      if(this.shockCast > 0){
+        this.shockCast = 0;
+        this.shockCooldown = BOSS_CD_SHOCK;
+      }
+      this.updateSkills(level, player);
+      this.checkPlayerCollision(level, player);
+      return;
+    }
+
     // 缓慢巡逻
-    const speed = 0.4;
-    this.vx = this.dir * speed;
+    this.vx = this.dir * 0.4;
     this.x += this.vx;
-    // 碰墙转向
     const frontCol = Math.floor((this.dir > 0 ? this.x + this.w : this.x) / TILE);
-    if(level.solidAt(frontCol, Math.floor(this.y / TILE))){
-      this.dir *= -1;
-    }
-    // 边缘转向
+    if(level.solidAt(frontCol, Math.floor(this.y / TILE))) this.dir *= -1;
     const checkRow = Math.floor((this.y + this.h + 2) / TILE);
-    if(!level.solidAt(frontCol, checkRow) && this.onGround){
-      this.dir *= -1;
-    }
+    if(!level.solidAt(frontCol, checkRow) && this.onGround) this.dir *= -1;
 
     // 重力
     this.vy += GRAVITY;
@@ -1292,38 +1741,233 @@ class Boss {
     this.onGround = false;
     const tiles = level.getOverlapTiles(this);
     for(const t of tiles){
-      if(level.solidTile(t.tile)){
-        if(this.vy > 0){
-          this.y = t.row * TILE - this.h;
-          this.vy = 0; this.onGround = true;
-        }
+      if(level.solidTile(t.tile) && this.vy > 0){
+        this.y = t.row * TILE - this.h;
+        this.vy = 0; this.onGround = true;
       }
     }
 
-    // WBC踩踏判定
-    if(rectOverlap(this, player)){
-      const stomp = player.vy > 0 && (player.y + player.h - this.y) < 20;
-      if(stomp){
-        if(player.cellType === 1){
-          // 白细胞踩踏：1点伤害
-          player.stompEnemy(this, level);
-          this.hp--;
-          this.flashTimer = 8;
-          if(this.hp <= 0){
-            this.alive = false;
-            Game.stats.kills++;
-            spawnParticles(this.x+this.w/2, this.y+this.h/2, C.boss, 30, 5);
-            spawnParticles(this.x+this.w/2, this.y+this.h/2, C.bossEye, 20, 4);
-            Sfx.complete();
-            showToast('Boss 已击杀！');
-          }
-        } else {
-          // 非白细胞：仅弹跳
-          player.vy = JUMP_VEL * 0.5;
-          player.jumpsLeft = 1;
+    this.checkPlayerCollision(level, player);
+    this.updateSkills(level, player);
+
+    // 溶血环扩散
+    for(const w of this.ringWaves){
+      if(!w.active) continue;
+      w.r += BOSS_RING_SPEED;
+      if(w.r >= w.maxR){ w.active = false; continue; }
+      // 命中玩家
+      const dx = player.x + player.w/2 - w.x;
+      const dy = player.y + player.h/2 - w.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if(Math.abs(dist - w.r) < 16){
+        player.takeDamage(level);
+        // 叠加贫血
+        if(player.anemiaStacks < 5){
+          player.anemiaStacks++;
+          player.anemiaTimer = 600; // 10s
+        }
+        w.active = false;
+      }
+    }
+
+    // 生物膜回血检测
+    if(this.biofilmActive){
+      this.biofilmRegenTimer++;
+      if(this.animT - this.biofilmLastHit > 300){ // 5s未受攻击
+        if(this.biofilmRegenTimer >= 180){ // 每3s回1血
+          this.biofilmRegenTimer = 0;
+          this.hp = Math.min(this.maxHp, this.hp + 1);
+          spawnParticles(this.x+this.w/2, this.y+this.h/2, '#7ac', 6, 1);
         }
       } else {
+        this.biofilmRegenTimer = 0;
+      }
+    }
+  }
+
+  // === 六个技能 ===
+  updateSkills(level, player){
+    // 未遭遇前不激活任何技能
+    if(!this.encountered) return;
+
+    // 技能一：血盾 — 周期性上盾
+    if(this.shieldCooldown > 0){
+      this.shieldCooldown--;
+    } else if(!this.shieldActive && this.stunTimer <= 0){
+      this.activateShield();
+    }
+
+    // 技能二：溶血环 — 周期性释放
+    if(this.ringCooldown > 0){
+      this.ringCooldown--;
+    } else {
+      this.activateRing();
+    }
+
+    // 技能三：杀白细胞素 — 点名锁定
+    if(this.leukocidinCooldown > 0) this.leukocidinCooldown--;
+    if(this.leukocidinCast > 0){
+      this.leukocidinCast--;
+      if(this.leukocidinCast === 0){
+        // 读条完毕，造成伤害
         player.takeDamage(level);
+        player.takeDamage(level); // 双倍伤害（约等于高额）
+        player.leukocidinMarked = 0;
+        this.leukocidinCooldown = BOSS_CD_LEUKOCIDIN;
+        Game.camera.shake = 6;
+        spawnParticles(player.x+player.w/2, player.y+player.h/2, '#ff4444', 15, 3);
+      }
+    } else if(this.leukocidinCooldown <= 0 && this.leukocidinCast <= 0){
+      this.activateLeukocidin(player);
+    }
+
+    // 技能四：增殖 — 召唤小怪
+    this.spawnTimer++;
+    if(this.spawnTimer >= BOSS_CD_SPAWN){
+      this.spawnTimer = 0;
+      this.activateProliferation(level);
+    }
+
+    // 技能五：毒休克 — 读条全屏AOE
+    if(this.shockCooldown > 0) this.shockCooldown--;
+    if(this.shockCast > 0){
+      this.shockCast--;
+      if(this.shockCast === 0){
+        this.executeShock(player);
+      }
+    } else if(this.shockCooldown <= 0 && this.stunTimer <= 0){
+      this.shockCast = 180; // 3s读条
+      this.shockCooldown = BOSS_CD_SHOCK;
+    }
+
+    // 技能六：生物膜 — 40%血量自动激活
+    if(!this.biofilmActive && this.hp <= this.maxHp * BOSS_BIOFILM_HP_PCT){
+      this.biofilmActive = true;
+      showToast('⚠ Boss 分泌生物膜！防御提升，持续近身攻击阻止回血');
+    }
+
+    // 玩家贫血计时
+    if(player.anemiaTimer > 0){
+      player.anemiaTimer--;
+      if(player.anemiaTimer === 0) player.anemiaStacks = 0;
+    }
+    // 杀白细胞素标记计时
+    if(player.leukocidinMarked > 0) player.leukocidinMarked--;
+  }
+
+  activateShield(){
+    this.shieldMaxHP = Math.ceil(this.maxHp * BOSS_SHIELD_PCT) || 1;
+    this.shieldHP = this.shieldMaxHP;
+    this.shieldActive = true;
+    spawnParticles(this.x+this.w/2, this.y+this.h/2, '#8b0000', 12, 2);
+  }
+
+  activateRing(){
+    this.ringWaves.push({
+      x: this.x + this.w/2, y: this.y + this.h/2,
+      r: 10, maxR: BOSS_RING_MAX_R, active: true
+    });
+    this.ringCooldown = BOSS_CD_RING;
+  }
+
+  activateLeukocidin(player){
+    this.leukocidinCast = 90; // 1.5s读条
+    player.leukocidinMarked = 90;
+    this.leukocidinCooldown = BOSS_CD_LEUKOCIDIN;
+  }
+
+  activateProliferation(level){
+    const bx = this.x + this.w/2;
+    const by = this.y + this.h;
+    for(let i = 0; i < 2; i++){
+      const ox = (Math.random() - 0.5) * 100;
+      const mini = new Enemy(bx + ox, by - 20, 'staph');
+      mini.makeMini();
+      mini.spawnX = mini.x; mini.spawnY = mini.y;
+      mini.lifeTimer = 0;      // 存活计时（用于分裂）
+      mini.patrolRange = 130;  // 限定在Boss附近巡逻（约4格）
+      level.enemies.push(mini);
+      spawnParticles(mini.x + 12, mini.y + 10, C.staph, 6, 1.5);
+    }
+  }
+
+  executeShock(player){
+    // 全屏震荡
+    Game.camera.shake = 20;
+    player.takeDamage(Game.level);
+    // 清除所有正面buff
+    player.shield = 0;
+    player.oxygen = 0;
+    player.complementAmmo = 0;
+    player.aoeStomp = 0;
+    player.oxyFieldTimer = 0;
+    Game.oxyField = false;
+    Game.tidePaused = 0;
+    // 视觉效果
+    for(let i = 0; i < 30; i++){
+      spawnParticles(
+        Math.random() * 800, Math.random() * 480,
+        '#ffd700', 4, 2 + Math.random() * 3
+      );
+    }
+    showToast('⚠ 毒性休克风暴！所有增益已被清除');
+  }
+
+  // === 玩家碰撞 ===
+  checkPlayerCollision(level, player){
+    if(!rectOverlap(this, player)) return;
+    const stomp = player.vy > 0 && (player.y + player.h - this.y) < 24;
+    if(stomp){
+      if(player.cellType === 1){
+        player.stompEnemy(this, level);
+        this.takeDamage(1, player);
+      } else {
+        player.vy = JUMP_VEL * 0.5;
+        player.jumpsLeft = 1;
+      }
+    } else {
+      player.takeDamage(level);
+    }
+  }
+
+  takeDamage(dmg, player){
+    // 第一次被击打：激活技能系统
+    if(!this.encountered){
+      this.encountered = true;
+      showToast('⚠ 金黄色葡萄球菌被激怒！开始增殖...');
+      spawnParticles(this.x+this.w/2, this.y+this.h/2, C.boss, 20, 3);
+      Game.camera.shake = 4;
+    }
+
+    // 生物膜防御
+    let effectiveDmg = dmg;
+    if(this.biofilmActive) effectiveDmg = Math.max(1, dmg - Math.ceil(dmg * 0.3));
+    // 血盾吸收
+    if(this.shieldActive && this.shieldHP > 0){
+      this.shieldHP -= effectiveDmg;
+      this.flashTimer = 8;
+      spawnParticles(this.x+this.w/2, this.y+this.h/2, '#ff4444', 8, 1.5);
+      if(this.shieldHP <= 0){
+        // 破盾！僵直3s
+        this.shieldActive = false;
+        this.shieldHP = 0;
+        this.stunTimer = 180;
+        this.shieldCooldown = BOSS_CD_SHIELD;
+        Game.camera.shake = 8;
+        spawnParticles(this.x+this.w/2, this.y+this.h/2, '#ffd700', 20, 3);
+        showToast('🔓 血盾破裂！Boss陷入僵直 3 秒');
+      }
+    } else {
+      this.hp -= effectiveDmg;
+      this.flashTimer = 8;
+      this.biofilmLastHit = this.animT; // 生物膜受击计时
+      if(this.hp <= 0){
+        this.alive = false;
+        Game.stats.kills++;
+        spawnParticles(this.x+this.w/2, this.y+this.h/2, C.boss, 40, 6);
+        spawnParticles(this.x+this.w/2, this.y+this.h/2, C.bossEye, 25, 5);
+        Sfx.complete();
+        showToast('🎉 Boss 已击杀！');
       }
     }
   }
@@ -1332,6 +1976,30 @@ class Boss {
     if(!this.alive) return;
     const px = Math.round(this.x) - Math.round(camX);
     const py = Math.round(this.y);
+
+    // 生物膜粘液光晕
+    if(this.biofilmActive){
+      ctx.fillStyle = 'rgba(100,200,150,0.08)';
+      ctx.beginPath(); ctx.arc(px+this.w/2, py+this.h/2, 60, 0, Math.PI*2); ctx.fill();
+    }
+
+    // 血盾视觉效果
+    const shieldAlpha = this.shieldActive ? 0.35 + Math.sin(this.animT * 0.1) * 0.15 : 0;
+    if(shieldAlpha > 0){
+      ctx.strokeStyle = `rgba(180,30,30,${shieldAlpha})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.ellipse(px+this.w/2, py+this.h/2, this.w/2+4, this.h/2+4, 0, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+    }
+
+    // 毒休克读条金光
+    if(this.shockCast > 0){
+      const glowAlpha = 0.15 + Math.sin(this.animT * 0.3) * 0.1;
+      ctx.fillStyle = `rgba(255,200,50,${glowAlpha})`;
+      ctx.beginPath(); ctx.arc(px+this.w/2, py+this.h/2, 50 + Math.sin(this.animT*0.2)*8, 0, Math.PI*2); ctx.fill();
+    }
 
     // 受击闪烁
     const flash = this.flashTimer > 0 && Math.floor(this.flashTimer / 2) % 2 === 0;
@@ -1358,21 +2026,67 @@ class Boss {
     ctx.beginPath(); ctx.arc(px+25, py+17 + eyeBob, 1.5, 0, Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(px+45, py+17 + eyeBob, 1.5, 0, Math.PI*2); ctx.fill();
 
-    // 血条
+    // 血条背景
     const barW = this.w + 10;
     const barX = px - 5;
     const barY = py - 14;
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(barX, barY, barW, 6);
+    ctx.fillRect(barX, barY, barW, 7);
+    // 血盾条（暗红色）
+    if(this.shieldActive && this.shieldHP > 0){
+      ctx.fillStyle = '#8b0000';
+      ctx.fillRect(barX, barY, barW * (this.shieldHP / this.shieldMaxHP), 3);
+    }
+    // HP条
     ctx.fillStyle = C.bossBar;
     const hpPct = Math.max(0, this.hp / this.maxHp);
-    ctx.fillRect(barX, barY, barW * hpPct, 6);
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(barX, barY, barW, 6);
-    // HP数字
+    ctx.fillRect(barX, barY + (this.shieldActive ? 3 : 0), barW * hpPct, this.shieldActive ? 4 : 7);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, 7);
+
+    // 技能名 + HP数字
     ctx.fillStyle = '#fff'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
-    ctx.fillText(this.hp + '/' + this.maxHp, px + this.w/2, barY - 2);
+    let label = `HP:${this.hp}/${this.maxHp}`;
+    if(this.stunTimer > 0) label = 'STUN!';
+    else if(this.shockCast > 0) label = `💀毒休克 ${Math.ceil(this.shockCast/60)}s`;
+    else if(this.leukocidinCast > 0) label = `🎯点名 ${Math.ceil(this.leukocidinCast/60)}s`;
+    else if(this.shieldActive) label = `🛡️盾 ${this.shieldHP}/${this.shieldMaxHP}`;
+    ctx.fillText(label, px + this.w/2, barY - 3);
+
+    // 溶血环绘制
+    for(const w of this.ringWaves){
+      if(!w.active) continue;
+      const alpha = 1 - (w.r / w.maxR);
+      ctx.strokeStyle = `rgba(255,200,50,${alpha})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(w.x - Math.round(camX), w.y, w.r, 0, Math.PI*2); ctx.stroke();
+      ctx.lineWidth = 1;
+    }
+    // 清理已失效环
+    this.ringWaves = this.ringWaves.filter(w => w.active);
+
+    // 杀白细胞素玩家头顶标记
+    if(Game.player && Game.player.leukocidinMarked > 0){
+      const pl = Game.player;
+      const pp = { x: Math.round(pl.x) - Math.round(camX), y: Math.round(pl.y) };
+      const warnPulse = Math.sin(this.animT * 0.5) * 0.5 + 0.5;
+      ctx.strokeStyle = `rgba(255,50,50,${0.5 + warnPulse * 0.5})`;
+      ctx.lineWidth = 2;
+      const mx = pp.x + pl.w/2, my = pp.y - 10;
+      ctx.beginPath(); ctx.arc(mx, my, 8, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx-12, my-12); ctx.lineTo(mx-6, my-6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx+12, my-12); ctx.lineTo(mx+6, my-6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx-12, my+12); ctx.lineTo(mx-6, my+6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx+12, my+12); ctx.lineTo(mx+6, my+6); ctx.stroke();
+      ctx.lineWidth = 1;
+    }
+
+    // 僵直特效
+    if(this.stunTimer > 0){
+      ctx.fillStyle = '#ffd700';
+      ctx.font = 'bold 12px monospace'; ctx.textAlign = 'center';
+      ctx.fillText('💫', px+this.w/2, py-24);
+    }
   }
 }
 
@@ -1802,12 +2516,23 @@ class QBlock {
     if(this.used) return;
     this.used = true;
     this.bounceTimer = QBLOCK_BOUNCE_FRAMES;
-    // ATP 从 ? 方块上方弹出，向右弧线落下
-    const atp = new Item(this.x + 4, this.y - TILE, 'atp');
-    atp.vy = -6;
-    atp.vx = 2;
-    Game.level.items.push(atp);
-    Sfx.coin();
+
+    // 50% 概率：ATP 或 链球菌
+    if(Math.random() < 0.5){
+      // ATP 从 ? 方块上方弹出，向右弧线落下
+      const atp = new Item(this.x + 4, this.y - TILE, 'atp');
+      atp.vy = -6;
+      atp.vx = 2;
+      Game.level.items.push(atp);
+      Sfx.coin();
+    } else {
+      // 链球菌从 ? 方块上方弹出
+      const strep = new Enemy(this.x + 4, this.y - TILE, 'strep');
+      strep.vy = -5;
+      strep.vx = (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.5);
+      Game.level.enemies.push(strep);
+      Sfx.hit();
+    }
     spawnParticles(this.x + TILE/2, this.y - 4, C.qBlock, 10, 2);
   }
 

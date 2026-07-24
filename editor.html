@@ -155,6 +155,7 @@ let grid = [];
 let mapWidth = 135;
 let mapHeight = 15;
 let cellSize = 20;
+const TILE_PX = 32; // 游戏中 1 格 = 32px
 let isDragging = false;
 let lastCell = null;
 let eraseMode = false;
@@ -190,8 +191,8 @@ function renderPalette(){
     html += '<div class="btn-add" onclick="startAddPipeSpawner()">+ 添加管道刷怪</div>';
   }
   // 知识卡片面板
-  html += '<h3>📝 知识卡片</h3>';
-  html += '<div style="font-size:10px;color:#666;margin-bottom:4px">触发位置为像素 x 坐标</div>';
+  html += '<h3>📝 知识卡片 <button onclick="clearAllKnowledgeCards()" style="font-size:10px;padding:1px 6px;margin-left:8px;background:#6a2a2a;border:1px solid #9a4a4a;color:#f66;border-radius:3px;cursor:pointer">清空全部</button></h3>';
+  html += '<div style="font-size:10px;color:#666;margin-bottom:4px">Ctrl+点击地图任意位置添加 | 绿点=卡片位置</div>';
   html += '<div id="knowledgeCardList"></div>';
   if(editingKcIdx === -1){
     html += '<div class="btn-add" onclick="startAddKnowledgeCard()">+ 添加知识卡片</div>';
@@ -212,6 +213,7 @@ function buildExtraStr(){
     const items = editorPipeSpawners.map(ps => {
       let s = `{ col:${ps.col}, row:${ps.row}, dir:'${ps.dir||'up'}', trigger:'${ps.trigger||'timer'}'`;
       if(ps.type && ps.type !== 'staph') s += `, type:'${ps.type}'`;
+      if(ps.vy != null) s += `, vy:${ps.vy}`;
       if(ps.range) s += `, range:${ps.range}`;
       if(ps.cooldown) s += `, cooldown:${ps.cooldown}`;
       if(ps.interval) s += `, interval:${ps.interval}`;
@@ -295,11 +297,20 @@ function draw(){
     c.style.cursor = 'crosshair';
     c.onmousedown = (e)=>{
       if(e.shiftKey){
-        // Shift+click on 'p' tile → add pipe spawner
+        // Shift+click on 'p' tile -> add pipe spawner
         const cell = getCell(e);
         if(cell && grid[cell.row][cell.col] === 'p'){
           e.preventDefault();
           startAddPipeSpawner(cell.col, cell.row);
+          return;
+        }
+      }
+      if(e.ctrlKey || e.metaKey){
+        // Ctrl+click anywhere -> add knowledge card
+        e.preventDefault();
+        const cell = getCell(e);
+        if(cell){
+          startAddKnowledgeCard(cell.col * TILE_PX);
           return;
         }
       }
@@ -364,6 +375,15 @@ function draw(){
       ctx.lineWidth = 0.5;
       ctx.strokeRect(x,y,cellSize,cellSize);
     }
+    // 知识卡片标记：绿色圆点（像素坐标）
+    for(const kc of editorKnowledgeCards){
+      const kx = 16 + kc.x / TILE_PX * cellSize;
+      const ky = 16 + (kc.y || 200) / TILE_PX * cellSize;
+      ctx.fillStyle = '#4caf50';
+      ctx.beginPath(); ctx.arc(kx, ky, 5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(kx, ky, 2, 0, Math.PI*2); ctx.fill();
+    }
   }
   ctx.fillStyle = '#4a4a6a';
   ctx.font = '10px monospace';
@@ -423,7 +443,8 @@ function renderPipeSpawnerList(){
         <option value="strep" ${ps.type==='strep'?'selected':''}>链球菌 strep</option>
         <option value="staphLarge" ${ps.type==='staphLarge'?'selected':''}>大型葡萄球菌</option>
       </select>
-      <label>方向</label><select id="psDir"><option value="up" ${ps.dir==='up'?'selected':''}>上</option><option value="down" ${ps.dir==='down'?'selected':''}>下</option></select>
+      <label>方向</label><select id="psDir" onchange="onDirChange()"><option value="up" ${ps.dir==='up'?'selected':''}>上</option><option value="down" ${ps.dir==='down'?'selected':''}>下</option><option value="up_jump" ${ps.dir==='up_jump'?'selected':''}>向上跳</option></select>
+      <label>初速度 vy (负=向上, 正=向下, 上:-5 下:3 跳:-9)</label><input type="number" id="psVy" value="${ps.vy!=null?ps.vy:''}" step="0.5" placeholder="默认">
       <label>冷却帧 (cooldown, timer用)</label><input type="number" id="psCooldown" value="${ps.cooldown||''}" min="0" placeholder="180">
       <label>接近范围格子 (range, proximity用)</label><input type="number" id="psRange" value="${ps.range||''}" min="1" placeholder="4">
       <label>间隔帧 (interval, timer用)</label><input type="number" id="psInterval" value="${ps.interval||''}" min="1" placeholder="300">
@@ -440,7 +461,8 @@ function renderPipeSpawnerList(){
   }
   el.innerHTML = editorPipeSpawners.map((ps,i)=>`<div class="config-item">
     <span class="tag">${ps.trigger}</span>
-    <span>(${ps.col},${ps.row}) ${ps.type}</span>
+    <span class="tag" style="background:#2a3a4a;color:#8ac">${ps.dir||'up'}</span>
+    <span>(${ps.col},${ps.row}) ${ps.type}${ps.vy!=null?' vy='+ps.vy:''}</span>
     <button onclick="editPipeSpawner(${i})">✏️</button>
     <button class="del" onclick="deletePipeSpawner(${i})">✕</button>
   </div>`).join('');
@@ -472,6 +494,8 @@ function savePipeSpawner(){
     type: document.getElementById('psType').value,
     dir: document.getElementById('psDir').value,
   };
+  const vyVal = parseFloat(document.getElementById('psVy').value);
+  if(!isNaN(vyVal)) ps.vy = vyVal;
   const cd = parseInt(document.getElementById('psCooldown').value);
   if(cd > 0) ps.cooldown = cd;
   const rng = parseInt(document.getElementById('psRange').value);
@@ -482,6 +506,14 @@ function savePipeSpawner(){
   editingPsIdx = -1;
   renderPalette();
   draw();
+}
+function onDirChange(){
+  // 切换方向时自动填充默认 vy
+  const dir = document.getElementById('psDir').value;
+  const vyInput = document.getElementById('psVy');
+  if(!vyInput || vyInput.value !== '') return; // 用户已手动填写则不覆盖
+  const defaults = { up: -5, down: 3, up_jump: -9 };
+  vyInput.placeholder = defaults[dir] || '';
 }
 function deletePipeSpawner(idx){
   if(!confirm(`删除管道刷怪 (${editorPipeSpawners[idx].col},${editorPipeSpawners[idx].row})？`)) return;
@@ -525,9 +557,9 @@ function renderKnowledgeCardList(){
     <button class="del" onclick="deleteKnowledgeCard(${i})">✕</button>
   </div>`).join('');
 }
-function startAddKnowledgeCard(){
+function startAddKnowledgeCard(px){
   editingKcIdx = editorKnowledgeCards.length;
-  editorKnowledgeCards.push({x:0, key:'wbc', title:'', text:''});
+  editorKnowledgeCards.push({x:px||0, key:'wbc', title:'', text:''});
   renderPalette();
 }
 function editKnowledgeCard(idx){
@@ -558,6 +590,15 @@ function deleteKnowledgeCard(idx){
   if(!confirm(`删除知识卡片「${editorKnowledgeCards[idx].title||'(无标题)'}」？`)) return;
   editorKnowledgeCards.splice(idx, 1);
   renderPalette();
+  draw(); // 刷新绿点
+}
+function clearAllKnowledgeCards(){
+  if(editorKnowledgeCards.length === 0) return;
+  if(!confirm(`确定清空全部 ${editorKnowledgeCards.length} 个知识卡片？`)) return;
+  editorKnowledgeCards = [];
+  editingKcIdx = -1;
+  renderPalette();
+  draw();
 }
 
 // ── Export / Import ──
@@ -826,7 +867,7 @@ function parseExtraConfig(text){
 
   // 安全 eval：构造 JS 表达式并求值
   function safeEvalArray(key){
-    const re = new RegExp(key + ':\\s*(\\[[\\s\\S]*?\\])\\s*[,\\x7D]');
+    const re = new RegExp(key + ':\\s*(\\[[\\s\\S]*?\\])\\s*[,}]');
     const m = text.match(re);
     if(!m || m[1].trim() === '[]') return null;
     try{

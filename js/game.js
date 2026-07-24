@@ -196,11 +196,14 @@ class Level {
   }
 
   respawnEnemies(){
-    // 重置非迷你敌人，清除迷你敌人
+    // 清除迷你敌人（Boss召唤的小怪）
     this.enemies = this.enemies.filter(e => !e.isMini);
-    for(const e of this.enemies) e.reset();
-    // 重置Boss
-    if(Game.boss) Game.boss.reset();
+    // 只重置还活着的敌人，已杀死的保持死亡（WIN_KILL_ALL关卡需要）
+    for(const e of this.enemies){
+      if(e.alive) e.reset();
+    }
+    // 只重置还活着的Boss
+    if(Game.boss && Game.boss.alive) Game.boss.reset();
   }
 
   // ===== 潮汐系统 =====
@@ -285,13 +288,24 @@ class Level {
     const ex = ps.col * TILE + TILE/2;
     const ey = ps.row * TILE - 8;
     const enemy = new Enemy(ps.col * TILE + 4, ey, ps.type || 'staph');
-    enemy.vy = ps.trigger === 'contact' ? -9 : -5; // contact: 飞出天际
-    enemy.flyAway = ps.trigger === 'contact';      // 不落地
+
+    // 初速度：优先用显式 vy，否则根据方向取默认值
+    const dir = ps.dir || 'up';
+    const defaultVy = { up: -5, down: 3, up_jump: -9 };
+    enemy.vy = (ps.vy != null) ? ps.vy : (defaultVy[dir] || -5);
+    enemy.flyAway = false;
+
+    // contact 触发：飞出天际不落地（可用 vy 覆盖速度）
+    if(ps.trigger === 'contact'){
+      if(ps.vy == null) enemy.vy = (dir === 'up_jump' ? -9 : -7);
+      enemy.flyAway = true;
+    }
+
     this.enemies.push(enemy);
     spawnParticles(ex, ey, ps.type==='strep'?C.strep:C.staph, 8, 3);
-    if(ps.trigger === 'proximity' || ps.trigger === 'contact'){
-      this.pipeCooldowns[i] = ps.cooldown || 180;
-    }
+    // 所有触发模式都设 cooldown（防御性：保证不会每帧都刷）
+    // timer 模式默认 300 帧（5秒），proximity/contact 默认 180 帧（3秒）
+    this.pipeCooldowns[i] = ps.cooldown || (ps.trigger === 'timer' ? (ps.interval || 300) : 180);
   }
 
   draw(ctx, camX){
@@ -506,6 +520,7 @@ const KEY_MAP = {
   ArrowDown:'down', s:'down', S:'down',
   e:'skill', E:'skill',
   Shift:'dash',
+  '1':'skill1', '2':'skill2', '3':'skill3', '4':'skill4',
 };
 
 function setupInput(){
@@ -549,6 +564,16 @@ function setupInput(){
     }
     if(e.key==='Escape' && Game.state==='playing' && !Game.memoryCardOpen && !Game.tutorialPause){
       togglePause();
+    }
+    // 死亡面板：Space/Enter 重试，Escape 返回主城
+    if(Game.state === 'dead'){
+      if(e.key === ' ' || e.key === 'Enter'){
+        retryFromDeath();
+        e.preventDefault();
+      } else if(e.key === 'Escape'){
+        quitFromDeath();
+        e.preventDefault();
+      }
     }
   });
   document.addEventListener('keyup', e=>{
@@ -705,6 +730,22 @@ function update(){
   // 敌人更新
   const prevKills = Game.stats.kills;
   for(const e of lvl.enemies) e.update(lvl, p);
+  // Boss召唤的迷你菌分裂（存活>10s）
+  for(const e of lvl.enemies){
+    if(!e.alive || !e.isMini) continue;
+    if(e.lifeTimer == null) e.lifeTimer = 0;
+    e.lifeTimer++;
+    if(e.lifeTimer >= 900 && lvl.enemies.length < 10){ // 15s, 上限10只
+      e.lifeTimer = 0;
+      const child = new Enemy(e.x + (Math.random()-0.5)*20, e.y, 'staph');
+      child.makeMini();
+      child.spawnX = child.x; child.spawnY = child.y;
+      child.lifeTimer = 0;
+      child.patrolRange = 130; // 继承Boss附近巡逻限制
+      lvl.enemies.push(child);
+      spawnParticles(e.x+e.w/2, e.y+e.h/2, C.miniStaph, 5, 1);
+    }
+  }
   // 清除死亡敌人（保留非迷你死亡敌人用于重生）
   lvl.enemies = lvl.enemies.filter(e => e.alive || !e.isMini);
 
@@ -909,14 +950,16 @@ function updateHUD(){
     avatarEl.innerHTML = getCellAvatarHTML(p.cellType);
   }
 
-  // 红心
-  const heartsDiv = $('hearts');
-  let html = '';
-  for(let i=0;i<p.maxHealth;i++){
-    const filled = i < p.health;
-    html += `<div class="heart${filled?'':' empty'}"><svg viewBox="0 0 24 22"><path d="M12 21l-1.5-1.4C5 14.7 2 11.9 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.8 4.5 2.1C13.1 3.8 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 3.4-3 6.2-8.5 11.1L12 21z" fill="${filled?'#ff4757':'#3a1520'}" stroke="${filled?'#ff6b8a':'#4a2030'}" stroke-width="1"/></svg></div>`;
+  // 红心 → 血条
+  const healthBar = $('health-bar-fill');
+  const healthText = $('health-text');
+  const healthPct = p.maxHealth > 0 ? (p.health / p.maxHealth) * 100 : 0;
+  if(healthBar){
+    healthBar.style.width = healthPct + '%';
+    healthBar.classList.toggle('low', healthPct <= 50 && healthPct > 25);
+    healthBar.classList.toggle('critical', healthPct <= 25);
   }
-  heartsDiv.innerHTML = html;
+  if(healthText) healthText.textContent = p.health + '/' + p.maxHealth;
 
   // 能量条
   const pct=(Game.globalEnergy/getMaxEnergy())*100;
@@ -966,6 +1009,40 @@ function updateHUD(){
   const memIcon = $('memory-icon');
   if(memIcon){
     memIcon.classList.toggle('found', Game.stats.foundMemory);
+  }
+
+  // ===== WBC 新技能槽更新 =====
+  if(p.cellType === 1){
+    const skills = [
+      { id:'skill1', cd:p.biteCooldown, max:BITE_COOLDOWN, charges:null },
+      { id:'skill2', cd:p.spitCooldown, max:SPIT_COOLDOWN, charges:null },
+      { id:'skill3', cd:p.lanceCooldown, max:LANCE_COOLDOWN, charges:null },
+      { id:'skill4', cd:p.pdashTimer>0?1:0, max:1, charges:p.pdashCharges, maxCharges:PDASH_CHARGES, pdashCooldown:p.pdashCooldown },
+    ];
+    for(const s of skills){
+      const slot = $(s.id);
+      if(!slot) continue;
+      const cdEl = slot.querySelector('.skill-cooldown');
+      if(s.cd > 0){
+        slot.classList.add('cooling');
+        slot.classList.remove('ready');
+        const sec = Math.ceil(s.cd / 60);
+        cdEl.textContent = sec + 's';
+      } else {
+        slot.classList.remove('cooling');
+        slot.classList.add('ready');
+        cdEl.textContent = '';
+      }
+      if(s.charges !== null){
+        const chEl = slot.querySelector('.skill-charges');
+        if(chEl) chEl.textContent = s.charges + '/' + s.maxCharges;
+      }
+    }
+    const bar = $('skill-bar');
+    if(bar) bar.style.display = 'flex';
+  } else {
+    const bar = $('skill-bar');
+    if(bar) bar.style.display = 'none';
   }
 
   // v2: 通关目标显示
@@ -1099,20 +1176,22 @@ function showKnowledgeCard(title, text){
   Game.memoryCardOpenTime = performance.now();
 }
 
-// 知识卡片位置触发（白细胞/红细胞/血小板）
+// 知识卡片位置触发（走到x坐标处触发，不限次数，每张卡独立）
 function checkKnowledgeCards(){
   if(!Game.level || !Game.level.knowledgeCards) return;
   if(Game.memoryCardOpen) return;
   if(Game.tutorialPause) return;
   const p = Game.player;
-  for(const kc of Game.level.knowledgeCards){
-    if(Game.knowledgeShown[kc.key]) continue;
+  if(!Game.knowledgeCardTriggered) Game.knowledgeCardTriggered = new Set();
+  for(let i = 0; i < Game.level.knowledgeCards.length; i++){
+    const kc = Game.level.knowledgeCards[i];
+    if(Game.knowledgeCardTriggered.has(i)) continue;
     if(p.x > kc.x){
-      // 如果指定了y坐标，需要玩家在该高度附近才触发（y越小越高）
+      // 如果指定了y坐标，需要玩家在该高度附近才触发
       if(kc.y !== undefined && p.y > kc.y + 20){
-        continue; // 玩家不够高，跳过
+        continue;
       }
-      Game.knowledgeShown[kc.key] = true;
+      Game.knowledgeCardTriggered.add(i);
       showKnowledgeCard(kc.title, kc.text);
       return;
     }
@@ -1351,6 +1430,7 @@ function levelComplete(){
   // 记忆细胞状态
   const memEl = $('stat-memory');
   if(memEl) memEl.textContent = Game.stats.foundMemory ? '✓ 已收集' : '✗ 未找到';
+  $('death-panel').classList.add('hidden');
   $('complete-screen').classList.remove('hidden');
   $('hud').classList.remove('active');
 }
@@ -1369,6 +1449,7 @@ function backToHub(){
   tutorialQueue = [];
   $('pause-menu').classList.add('hidden');
   $('complete-screen').classList.add('hidden');
+  $('death-panel').classList.add('hidden');
   $('dialogue-bubble').classList.remove('active');
   $('memory-card').classList.add('hidden');
   $('hud').classList.remove('active');
@@ -1427,15 +1508,13 @@ function LoadLevel(n){
   Game.oxyField = false;
   Game.tidePaused = 0;
   Game.healingProgress = 0;
-  // Boss与挥剑状态重置
-  Game.boss = null;
+  Game.cells = 3;          // 初始化细胞数（生命数）
+  // 挥剑状态重置（Boss 由关卡地图 b 瓦片创建，不在此处清空）
   Game.swordTimer = 0;
   Game.swordCooldown = 0;
   Game.allEnemiesDead = false;
-  // 知识卡片状态（每次进关卡都重置，确保每次都能看到科普内容）
-  Game.knowledgeShown = {
-    wbc: false, rbc: false, plt: false
-  };
+  // 知识卡片触发状态（每张独立，不限制细胞类型）
+  Game.knowledgeCardTriggered = new Set();
 
   // 检查是否首次游玩（教程）
   try{
@@ -1460,6 +1539,7 @@ function LoadLevel(n){
   Game.state = 'playing';
   $('hub-screen').classList.add('hidden');
   $('complete-screen').classList.add('hidden');
+  $('death-panel').classList.add('hidden');
   $('pause-menu').classList.add('hidden');
   $('dialogue-bubble').classList.remove('active');
   $('memory-card').classList.add('hidden');
@@ -1488,6 +1568,89 @@ function level3Mechanics(player, level){ /* 血管奔流：血流冲击/高速�
 function level4Mechanics(player, level){ /* 淋巴结：免疫中枢/强敌AI */ }
 function level5Mechanics(player, level){ /* Boss感染：三阶段Boss战 */ }
 
+// ===== 死亡面板 =====
+function showDeathPanel(){
+  if(!Game.player) return;
+
+  // 更新细胞名称
+  const cellNames = {1:'白细胞（中性粒细胞）', 2:'血小板', 3:'红细胞'};
+  $('death-cell-name').textContent = cellNames[Game.player.cellType] || '未知细胞';
+
+  // 根据 cellType 选头像（WBC=1, PLT=2, RBC=3）
+  const avatarMap = {1:'images/avatar-wbc.png', 2:'images/avatar-plt.png', 3:'images/avatar-rbc.png'};
+  const avatarEl = $('death-cell-avatar');
+  avatarEl.src = avatarMap[Game.player.cellType] || 'images/avatar-rbc.png';
+  // Game.cells <= 0 时头像变灰
+  if(Game.cells <= 0){
+    avatarEl.classList.add('lost');
+  } else {
+    avatarEl.classList.remove('lost');
+  }
+
+  // 数字 -1
+  const countEl = $('death-cells-count');
+  countEl.textContent = Game.cells;
+  if(Game.cells <= 0){
+    countEl.classList.add('lost');
+  } else {
+    countEl.classList.remove('lost');
+  }
+
+  // 更新重试按钮
+  const retryBtn = $('btn-retry');
+  const countBtn = $('death-cells-count-btn');
+  if(countBtn) countBtn.textContent = Game.cells;
+  if(Game.cells <= 0){
+    retryBtn.disabled = true;
+    retryBtn.innerHTML = '细胞耗尽，无法继续挑战';
+  } else {
+    retryBtn.disabled = false;
+    retryBtn.innerHTML = '继续挑战 (剩余细胞: <span id="death-cells-count-btn">' + Game.cells + ')</span>';
+  }
+
+  // 显示面板，隐藏 HUD
+  $('death-panel').classList.remove('hidden');
+  $('hud').classList.remove('active');
+  $('death-flash').classList.remove('active');
+  Game.deathTimer = 0; // 防止 update() 中再次激活死亡闪屏
+
+  // 自动聚焦
+  const container = $('game-container');
+  container.focus();
+}
+
+function retryFromDeath(){
+  if(Game.cells <= 0) return; // 无细胞时不允许重试
+
+  const p = Game.player;
+  const lvl = Game.level;
+  if(!p || !lvl) return;
+
+  // 重生到检查点
+  p.x = p.checkpointX;
+  p.y = p.checkpointY;
+  p.vx = 0; p.vy = 0;
+  p.health = p.maxHealth;
+  p.invincible = 60;
+  p.jumpsLeft = 1;
+
+  // 隐藏死亡面板
+  $('death-panel').classList.add('hidden');
+  $('hud').classList.add('active');
+  Game.state = 'playing';
+  Game.deathTimer = 0;
+
+  updateHUD();
+
+  const container = $('game-container');
+  container.focus();
+}
+
+function quitFromDeath(){
+  $('death-panel').classList.add('hidden');
+  backToHub();
+}
+
 // ===== 初始化 =====
 function init(){
   Game.canvas = $('canvas');
@@ -1510,6 +1673,9 @@ function init(){
   $('btn-resume').onclick = ()=>{ togglePause(); };
   $('btn-quit').onclick = ()=>{ backToHub(); };
   $('btn-next-level').onclick = ()=>{ backToHub(); };
+  // 死亡面板按钮
+  $('btn-retry').onclick = ()=>{ retryFromDeath(); };
+  $('btn-death-quit').onclick = ()=>{ quitFromDeath(); };
   // 对话气泡按钮
   $('btn-bubble-next').onclick = ()=>{ dismissTutorial(); };
   $('btn-bubble-skip').onclick = ()=>{ skipAllTutorials(); };

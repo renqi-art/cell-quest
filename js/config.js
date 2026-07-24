@@ -133,6 +133,16 @@ const BOSS_HP    = 10;
 const BOSS_W     = 72;
 const BOSS_H     = 56;
 const BOSS_CONTACT_DAMAGE = 1;
+// Boss 技能冷却 (帧, 60fps)
+const BOSS_CD_SHIELD     = 1200; // 技能一 血盾 20s
+const BOSS_CD_RING       = 1080; // 技能二 溶血环 18s
+const BOSS_CD_LEUKOCIDIN = 1440; // 技能三 杀白细胞素 24s
+const BOSS_CD_SPAWN      = 2700; // 技能四 增殖 45s（降低频率）
+const BOSS_CD_SHOCK      = 2700; // 技能五 毒休克 45s
+const BOSS_SHIELD_PCT    = 0.15; // 血盾血量比例
+const BOSS_BIOFILM_HP_PCT = 0.4; // 生物膜触发血量%
+const BOSS_RING_SPEED    = 3;    // 溶血环扩散速度 px/frame
+const BOSS_RING_MAX_R    = 200;  // 溶血环最大半径
 
 // ===== 白细胞挥剑 =====
 const SWORD_RANGE    = 70;   // 攻击范围(px)
@@ -140,6 +150,49 @@ const SWORD_DAMAGE   = 2;    // 对敌人/Boss伤害
 const SWORD_COST     = 5;    // 能量消耗
 const SWORD_COOLDOWN = 25;   // 冷却帧数
 const SWORD_DURATION = 12;   // 挥剑动画帧数
+
+// ===== 白细胞基础属性（用于新技能伤害计算）=====
+const WBC_BASE_ATK = 5;     // 基础攻击力（可被装备加成）
+const METER = 32;           // 1米 = 32像素（接近 1 tile）
+
+// ===== 技能一：吞噬撕咬 (Phagocytic Bite) =====
+const BITE_RANGE        = 80;    // 单体锁定范围 2.5米
+const BITE_COST         = 0;     // 无能量消耗
+const BITE_COOLDOWN     = 360;   // 6秒 @ 60fps
+const BITE_MULT         = 2.0;   // 伤害倍率 攻击力×200%
+const BITE_EXECUTE_PCT  = 0.30;  // 血量<30%触发斩杀
+const BITE_EXECUTE_MULT = 3.0;  // 斩杀倍率 总×600%
+const BITE_HEAL_PCT     = 0.25;  // 击杀回血 25%最大生命
+
+// ===== 技能二：活性氧喷吐 (Oxidative Burst Spit) =====
+const SPIT_RANGE_DEG = 60;       // 60°扇形
+const SPIT_RANGE_M   = 5;        // 5米射程
+const SPIT_COST      = 8;        // 能量消耗
+const SPIT_COOLDOWN  = 480;      // 8秒
+const SPIT_MULT      = 1.2;      // 即时伤害 攻击力×120%
+const SPIT_DOT_MULT  = 0.15;    // 每秒15% (×60帧/秒)
+const SPIT_DOT_DUR   = 300;      // 5秒
+const SPIT_DEF_DEBUFF = 0.10;    // 防御降低10%
+
+// ===== 技能三：弹性蛋白酶贯枪 (Elastase Lance) =====
+const LANCE_RANGE_M   = 8;      // 8米射程
+const LANCE_WIDTH_M   = 2;      // 2米宽度
+const LANCE_COST      = 10;     // 能量消耗
+const LANCE_COOLDOWN  = 600;    // 10秒
+const LANCE_MULT      = 1.5;    // 攻击力×150%
+const LANCE_DEF_PEN   = 0.20;   // 破甲20%
+const LANCE_DEF_DUR   = 360;    // 6秒
+const LANCE_BONUS_MULT = 1.5;   // 对生物膜/血盾额外×50%
+
+// ===== 技能四：杀菌渗透·瞬突 (Bactericidal Permeability Dash) =====
+const PDASH_RANGE_M   = 5;      // 冲刺5米
+const PDASH_SHOCK_R   = 96;     // 冲击波半径 3米
+const PDASH_COST      = 12;     // 能量消耗
+const PDASH_COOLDOWN  = 840;    // 14秒
+const PDASH_CHARGES   = 2;      // 2层充能
+const PDASH_MULT      = 1.3;    // 攻击力×130%
+const PDASH_KNOCKBACK = 64;     // 击退2米
+const PDASH_INVUL     = 30;     // 0.5秒不可选中
 
 // ===== XP 经验与等级 =====
 const XP_BASE=100,XP_GROWTH=1.5,MAX_LEVEL=30,SKILL_POINTS_PER_LEVEL=1;
@@ -351,10 +404,11 @@ const Game = {
   state: 'menu',           // menu | hub | playing | paused | complete | dead
   levelIndex: 0,           // 当前关卡索引 (0-5)
   // 全局进度
-  unlocked: [true, true, true, true, true, true],
+  unlocked: [true, true, false, false, false, false],
   completed: [false, false, false, false, false, false],
   stars:     [0, 0, 0, 0, 0, 0],
   globalEnergy: 100,
+  cells: 3,                // 当前关卡剩余细胞（生命数）
   // 运行时
   keys: {},
   prevKeys: {},
@@ -452,7 +506,13 @@ function loadGame(){
       Game.equipment = d.equipment || {weapon:null,armor:null,accessory:null}; Game.inventory = d.inventory || [];
       // 扩容到当前实际关卡数 + 自定义关卡
       const total = buildLevelConfigs().length;
-      while(Game.unlocked.length < total) Game.unlocked.push(true);
+      // 关卡逐级解锁：第0-1关始终开放，后续需通关前一关
+      Game.unlocked[0] = true;
+      Game.unlocked[1] = true;
+      for(let i = 2; i < Game.unlocked.length; i++){
+        if(!Game.completed[i - 1]) Game.unlocked[i] = false;
+      }
+      while(Game.unlocked.length < total) Game.unlocked.push(false);
       while(Game.completed.length < total) Game.completed.push(false);
       while(Game.stars.length < total) Game.stars.push(0);
       if(Game.unlocked.length > total) Game.unlocked.splice(total);

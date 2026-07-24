@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>细胞远征 · Cell Quest</title>
-<link rel="stylesheet" href="css/style.css?v=119">
+<link rel="stylesheet" href="css/style.css?v=120">
 </head>
 <body>
 <div id="game-container" tabindex="0">
@@ -16,7 +16,12 @@
     <div id="hud-tl">
       <div id="cell-avatar" title="当前细胞"></div>
       <div id="cell-badge"><span class="dot"></span><span id="cell-name">白细胞</span></div>
-      <div id="hearts"></div>
+      <div id="health-bar-wrap">
+        <div id="health-bar">
+          <div id="health-bar-fill"></div>
+        </div>
+        <span id="health-text">3/3</span>
+      </div>
     </div>
     <div id="hud-tr">
       <div id="objective-display"></div>
@@ -34,11 +39,50 @@
       <span id="hud-controls"></span>
       <span class="sep">|</span>
       <span><kbd>P</kbd>暂停</span>
+      <span class="sep">|</span>
+      <div id="skill-bar">
+        <div class="skill-slot" id="skill1" data-key="1" title="吞噬撕咬 - 单体爆发+斩杀回血 (6s)">
+          <span class="skill-icon">🦷</span>
+          <span class="skill-key">1</span>
+          <div class="skill-cooldown"></div>
+        </div>
+        <div class="skill-slot" id="skill2" data-key="2" title="活性氧喷吐 - 扇形AOE+灼烧 (8s)">
+          <span class="skill-icon">🔥</span>
+          <span class="skill-key">2</span>
+          <div class="skill-cooldown"></div>
+        </div>
+        <div class="skill-slot" id="skill3" data-key="3" title="弹性蛋白酶贯枪 - 直线穿透+破甲 (10s)">
+          <span class="skill-icon">🔫</span>
+          <span class="skill-key">3</span>
+          <div class="skill-cooldown"></div>
+        </div>
+        <div class="skill-slot" id="skill4" data-key="4" title="杀菌渗透瞬突 - 突进冲击+不可选中 (14s, 2层)">
+          <span class="skill-icon">💨</span>
+          <span class="skill-key">4</span>
+          <div class="skill-cooldown"></div>
+          <span class="skill-charges"></span>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- ===== Death Flash ===== -->
   <div id="death-flash"></div>
+
+  <!-- ===== Death Panel (死亡面板) ===== -->
+  <div id="death-panel" class="overlay hidden">
+    <h1>细胞凋亡</h1>
+    <h3 id="death-cell-name">红细胞</h3>
+    <p id="death-msg">损失了 1 个细胞</p>
+    <div class="death-cells" id="death-cells-display">
+      <img class="death-cell-avatar" id="death-cell-avatar" src="images/avatar-rbc.png" alt="">
+      <span class="death-cell-count" id="death-cells-count">1</span>
+    </div>
+    <div class="btn-row" style="flex-direction:column;">
+      <button class="btn primary" id="btn-retry">继续挑战 (剩余细胞: <span id="death-cells-count-btn">2</span>)</button>
+      <button class="btn" id="btn-death-quit">返回主城</button>
+    </div>
+  </div>
 
   <!-- ===== Toast ===== -->
   <div id="toast"></div>
@@ -165,16 +209,16 @@
   </div>
 </div>
 
-<script src="js/config.js?v=84"></script>
-<script src="js/entities.js?v=7"></script>
+<script src="js/config.js?v=86"></script>
+<script src="js/entities.js?v=10"></script>
 <script src="js/levels/level0_blood.js?v=4"></script>
-<script src="js/levels/level1_wbc.js?v=4"></script>
+<script src="js/levels/level1_wbc.js?v=5"></script>
 <script src="js/levels/level2_alveoli.js?v=4"></script>
 <script src="js/levels/level3_vessel.js?v=4"></script>
 <script src="js/levels/level4_lymph.js?v=4"></script>
 <script src="js/levels/level5_boss.js?v=4"></script>
 <script src="js/levels.js?v=78"></script>
 <script src="js/sprites.js?_nc=2"></script>
-<script src="js/game.js?_nc=3"></script>
+<script src="js/game.js?_nc=5"></script>
 </body>
 </html>
