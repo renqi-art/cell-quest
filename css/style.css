@@ -774,3 +774,20 @@ body{
   padding:0;line-height:1;transition:all .12s;z-index:5;
 }
 .btn-level-delete:hover{background:rgba(180,20,20,.5);border-color:#ff5555;transform:scale(1.15);}
+
+/* v3: 自适应难度标签 */
+.diff-tag{font-size:11px;padding:1px 7px;border-radius:3px;font-weight:bold;letter-spacing:.5px;display:inline-block;}
+.diff-tag.easy{background:rgba(129,199,132,.25);color:#81c784;border:1px solid rgba(129,199,132,.4);}
+.diff-tag.normal{background:rgba(255,255,255,.1);color:#e0e0e0;border:1px solid rgba(255,255,255,.2);}
+.diff-tag.hard{background:rgba(255,152,0,.25);color:#ffb74d;border:1px solid rgba(255,152,0,.4);}
+.diff-tag.extreme{background:rgba(244,67,54,.25);color:#ff5252;border:1px solid rgba(244,67,54,.4);animation:diffPulse .8s infinite alternate;}
+@keyframes diffPulse{from{opacity:.7;}to{opacity:1;}}
+
+/* v3: 双人模式 P2 HUD */
+#hud-p2{margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,.12);}
+#p2-indicator{font-size:10px;color:#aac;}
+#health-bar-p2{width:120px;height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:4px;}
+#health-bar-fill-p2{width:100%;height:100%;background:linear-gradient(90deg,#29b6f6,#4fc3f7);border-radius:4px;transition:width .25s;}
+#health-bar-fill-p2.low{background:linear-gradient(90deg,#ff9800,#ffb74d);}
+#health-bar-fill-p2.critical{background:linear-gradient(90deg,#f44336,#ef5350);animation:diffPulse .6s infinite alternate;}
+#health-text-p2{font-size:10px;color:#ccc;vertical-align:middle;}

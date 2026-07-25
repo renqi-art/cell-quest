@@ -264,13 +264,13 @@ const CUSTOM_LEVEL_ICONS = [
 
 function loadCustomLevels(){
   try{
-    const raw = localStorage.getItem('cellQuest_customLevels');
+    const raw = localStorage.getItem(customLevelKey(Game.currentSlot));
     if(raw) return JSON.parse(raw);
   }catch(e){}
   return [];
 }
 function saveCustomLevels(levels){
-  try{ localStorage.setItem('cellQuest_customLevels', JSON.stringify(levels)); }catch(e){}
+  try{ localStorage.setItem(customLevelKey(Game.currentSlot), JSON.stringify(levels)); }catch(e){}
 }
 function addCustomLevel(levelData, icon){
   const levels = loadCustomLevels();
@@ -409,6 +409,8 @@ const Game = {
   stars:     [0, 0, 0, 0, 0, 0],
   globalEnergy: 100,
   cells: 3,                // 当前关卡剩余细胞（生命数）
+  currentSlot: 0,           // v3: 当前存档栏位 (0-4)
+  playerName: '',            // v3: 排行榜昵称
   // 运行时
   keys: {},
   prevKeys: {},
@@ -476,48 +478,345 @@ const Game = {
   playerLevel:1,xp:0,skillPoints:0,damageNumbers:[],
   skills:{wbc:{damagePlus:0,dashCooldown:0,swordRange:0,slamRadius:0},plt:{bridgeCost:0,bridgeDuration:0,shieldDuration:0,healOnBridge:0},rbc:{energyDrain:0,oxyFieldPower:0,maxEnergy:0,nutritionBonus:0}},
   equipment:{weapon:null,armor:null,accessory:null},inventory:[],
+  // v3: 本局死亡计数
+  deathsThisRun: 0,
+  // v3: 记忆细胞全局收集
+  memoryCells: 0,              // 全局累计收集数
+  memoryCellsCollected: {},    // { levelIndex: true } 已收集过哪些关的记忆细胞
+  // v3: 双人模式
+  twoPlayer: false,
+  players: [],
+  keysP2: {},
+  prevKeysP2: {},
+  // v3: DC NPC 数组
+  dcNPCs: [],
+  // v3: AI 自适应难度系统
+  adaptiveDifficulty:{
+    level:'normal',          // 'easy' | 'normal' | 'hard' | 'extreme'
+    recentDeaths:0,          // 最近3次关卡累计死亡次数
+    recentClears:[],         // [{time, atpPct, kills}] 最近5次通关记录
+    clearStreak:0,           // 连续通关次数（无死亡）
+    adjustEnemies:0,         // 敌人数量调整（±30%）
+    adjustItems:0,           // 道具数量调整（±20%）
+    adjustTide:0,            // 潮涌频率调整（±15%）
+    adjustDamage:0,          // 敌人伤害调整（±1）
+  },
 };
 
-// ===== 存档系统 =====
-function saveGame(){
+// ===== v3: 记忆细胞永久加成系统 =====
+const MEMORY_BONUS_TIERS = [
+  { count:1,  name:'初次免疫应答',    desc:'初始能量 +10',     bonus:{startEnergy:10} },
+  { count:3,  name:'免疫记忆形成',    desc:'移动速度 +5%',     bonus:{speedPct:5} },
+  { count:5,  name:'抗体亲和力成熟',  desc:'最大生命 +10',     bonus:{maxHp:10} },
+  { count:8,  name:'二次免疫应答',    desc:'挥剑伤害 +1',      bonus:{swordDmg:1} },
+  { count:12, name:'记忆持久性',      desc:'重生保留 50% 能量', bonus:{deathEnergyKeep:50} },
+  { count:99, name:'终身免疫',        desc:'开局自带 1 护盾',   bonus:{startShield:1} }, // 99=全收集
+];
+
+function getMemoryBonus(count){
+  let bonus = {startEnergy:0, speedPct:0, maxHp:0, swordDmg:0, deathEnergyKeep:0, startShield:0};
+  for(const t of MEMORY_BONUS_TIERS){
+    if(count >= t.count){
+      for(const [k,v] of Object.entries(t.bonus)){
+        bonus[k] += v;
+      }
+    }
+  }
+  return bonus;
+}
+
+function getTotalMemoryCells(){
+  // 内置关卡每关1个记忆细胞
+  return Math.min(_BUILTIN_LEVELS.length, 6);
+}
+
+function getLastUnlockedTier(count){
+  for(let i = MEMORY_BONUS_TIERS.length-1; i >= 0; i--){
+    if(count >= MEMORY_BONUS_TIERS[i].count) return MEMORY_BONUS_TIERS[i];
+  }
+  return null;
+}
+
+function collectMemoryCell(levelIndex){
+  // 检查是否已在本关收集过
+  if(Game.memoryCellsCollected[levelIndex]) return false;
+
+  Game.memoryCellsCollected[levelIndex] = true;
+  Game.memoryCells++;
+
+  const oldBonus = getMemoryBonus(Game.memoryCells - 1);
+  const newBonus = getMemoryBonus(Game.memoryCells);
+  const tier = getLastUnlockedTier(Game.memoryCells);
+
+  // 有新增益时才提示
+  if(tier && JSON.stringify(oldBonus) !== JSON.stringify(newBonus)){
+    showToast('🧬 ' + tier.name + '！\n' + tier.desc + '\n(已收集 ' + Game.memoryCells + ' 个记忆细胞)');
+    spawnParticles(Game.player.x+Game.player.w/2, Game.player.y+Game.player.h/2, '#ce93d8', 25, 3);
+  } else {
+    showToast('🧬 发现记忆细胞！\n(已收集 ' + Game.memoryCells + ' 个记忆细胞)');
+  }
+
+  Game.stats.foundMemory = true;
+  saveGame();
+  return true;
+}
+
+// ===== v3: AI 自适应难度系统 =====
+const ADAPTIVE_DIFFICULTY = {
+  easy:   { name:'🌱 萌新',   enemyMult:0.7, itemMult:1.3, tideMult:0.7, damageAdj:-1, energyBonus:0 },
+  normal: { name:'⚔️ 标准',   enemyMult:1.0, itemMult:1.0, tideMult:1.0, damageAdj:0,  energyBonus:0 },
+  hard:   { name:'💀 困难',   enemyMult:1.2, itemMult:0.8, tideMult:1.15,damageAdj:1,  energyBonus:-5 },
+  extreme:{ name:'🔥 极限',   enemyMult:1.3, itemMult:0.7, tideMult:1.3, damageAdj:2,  energyBonus:-10 },
+};
+
+function getAdaptiveLevel(){
+  const d = Game.adaptiveDifficulty;
+  if(d.clearStreak >= 5 && d.recentDeaths === 0) return 'extreme';
+  if(d.clearStreak >= 3 && d.recentDeaths <= 1) return 'hard';
+  if(d.recentDeaths >= 5) return 'easy';
+  if(d.recentDeaths >= 3 && d.clearStreak <= 1) return 'easy';
+  // 分析通关质量
+  if(d.recentClears.length >= 3){
+    const avgTime = d.recentClears.reduce((a,c)=>a+c.time,0)/d.recentClears.length;
+    const avgATP = d.recentClears.reduce((a,c)=>a+c.atpPct,0)/d.recentClears.length;
+    if(avgTime < 60000 && avgATP > 70) return 'hard';   // <1分钟 + 高ATP → 困难
+    if(avgTime > 180000 || avgATP < 30) return 'easy';   // >3分钟 或 低ATP → 简单
+  }
+  return 'normal';
+}
+
+function updateAdaptiveDifficulty(cleared, deathCount, clearTime, atpPct){
+  const d = Game.adaptiveDifficulty;
+  if(deathCount > 0){
+    d.recentDeaths += deathCount;
+    d.clearStreak = 0;
+  }
+  if(cleared){
+    d.recentClears.push({time:clearTime||0, atpPct:atpPct||0});
+    if(d.recentClears.length > 5) d.recentClears.shift();
+    if(deathCount === 0) d.clearStreak++;
+    else d.clearStreak = 0;
+  }
+  // 每完成一次关卡，衰减一次死亡记录（避免永远卡在easy）
+  if(cleared && d.recentDeaths > 0) d.recentDeaths = Math.max(0, d.recentDeaths - 1);
+
+  const newLevel = getAdaptiveLevel();
+  d.level = newLevel;
+  const cfg = ADAPTIVE_DIFFICULTY[newLevel];
+  d.adjustEnemies = Math.round(cfg.enemyMult * 100 - 100);
+  d.adjustItems = Math.round(cfg.itemMult * 100 - 100);
+  d.adjustTide = Math.round(cfg.tideMult * 100 - 100);
+  d.adjustDamage = cfg.damageAdj;
+  // 调整初始能量
+  Game.globalEnergy = Math.min(getMaxEnergy(), Math.max(20, MAX_ENERGY + cfg.energyBonus));
+
+  // 持久化
   try{
-    localStorage.setItem('cellQuest_save', JSON.stringify({
-      unlocked:Game.unlocked,
-      completed:Game.completed,
-      stars:Game.stars,
-      globalEnergy:Game.globalEnergy,
-      playerLevel:Game.playerLevel,xp:Game.xp,skillPoints:Game.skillPoints,
-      skills:Game.skills,equipment:Game.equipment,inventory:Game.inventory,saveVersion:2,
+    localStorage.setItem(adaptiveKey(Game.currentSlot), JSON.stringify({
+      recentDeaths:d.recentDeaths, recentClears:d.recentClears, clearStreak:d.clearStreak, level:d.level
     }));
   }catch(e){}
 }
-function loadGame(){
+
+function loadAdaptiveDifficulty(){
   try{
-    const raw = localStorage.getItem('cellQuest_save');
+    const raw = localStorage.getItem(adaptiveKey(Game.currentSlot));
     if(raw){
       const d = JSON.parse(raw);
-      Game.unlocked = d.unlocked || Game.unlocked;
-      Game.completed = d.completed || Game.completed;
-      Game.stars = d.stars || Game.stars;
+      Game.adaptiveDifficulty.recentDeaths = d.recentDeaths || 0;
+      Game.adaptiveDifficulty.recentClears = d.recentClears || [];
+      Game.adaptiveDifficulty.clearStreak = d.clearStreak || 0;
+      const lvl = getAdaptiveLevel();
+      Game.adaptiveDifficulty.level = lvl;
+      const cfg = ADAPTIVE_DIFFICULTY[lvl];
+      Game.adaptiveDifficulty.adjustEnemies = Math.round(cfg.enemyMult * 100 - 100);
+      Game.adaptiveDifficulty.adjustItems = Math.round(cfg.itemMult * 100 - 100);
+      Game.adaptiveDifficulty.adjustTide = Math.round(cfg.tideMult * 100 - 100);
+      Game.adaptiveDifficulty.adjustDamage = cfg.damageAdj;
+    }
+  }catch(e){}
+}
+
+// ===== 存档系统 =====
+// ===== v3: 本地排行榜系统 =====
+const LB_MAX_ENTRIES = 5;
+
+function lbKey(slot){ return 'cellQuest_leaderboard_' + slot; }
+
+function loadLeaderboard(){
+  try{
+    const raw = localStorage.getItem(lbKey(Game.currentSlot));
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return {};
+}
+
+function saveLeaderboard(lb){
+  try{ localStorage.setItem(lbKey(Game.currentSlot), JSON.stringify(lb)); }catch(e){}
+}
+
+function recordLevelScore(levelIndex, time, completionPct, deaths, playerLevel){
+  const lb = loadLeaderboard();
+  const key = 'level_' + levelIndex;
+  if(!lb[key]) lb[key] = [];
+
+  const entry = {
+    name: Game.playerName || '无名细胞',
+    time: time,                    // ms
+    completionPct: completionPct,  // 0-1
+    deaths: deaths,
+    playerLevel: playerLevel,
+    date: Date.now(),
+  };
+
+  lb[key].push(entry);
+  // 按 完成度降序 → 时间升序 排名，取前5
+  lb[key].sort((a,b) => b.completionPct - a.completionPct || a.time - b.time);
+  lb[key] = lb[key].slice(0, LB_MAX_ENTRIES);
+
+  saveLeaderboard(lb);
+  return lb[key].indexOf(entry) + 1; // 返回排名(1-based)
+}
+
+function getLevelRanking(levelIndex){
+  const lb = loadLeaderboard();
+  return lb['level_' + levelIndex] || [];
+}
+
+function getTotalStarsRanking(){
+  // 综合排行：按总星星 + 总通关数
+  const lb = loadLeaderboard();
+  // 当前存档的综合数据
+  const totalStars = (Game.stars||[]).reduce((a,b)=>a+b,0);
+  const totalCompleted = (Game.completed||[]).filter(Boolean).length;
+  return { totalStars, totalCompleted, playerLevel: Game.playerLevel };
+}
+
+// ===== v3: 5存档栏位系统 =====
+const MAX_SLOTS = 5;
+
+function saveKey(slot){ return 'cellQuest_save_' + slot; }
+function customLevelKey(slot){ return 'cellQuest_customLevels_' + slot; }
+function adaptiveKey(slot){ return 'cellQuest_adaptive_' + slot; }
+
+function saveGame(slot){
+  const s = slot != null ? slot : Game.currentSlot;
+  try{
+    localStorage.setItem(saveKey(s), JSON.stringify({
+      unlocked:Game.unlocked, completed:Game.completed, stars:Game.stars,
+      globalEnergy:Game.globalEnergy,
+      playerLevel:Game.playerLevel,xp:Game.xp,skillPoints:Game.skillPoints,
+      skills:Game.skills,equipment:Game.equipment,inventory:Game.inventory,
+      memoryCells:Game.memoryCells, memoryCellsCollected:Game.memoryCellsCollected,
+      playerName:Game.playerName,
+      saveVersion:3, lastSaved: Date.now(),
+    }));
+    localStorage.setItem('cellQuest_currentSlot', String(s));
+  }catch(e){}
+}
+
+function loadGame(slot){
+  const s = slot != null ? slot : Game.currentSlot;
+  try{
+    const raw = localStorage.getItem(saveKey(s));
+    if(raw){
+      const d = JSON.parse(raw);
+      Game.unlocked = d.unlocked || [];
+      Game.completed = d.completed || [];
+      Game.stars = d.stars || [];
       Game.globalEnergy = d.globalEnergy != null ? d.globalEnergy : 100;
-      Game.playerLevel = d.playerLevel || d.level || 1;
+      Game.playerLevel = d.playerLevel || 1;
       Game.xp = d.xp || 0; Game.skillPoints = d.skillPoints || 0;
       Game.skills = d.skills || {wbc:{damagePlus:0,dashCooldown:0,swordRange:0,slamRadius:0},plt:{bridgeCost:0,bridgeDuration:0,shieldDuration:0,healOnBridge:0},rbc:{energyDrain:0,oxyFieldPower:0,maxEnergy:0,nutritionBonus:0}};
-      Game.equipment = d.equipment || {weapon:null,armor:null,accessory:null}; Game.inventory = d.inventory || [];
-      // 扩容到当前实际关卡数 + 自定义关卡
+      Game.equipment = d.equipment || {weapon:null,armor:null,accessory:null};
+      Game.inventory = d.inventory || [];
+      Game.memoryCells = d.memoryCells || 0;
+      Game.memoryCellsCollected = d.memoryCellsCollected || {};
+      Game.playerName = d.playerName || '';
+      // 扩容关卡数组
       const total = buildLevelConfigs().length;
-      // 关卡逐级解锁：第0-1关始终开放，后续需通关前一关
-      Game.unlocked[0] = true;
-      Game.unlocked[1] = true;
-      for(let i = 2; i < Game.unlocked.length; i++){
-        if(!Game.completed[i - 1]) Game.unlocked[i] = false;
-      }
       while(Game.unlocked.length < total) Game.unlocked.push(false);
       while(Game.completed.length < total) Game.completed.push(false);
       while(Game.stars.length < total) Game.stars.push(0);
-      if(Game.unlocked.length > total) Game.unlocked.splice(total);
-      if(Game.completed.length > total) Game.completed.splice(total);
-      if(Game.stars.length > total) Game.stars.splice(total);
+      Game.unlocked[0] = true; Game.unlocked[1] = true;
+      for(let i = 2; i < Game.unlocked.length; i++){
+        if(!Game.completed[i - 1]) Game.unlocked[i] = false;
+      }
+      return true; // 读取成功
+    }
+  }catch(e){}
+  return false; // 空存档
+}
+
+function getSlotInfo(slot){
+  try{
+    const raw = localStorage.getItem(saveKey(slot));
+    if(raw){
+      const d = JSON.parse(raw);
+      const completedCount = (d.completed||[]).filter(Boolean).length;
+      const totalStars = (d.stars||[]).reduce((a,b)=>a+b,0);
+      const date = d.lastSaved ? new Date(d.lastSaved) : null;
+      const dateStr = date ? (date.getMonth()+1)+'/'+date.getDate()+' '+date.getHours()+':'+String(date.getMinutes()).padStart(2,'0') : '空';
+      return {
+        exists: true, name: '存档 ' + (slot+1),
+        completed: completedCount, stars: totalStars,
+        level: d.playerLevel || 1, date: dateStr,
+        memoryCells: d.memoryCells || 0,
+        playerName: d.playerName || '',
+      };
+    }
+  }catch(e){}
+  return { exists: false, name: '空存档', completed: 0, stars: 0, level: 1, date: '--', memoryCells: 0, playerName: '' };
+}
+
+function switchSlot(slot){
+  if(slot === Game.currentSlot) return;
+  saveGame(); // 先保存当前
+  Game.currentSlot = slot;
+  localStorage.setItem('cellQuest_currentSlot', String(slot));
+  loadGame(slot);
+  loadAdaptiveDifficulty();
+  refreshCustomLevels(); // 重新加载该栏位的自定义关卡
+}
+
+function resetSlot(slot){
+  try{
+    localStorage.removeItem(saveKey(slot));
+    localStorage.removeItem(customLevelKey(slot));
+    localStorage.removeItem(adaptiveKey(slot));
+    if(slot === Game.currentSlot){
+      // 重置当前栏位
+      Game.unlocked = [true,true]; Game.completed = []; Game.stars = [];
+      Game.globalEnergy = 100; Game.playerLevel = 1; Game.xp = 0; Game.skillPoints = 0;
+      Game.skills = {wbc:{damagePlus:0,dashCooldown:0,swordRange:0,slamRadius:0},plt:{bridgeCost:0,bridgeDuration:0,shieldDuration:0,healOnBridge:0},rbc:{energyDrain:0,oxyFieldPower:0,maxEnergy:0,nutritionBonus:0}};
+      Game.equipment = {weapon:null,armor:null,accessory:null}; Game.inventory = [];
+      Game.memoryCells = 0; Game.memoryCellsCollected = {};
+      Game.adaptiveDifficulty = {level:'normal',recentDeaths:0,recentClears:[],clearStreak:0,adjustEnemies:0,adjustItems:0,adjustTide:0,adjustDamage:0};
+      const total = buildLevelConfigs().length;
+      while(Game.unlocked.length < total) Game.unlocked.push(false);
+      while(Game.completed.length < total) Game.completed.push(false);
+      while(Game.stars.length < total) Game.stars.push(0);
+      Game.unlocked[0] = true; Game.unlocked[1] = true;
+      saveGame();
+      refreshCustomLevels();
+    }
+    return true;
+  }catch(e){ return false; }
+}
+
+// 迁移旧版单存档 → 多栏位（首次启动时自动执行）
+function migrateOldSave(){
+  try{
+    const old = localStorage.getItem('cellQuest_save');
+    if(old && !localStorage.getItem(saveKey(0))){
+      localStorage.setItem(saveKey(0), old);
+      localStorage.removeItem('cellQuest_save');
+      // 迁移自定义关卡
+      const oldCL = localStorage.getItem('cellQuest_customLevels');
+      if(oldCL) localStorage.setItem(customLevelKey(0), oldCL);
+      // 迁移自适应难度
+      const oldA = localStorage.getItem('cellQuest_adaptive');
+      if(oldA) localStorage.setItem(adaptiveKey(0), oldA);
     }
   }catch(e){}
 }

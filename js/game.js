@@ -112,6 +112,9 @@ class Level {
           case '_':
             this.crumblePlatforms.push({x:c*TILE, y:r*TILE, col:c, row:r, state:'solid', timer:0});
             arr.push('_'); break;
+          case 'N':
+            Game.dcNPCs.push(new DendriticCell(c*TILE, r*TILE, Game.dcNPCs.length));
+            arr.push(' '); break;
           default:
             arr.push(' ');
         }
@@ -463,8 +466,8 @@ class Level {
     const x = Math.round(this.finish.x) - Math.round(camX);
     const y = this.finish.y;
     const t = Game.frame * 0.06;
-    const winMet = (Game.winCondition === WIN_KILL_ALL && Game.allEnemiesDead)
-                || (Game.winCondition === WIN_COLLECT_ALL && Game.itemsCollected >= Game.totalItems);
+    // v3: 终点门始终开放（抵达即通关，杀怪/收集为评分标准）
+    const winMet = true;
     
     ctx.save();
     if(winMet){
@@ -502,10 +505,10 @@ class Level {
       ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('🔒', x+TILE/2, y+TILE/2+5);
-      // 条件提示
+      // v3: 评分提示
       ctx.fillStyle = '#ffd700';
       ctx.font = '9px sans-serif';
-      const hint = Game.winCondition === WIN_KILL_ALL ? '消灭全部敌人' : '收集全部物品';
+      const hint = Game.winCondition === WIN_KILL_ALL ? '抵达通关·击杀评分' : '抵达通关·收集评分';
       ctx.fillText(hint, x+TILE/2, y-6);
     }
     ctx.restore();
@@ -521,6 +524,17 @@ const KEY_MAP = {
   e:'skill', E:'skill',
   Shift:'dash',
   '1':'skill1', '2':'skill2', '3':'skill3', '4':'skill4',
+};
+
+// v3: P2 键位映射（方向键 + 小键盘区域）
+const KEY_MAP_P2 = {
+  'j':'left', 'J':'left',
+  'l':'right', 'L':'right',
+  'i':'jump', 'I':'jump',
+  'k':'down', 'K':'down',
+  'u':'skill', 'U':'skill',
+  'o':'dash', 'O':'dash',
+  '7':'skill1', '8':'skill2', '9':'skill3', '0':'skill4',
 };
 
 function setupInput(){
@@ -546,6 +560,11 @@ function setupInput(){
     Sfx.init();
     if(KEY_MAP[e.key] !== undefined){
       Game.keys[KEY_MAP[e.key]] = true;
+      e.preventDefault();
+    }
+    // v3: P2 输入路由
+    if(KEY_MAP_P2[e.key] !== undefined && Game.twoPlayer){
+      Game.keysP2[KEY_MAP_P2[e.key]] = true;
       e.preventDefault();
     }
     // v2: 角色切换已移除，细胞由关卡锁定
@@ -579,6 +598,10 @@ function setupInput(){
   document.addEventListener('keyup', e=>{
     if(KEY_MAP[e.key] !== undefined){
       Game.keys[KEY_MAP[e.key]] = false;
+    }
+    // v3: P2 keyup
+    if(KEY_MAP_P2[e.key] !== undefined && Game.twoPlayer){
+      Game.keysP2[KEY_MAP_P2[e.key]] = false;
     }
   });
   // blur 时清除按键（防止粘键）
@@ -704,8 +727,10 @@ function update(){
   if(Game.tidePaused > 0) Game.tidePaused--;
   Game.tideTimer++;
 
-  // 玩家更新
-  p.update(lvl);
+  // v3: 更新所有玩家
+  for(const player of Game.players){
+    player.update(lvl);
+  }
 
   // 缺口未止血倍率
   if(p.x > 24 * TILE && !Game.bridgeUsedInGap){
@@ -758,6 +783,9 @@ function update(){
   // Boss更新
   if(Game.boss) Game.boss.update(lvl, p);
 
+  // v3: DC NPC 更新
+  for(const dc of Game.dcNPCs) dc.update(p);
+
   // 全敌击杀检测（含Boss）
   const allEnemiesDead = lvl.enemies.every(e => !e.alive) && (!Game.boss || !Game.boss.alive);
   Game.allEnemiesDead = allEnemiesDead;
@@ -809,14 +837,16 @@ function update(){
     }
   }
 
-  // 终点门检测
-  if(lvl.finish && p.x+p.w > lvl.finish.x+2 && p.x < lvl.finish.x+TILE-2 &&
-     p.y+p.h > lvl.finish.y && p.y < lvl.finish.y+TILE){
-    if(Game.winCondition === WIN_KILL_ALL && !Game.allEnemiesDead){
-      showToast('还有细菌未消灭！\n请清除全部敌人后再进入大门');
-    } else if(Game.winCondition === WIN_COLLECT_ALL && Game.itemsCollected < Game.totalItems){
-      showToast(`还有物品未收集！\n已收集 ${Game.itemsCollected}/${Game.totalItems}`);
-    } else {
+  // 终点门检测（v3: 双人模式需要两人都到）
+  if(lvl.finish){
+    let allAtGate = true;
+    for(const pl of Game.players){
+      if(!pl) continue;
+      const atGate = pl.x+pl.w > lvl.finish.x+2 && pl.x < lvl.finish.x+TILE-2 &&
+                     pl.y+pl.h > lvl.finish.y && pl.y < lvl.finish.y+TILE;
+      if(!atGate){ allAtGate = false; break; }
+    }
+    if(allAtGate){
       levelComplete();
       return;
     }
@@ -866,12 +896,30 @@ function render(){
   if(Game.state !== 'playing' && Game.state !== 'paused') return;
 
   const lvl = Game.level;
-  const p=Game.player;const ex=p.x+p.vx*Game.renderAlpha;
-  let camX=ex-CW/2+p.w/2;camX=Math.max(0,Math.min(camX,lvl.width*TILE-CW));
+  // v3: 双人模式 — 摄像机跟随中点并缩放
+  let camX, zoomScale = 1;
+  if(Game.twoPlayer && Game.players.length >= 2){
+    const p1 = Game.players[0], p2 = Game.players[1];
+    const midX = (p1.x + p2.x) / 2;
+    const dist = Math.abs(p1.x - p2.x);
+    // 如果两人距离超过屏幕一半，则 zoom out
+    if(dist > CW * 0.6){
+      zoomScale = Math.max(0.65, 1 - (dist - CW * 0.6) / CW * 0.5);
+    }
+    camX = midX - (CW * zoomScale) / 2;
+  } else {
+    const p=Game.player;const ex=p.x+p.vx*Game.renderAlpha;
+    camX=ex-CW/2+p.w/2;
+  }
+  camX=Math.max(0,Math.min(camX,lvl.width*TILE-CW*zoomScale));
   const shakeX=Game.camera.shake>0?Math.sin(Game.frame*1.7)*Game.camera.shake*0.7:0;
   const shakeY=Game.camera.shake>0?Math.cos(Game.frame*2.3)*Game.camera.shake*0.7:0;
 
   ctx.save();
+  if(zoomScale < 1){
+    ctx.scale(1/zoomScale, 1/zoomScale);
+    ctx.translate(-camX*(1-zoomScale), 0);
+  }
   ctx.translate(shakeX, shakeY);
 
   drawBackground(ctx, camX, lvl.bg);
@@ -882,8 +930,13 @@ function render(){
   for(const it of lvl.items) it.draw(ctx, camX);
   for(const e of lvl.enemies) e.draw(ctx, camX);
   if(Game.boss) Game.boss.draw(ctx, camX);
+  // v3: DC NPC 绘制
+  for(const dc of Game.dcNPCs) dc.draw(ctx, camX);
   for(const pr of Game.projectiles) pr.draw(ctx, camX);
-  if(Game.player) Game.player.draw(ctx, camX);
+  // v3: 绘制所有玩家
+  for(const player of Game.players){
+    if(player) player.draw(ctx, camX);
+  }
   for(const pa of Game.particles) pa.draw(ctx, camX);
   for(const dn of Game.damageNumbers) dn.draw(ctx, camX);
   for(const qb of Game.qBlocks) qb.draw(ctx, camX);
@@ -941,6 +994,29 @@ function render(){
 function updateHUD(){
   if(!Game.player) return;
   const p = Game.player;
+
+  // v3: 双人模式 — 更新 P2 HUD
+  const p2hud = document.getElementById('hud-p2');
+  if(Game.twoPlayer && Game.players.length >= 2){
+    const p2 = Game.players[1];
+    if(p2hud){
+      p2hud.style.display = 'block';
+      // P2 health
+      const p2HealthBar = document.getElementById('health-bar-fill-p2');
+      const p2HealthText = document.getElementById('health-text-p2');
+      if(p2HealthBar){
+        const pct2 = p2.maxHealth > 0 ? (p2.health / p2.maxHealth) * 100 : 0;
+        p2HealthBar.style.width = pct2 + '%';
+        p2HealthBar.classList.toggle('low', pct2 <= 50 && pct2 > 25);
+        p2HealthBar.classList.toggle('critical', pct2 <= 25);
+      }
+      if(p2HealthText) p2HealthText.textContent = p2.health + '/' + p2.maxHealth;
+      document.getElementById('cell-name-p2').textContent = p2.cell.name;
+      document.getElementById('p2-indicator').textContent = 'P2 ' + p2.cell.short;
+    }
+  } else if(p2hud){
+    p2hud.style.display = 'none';
+  }
 
   // 左上角角色头像（跟随当前细胞）
   const avatarEl = $('cell-avatar');
@@ -1005,10 +1081,32 @@ function updateHUD(){
     timerDiv.textContent = formatTime(Game.levelTime);
   }
 
-  // 记忆细胞标记
+  // v3: 记忆细胞 — 显示全局收集进度
   const memIcon = $('memory-icon');
   if(memIcon){
     memIcon.classList.toggle('found', Game.stats.foundMemory);
+    const total = getTotalMemoryCells();
+    const bonus = getMemoryBonus(Game.memoryCells);
+    let tooltip = Game.memoryCells + '/' + total + ' 记忆细胞';
+    if(bonus.speedPct>0) tooltip += '\n移速 +' + bonus.speedPct + '%';
+    if(bonus.maxHp>0) tooltip += '\n生命 +' + bonus.maxHp;
+    if(bonus.startEnergy>0) tooltip += '\n初始能量 +' + bonus.startEnergy;
+    if(bonus.swordDmg>0) tooltip += '\n伤害 +' + bonus.swordDmg;
+    if(bonus.deathEnergyKeep>0) tooltip += '\n死亡保留 ' + bonus.deathEnergyKeep + '% 能量';
+    if(bonus.startShield>0) tooltip += '\n开局护盾';
+    memIcon.title = tooltip;
+    memIcon.textContent = Game.memoryCells > 0 ? '🧬' + Game.memoryCells : '🧬';
+  }
+
+  // v3: 自适应难度指示器
+  const objDisplay = $('objective-display');
+  if(objDisplay){
+    const diffCfg = ADAPTIVE_DIFFICULTY[Game.adaptiveDifficulty.level];
+    const diffTag = objDisplay.querySelector('.diff-tag');
+    if(diffTag){
+      diffTag.textContent = diffCfg.name;
+      diffTag.className = 'diff-tag ' + Game.adaptiveDifficulty.level;
+    }
   }
 
   // ===== WBC 新技能槽更新 =====
@@ -1045,17 +1143,19 @@ function updateHUD(){
     if(bar) bar.style.display = 'none';
   }
 
-  // v2: 通关目标显示
+  // v3: 通关目标 → 评分进度显示
   const objEl = $('objective-display');
   if(objEl){
     if(Game.winCondition === WIN_KILL_ALL){
-      const alive = (Game.level.enemies.filter(e=>e.alive).length) + (Game.boss&&Game.boss.alive?1:0);
-      objEl.textContent = alive === 0 ? '⚔️ ✓' : `⚔️ ${alive}`;
-      objEl.style.color = alive === 0 ? '#66ff66' : '#ff6b6b';
+      const totalEnemies = Game.level.enemies.length + (Game.boss&&Game.boss.alive?1:0);
+      const killed = Game.stats.kills;
+      const pct = totalEnemies > 0 ? killed / totalEnemies : 1;
+      objEl.innerHTML = `⚔️ <b style="color:${pct>=0.9?'#66ff66':pct>=0.5?'#ffd700':'#ff6b6b'}">${killed}/${totalEnemies}</b> <small style="color:#888">${Math.round(pct*100)}%</small>`;
     } else if(Game.winCondition === WIN_COLLECT_ALL){
-      const done = Game.itemsCollected >= Game.totalItems;
-      objEl.textContent = `📦 ${Game.itemsCollected}/${Game.totalItems}`;
-      objEl.style.color = done ? '#66ff66' : '#ffd700';
+      const collected = Game.itemsCollected;
+      const total = Game.totalItems;
+      const pct = total > 0 ? collected / total : 1;
+      objEl.innerHTML = `📦 <b style="color:${pct>=0.9?'#66ff66':pct>=0.5?'#ffd700':'#ff6b6b'}">${collected}/${total}</b> <small style="color:#888">${Math.round(pct*100)}%</small>`;
     }
   }
 
@@ -1250,6 +1350,239 @@ function showMenu(){
   if(fp) fp.classList.add('hidden');
 }
 
+// ===== v3: 排行榜昵称 =====
+function changeNickname(){
+  const cur = Game.playerName || '';
+  const name = prompt('输入你的玩家昵称 (最多 12 个字):', cur);
+  if(name !== null && name.trim()){
+    Game.playerName = name.trim().substring(0, 12);
+    saveGame();
+    showToast('昵称已更新: ' + Game.playerName);
+    // 刷新排行榜面板
+    const panel = document.getElementById('lb-panel');
+    if(panel) panel.remove();
+    setTimeout(()=>showLeaderboard(), 100);
+  }
+}
+
+// ===== v3: 排行榜面板 =====
+function showLeaderboard(){
+  const configs = buildLevelConfigs();
+  const total = getTotalStarsRanking();
+  const name = Game.playerName || '未设置';
+  let html = '<h3>🏆 本地排行榜 (存档 ' + (Game.currentSlot+1) + ')</h3>';
+
+  // 昵称设置
+  html += `<div style="display:flex;align-items:center;gap:6px;margin:4px 0 8px;">
+    <span style="font-size:12px;color:#aaa;">👤 昵称:</span>
+    <b style="color:#ffd700;">${name}</b>
+    <button class="btn-small" style="font-size:10px;padding:2px 8px;" onclick="changeNickname()">修改</button>
+  </div>`;
+
+  // 综合统计
+  html += `<div style="background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.3);border-radius:6px;padding:8px;margin:8px 0;text-align:center;">
+    ⭐ 总星数: <b>${total.totalStars}</b> | ✅ 已通关: <b>${total.totalCompleted}/${configs.length}</b> | 📊 Lv.${total.playerLevel}
+  </div>`;
+
+  // 分关排行
+  html += '<div style="max-height:320px;overflow-y:auto;">';
+  for(let i = 0; i < configs.length; i++){
+    const cfg = configs[i];
+    const entries = getLevelRanking(i);
+    html += `<div style="margin:6px 0;padding:6px;background:rgba(255,255,255,.03);border-radius:4px;">
+      <b title="${cfg.desc||''}">${cfg.icon||''} ${cfg.name}</b>`;
+    if(entries.length === 0){
+      html += '<div style="font-size:11px;color:#666;padding:2px 8px;">暂无记录</div>';
+    } else {
+      for(let j = 0; j < entries.length; j++){
+        const e = entries[j];
+        const medal = j === 0 ? '🥇' : j === 1 ? '🥈' : j === 2 ? '🥉' : (j+1);
+        const pctStr = Math.round(e.completionPct * 100) + '%';
+        const pctColor = e.completionPct >= 1 ? '#66ff66' : e.completionPct >= 0.9 ? '#ffd700' : '#aaa';
+        const date = new Date(e.date);
+        const dateStr = (date.getMonth()+1)+'/'+date.getDate();
+        html += `<div style="font-size:11px;padding:2px 8px;display:flex;justify-content:space-between;color:#ccc;">
+          <span>${medal} <b style="color:#ffd700;">${e.name||'???'}</b> <span style="color:${pctColor}">${pctStr}</span> | ${formatTime(e.time)} | Lv.${e.playerLevel}</span>
+          <span style="color:#666;">${dateStr}</span>
+        </div>`;
+      }
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  html += '<button class="btn-small" style="margin-top:6px;" onclick="document.getElementById(\'lb-panel\').remove()">关闭</button>';
+
+  const existing = document.getElementById('lb-panel');
+  if(existing) existing.remove();
+  const panel = document.createElement('div');
+  panel.id = 'lb-panel';
+  panel.className = 'overlay';
+  panel.style.cssText = 'display:flex;align-items:center;justify-content:center;z-index:1000;';
+  panel.innerHTML = `<div class="confirm-inner" style="max-width:500px;">${html}</div>`;
+  panel.addEventListener('click', e => { if(e.target === panel) panel.remove(); });
+  document.getElementById('game-container').appendChild(panel);
+}
+
+// ===== v3: 存档管理面板 =====
+function showSlotPanel(){
+  saveGame(); // 先保存当前
+  let html = '<h3>💾 存档管理 (当前: 存档 ' + (Game.currentSlot+1) + ')</h3>';
+  html += '<div style="display:flex;flex-direction:column;gap:6px;margin:10px 0;max-height:350px;overflow-y:auto;">';
+
+  for(let i = 0; i < MAX_SLOTS; i++){
+    const info = getSlotInfo(i);
+    const isActive = i === Game.currentSlot;
+    const bg = isActive ? 'rgba(129,199,132,.15)' : 'rgba(255,255,255,.05)';
+    const border = isActive ? '1px solid #81c784' : '1px solid rgba(255,255,255,.1)';
+    html += `<div style="background:${bg};border:${border};border-radius:6px;padding:10px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="flex:1;">
+        <b>${info.exists ? '💾' : '📭'} 存档 ${i+1}</b>
+        ${info.exists
+          ? `<div style="font-size:11px;color:#aaa;">Lv.${info.level} | ⭐${info.stars} | 已通${info.completed}关 | 🧬${info.memoryCells} | ${info.date}</div>`
+          : '<div style="font-size:11px;color:#666;">空存档</div>'}
+      </div>
+      <div style="display:flex;gap:4px;">
+        ${!isActive ? `<button class="btn-small" style="font-size:10px;padding:4px 8px;" onclick="switchToSlot(${i})">切换</button>` : '<span style="font-size:10px;color:#81c784;">当前</span>'}
+        <button class="btn-small" style="font-size:10px;padding:4px 8px;border-color:#ff5252;color:#ff5252;" onclick="resetSlotConfirm(${i})">🗑</button>
+      </div>
+    </div>`;
+  }
+
+  html += '</div>';
+  html += '<button class="btn-small" style="margin-top:6px;" onclick="document.getElementById(\'slot-panel\').remove()">关闭</button>';
+
+  const existing = document.getElementById('slot-panel');
+  if(existing) existing.remove();
+  const panel = document.createElement('div');
+  panel.id = 'slot-panel';
+  panel.className = 'overlay';
+  panel.style.cssText = 'display:flex;align-items:center;justify-content:center;z-index:1000;';
+  panel.innerHTML = `<div class="confirm-inner" style="max-width:480px;">${html}</div>`;
+  panel.addEventListener('click', e => { if(e.target === panel) panel.remove(); });
+  document.getElementById('game-container').appendChild(panel);
+}
+
+function switchToSlot(slot){
+  switchSlot(slot);
+  const panel = document.getElementById('slot-panel');
+  if(panel) panel.remove();
+  showToast('已切换到 存档 ' + (slot+1));
+  renderHub();
+}
+
+function resetSlotConfirm(slot){
+  if(slot === Game.currentSlot){
+    showToast('不能删除当前使用的存档！请先切换到其他存档');
+    return;
+  }
+  const info = getSlotInfo(slot);
+  if(!info.exists){ showToast('该存档已是空的'); return; }
+  if(confirm('确定要删除 存档 ' + (slot+1) + ' 吗？\n(已通' + info.completed + '关 | ⭐' + info.stars + '星 | Lv.' + info.level + ')\n此操作不可撤销！')){
+    resetSlot(slot);
+    const panel = document.getElementById('slot-panel');
+    if(panel) panel.remove();
+    showToast('已删除 存档 ' + (slot+1));
+    setTimeout(()=>showSlotPanel(), 100);
+  }
+}
+
+function renderHub(){
+  // 刷新关卡列表后需重新调用 showHub
+  showHub();
+}
+
+// ===== v3: AI 关卡生成面板 =====
+function showAIGeneratePanel(){
+  const key = getDeepSeekKey();
+  let html = '<h3>🤖 AI 生成关卡</h3>';
+
+  // API Key 设置
+  html += '<div style="margin:4px 0 8px;font-size:11px;">';
+  html += '<span style="color:#aaa;">DeepSeek Key:</span> ';
+  if(key){
+    html += '<span style="color:#81c784;">已设置 (' + key.substring(0,8) + '...)</span> ';
+    html += '<button class="btn-small" style="font-size:10px;padding:2px 6px;" onclick="changeDeepSeekKey()">更换</button>';
+  } else {
+    html += '<button class="btn-small" style="font-size:10px;padding:2px 8px;" onclick="changeDeepSeekKey()">设置API Key</button>';
+    html += ' <span style="color:#666;">(需要DeepSeek账号)</span>';
+  }
+  html += '</div>';
+
+  // 真AI: 输入关键词
+  html += '<div style="border:1px solid #ab47bc;border-radius:6px;padding:10px;margin:8px 0;">';
+  html += '<b style="color:#ab47bc;">🧠 AI 智能生成</b>';
+  html += '<div style="margin:6px 0;display:flex;gap:4px;">';
+  html += '<input id="ai-prompt-input" type="text" placeholder="输入主题词,如: 海底世界、太空站、僵尸入侵..." style="flex:1;padding:6px 8px;border:1px solid #555;border-radius:4px;background:#1a1a2e;color:#fff;font-size:13px;" onkeydown="if(event.key===\'Enter\')generateAILevelFromPrompt()">';
+  html += '<button class="btn-small" style="background:#ab47bc;color:#fff;padding:6px 12px;white-space:nowrap;" onclick="generateAILevelFromPrompt()">生成</button>';
+  html += '</div>';
+  html += '<div style="font-size:10px;color:#888;">输入任意主题词,DeepSeek AI 为你生成专属关卡。需要联网 + API Key。</div>';
+  html += '</div>';
+
+  // 伪随机: 模板选择
+  html += '<div style="margin:8px 0;"><b style="color:#ffd700;">🎲 随机模板生成</b></div>';
+  const templates = AILevelGenerator.getTemplateList();
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow-y:auto;">';
+  for(const t of templates){
+    html += `<button class="btn-small" style="padding:6px 10px;font-size:11px;"
+      onclick="generateAILevel('${t.id}')">${t.icon} ${t.name}</button>`;
+  }
+  html += '</div>';
+
+  html += '<button class="btn-small" style="margin-top:10px;" onclick="document.getElementById(\'ai-panel\').remove()">关闭</button>';
+
+  const existing = document.getElementById('ai-panel');
+  if(existing) existing.remove();
+  const panel = document.createElement('div');
+  panel.id = 'ai-panel';
+  panel.className = 'overlay';
+  panel.style.cssText = 'display:flex;align-items:center;justify-content:center;z-index:1000;';
+  panel.innerHTML = `<div class="confirm-inner" style="max-width:520px;">${html}</div>`;
+  panel.addEventListener('click', e => { if(e.target === panel) panel.remove(); });
+  document.getElementById('game-container').appendChild(panel);
+}
+
+function changeDeepSeekKey(){
+  const cur = getDeepSeekKey();
+  const key = prompt('输入 DeepSeek API Key:\n(获取: platform.deepseek.com → API Keys)\n\n留空则清除已保存的Key', cur || '');
+  if(key !== null){
+    if(key.trim()){
+      setDeepSeekKey(key.trim());
+      showToast('API Key 已保存');
+    } else if(cur){
+      localStorage.removeItem('cellQuest_ds_key');
+      showToast('API Key 已清除');
+    }
+    const panel = document.getElementById('ai-panel');
+    if(panel) panel.remove();
+    setTimeout(()=>showAIGeneratePanel(), 100);
+  }
+}
+
+async function generateAILevelFromPrompt(){
+  const input = document.getElementById('ai-prompt-input');
+  const prompt = input ? input.value.trim() : '';
+  if(!prompt){ showToast('请输入主题词'); return; }
+
+  const panel = document.getElementById('ai-panel');
+  if(panel) panel.remove();
+  showToast('🧠 AI 正在生成关卡... (可能需要10-30秒)');
+
+  try{
+    const levelData = await generateAIMap(prompt);
+    if(levelData.error){
+      showToast('生成失败: ' + levelData.error);
+      return;
+    }
+
+    const idx = addCustomLevel(levelData, '🧠');
+    refreshCustomLevels();
+    showToast('✅ AI 关卡 "' + levelData.name + '" 已生成！');
+    renderHub();
+  }catch(e){
+    showToast('生成出错: ' + e.message);
+  }
+}
+
 function showHub(){
   Game.state = 'hub';
   // 刷新自定义关卡（编辑器可能新保存了关卡）
@@ -1397,16 +1730,41 @@ function levelComplete(){
   const configs = buildLevelConfigs();
   if(idx + 1 < configs.length) Game.unlocked[idx + 1] = true;
 
-  // 星级评定
+  // v3: 评分制星级评定
+  let stars = 1; // 1星：抵达终点
   const energyPct = Game.globalEnergy / getMaxEnergy();
-  let stars = 1; // 1星：正常通关
-  if(Game.stats.deaths === 0) stars++; // 2星：0死亡
-  if(Game.stats.deaths === 0 && energyPct > 0.5 && Game.stats.foundMemory) stars++; // 3星：0死亡+能量>50%+记忆细胞
+
+  // 计算完成度
+  let completionPct = 0;
+  if(Game.winCondition === WIN_KILL_ALL){
+    const totalEnemies = Game.level.enemies.length + (Game.boss ? 1 : 0);
+    completionPct = totalEnemies > 0 ? Game.stats.kills / totalEnemies : 1;
+  } else if(Game.winCondition === WIN_COLLECT_ALL){
+    completionPct = Game.totalItems > 0 ? Game.itemsCollected / Game.totalItems : 1;
+  } else {
+    completionPct = 1;
+  }
+
+  // 2星：完成度 ≥ 60%
+  if(completionPct >= 0.6) stars++;
+  // 3星：完成度 ≥ 90% + 0死亡 + 记忆细胞
+  if(completionPct >= 0.9 && Game.stats.deaths === 0 && Game.stats.foundMemory) stars++;
+  // 完美通关（100%完成+0死亡）：展示特殊标记
+  const isPerfect = completionPct >= 1.0 && Game.stats.deaths === 0;
+
   if(Game.stars[idx] < stars) Game.stars[idx] = stars;
+
+  // 存储完成度用于结算面板
+  Game._lastCompletionPct = completionPct;
+  Game._lastIsPerfect = isPerfect;
 
   // 通关后视为已熟悉本关，之后不再自动弹出教程
   Game.tutorialsDone = true;
   try{ localStorage.setItem('cellQuest_tutorials_done', '1'); }catch(e){}
+
+  // v3: 更新自适应难度
+  const energyPct2 = Game.globalEnergy / getMaxEnergy();
+  updateAdaptiveDifficulty(true, Game.deathsThisRun, Game.levelTime, energyPct2);
 
   // 速通记录
   let isNewRecord = false;
@@ -1418,11 +1776,32 @@ function levelComplete(){
   }
   saveGame();
 
+  // v3: 首次通关提示设置昵称
+  if(!Game.playerName){
+    const name = prompt('🎉 首次通关！\n请输入你的玩家昵称 (排行榜显示):', '免疫战士');
+    if(name && name.trim()){
+      Game.playerName = name.trim().substring(0, 12);
+      saveGame();
+    }
+  }
+
+  // v3: 录入本地排行榜
+  const rank = recordLevelScore(idx, Game.levelTime, Game._lastCompletionPct, Game.stats.deaths, Game.playerLevel);
+
   $('complete-level-name').textContent = buildLevelConfigs()[idx].name;
   $('stat-kills').textContent = Game.stats.kills;
   $('stat-items').textContent = Game.stats.items;
+  // v3: 完成度
+  $('stat-completion').textContent = Math.round(Game._lastCompletionPct * 100) + '%'
+    + (Game._lastIsPerfect ? ' 👑 完美' : '');
   $('stat-energy').textContent = Math.round(Game.globalEnergy);
-  $('stat-rating').textContent = '★'.repeat(stars) + '☆'.repeat(3-stars);
+  $('stat-rating').textContent = '★'.repeat(stars) + '☆'.repeat(3-stars)
+    + (Game._lastIsPerfect ? ' 👑' : '')
+    + ' (' + Math.round(Game._lastCompletionPct * 100) + '%)';
+  // v3: 排行
+  if(rank && rank <= LB_MAX_ENTRIES){
+    $('stat-rating').textContent += ' | 🏆 #' + rank;
+  }
   $('stat-time').textContent = formatTime(Game.levelTime);
   $('stat-best-time').textContent = best > 0 ? formatTime(best) : '--:--.--';
   if(isNewRecord) $('stat-best-time').classList.add('new-record');
@@ -1474,10 +1853,23 @@ function LoadLevel(n){
 
   Game.levelIndex = idx;
   Game.qBlocks = [];
+  Game.dcNPCs = [];     // v3: 重置DC NPC
   Game.level = new Level(mapData);
-  Game.player = new Player(Game.level.playerSpawn.x, Game.level.playerSpawn.y);
-  // v2: 关卡锁定细胞类型
+  // v3: 双人模式 — 创建两个玩家
   const cfg = buildLevelConfigs()[idx];
+  Game.players = [];
+  const p1 = new Player(Game.level.playerSpawn.x, Game.level.playerSpawn.y, 0);
+  p1.cellType = cfg.cellType || 1;
+  Game.players.push(p1);
+
+  if(Game.twoPlayer){
+    const p2 = new Player(Game.level.playerSpawn.x + 40, Game.level.playerSpawn.y, 1);
+    p2.cellType = cfg.cellType || 1;
+    Game.players.push(p2);
+  }
+
+  // v2: 关卡锁定细胞类型（兼容旧代码）
+  Game.player = Game.players[0];
   Game.player.cellType = cfg.cellType || 1;
   Game.winCondition = cfg.winCondition || WIN_KILL_ALL;
   Game.itemsCollected = 0;
@@ -1509,6 +1901,9 @@ function LoadLevel(n){
   Game.tidePaused = 0;
   Game.healingProgress = 0;
   Game.cells = 3;          // 初始化细胞数（生命数）
+  Game.deathsThisRun = 0;   // v3: 本局死亡计数
+  Game.keysP2 = {};          // v3: 初始化P2按键
+  Game.prevKeysP2 = {};
   // 挥剑状态重置（Boss 由关卡地图 b 瓦片创建，不在此处清空）
   Game.swordTimer = 0;
   Game.swordCooldown = 0;
@@ -1536,6 +1931,11 @@ function LoadLevel(n){
     showToast('⚠ 能量不足！移动速度降低');
   }
 
+  // v3: 应用记忆细胞永久加成
+  applyMemoryBonuses();
+  // v3: 应用自适应难度调整
+  applyAdaptiveDifficulty();
+
   Game.state = 'playing';
   $('hub-screen').classList.add('hidden');
   $('complete-screen').classList.add('hidden');
@@ -1552,6 +1952,71 @@ function LoadLevel(n){
   updateHUD();
 
   return true;
+}
+
+// ===== v3: 记忆细胞加成应用 =====
+function applyMemoryBonuses(){
+  const bonus = getMemoryBonus(Game.memoryCells);
+  if(Game.memoryCells <= 0) return;
+
+  // 应用到所有玩家
+  for(const p of Game.players){
+    if(!p) continue;
+    // 初始能量加成
+    Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + bonus.startEnergy);
+    // 最大生命加成
+    if(bonus.maxHp > 0){
+      p.maxHealth = 100 + bonus.maxHp;
+      p.health = p.maxHealth;
+    }
+    // 挥剑伤害加成
+    if(bonus.swordDmg > 0){
+      p.atk = WBC_BASE_ATK + bonus.swordDmg;
+    } else {
+      p.atk = WBC_BASE_ATK;
+    }
+    // 开局护盾
+    if(bonus.startShield > 0){
+      p.shield = 600; // 10秒护盾
+    }
+  }
+}
+
+// ===== v3: 自适应难度应用 =====
+function applyAdaptiveDifficulty(){
+  const d = Game.adaptiveDifficulty;
+  const lvl = Game.level;
+  if(!lvl) return;
+
+  const cfg = ADAPTIVE_DIFFICULTY[d.level];
+  showToast('当前难度：' + cfg.name + ' | 敌人' + (d.adjustEnemies>=0?'+':'') + d.adjustEnemies + '% | 道具' + (d.adjustItems>=0?'+':'') + d.adjustItems + '%');
+
+  if(d.adjustEnemies > 0){
+    const extraCount = Math.floor(lvl.enemies.length * d.adjustEnemies / 100);
+    for(let i = 0; i < extraCount; i++){
+      const col = 30 + Math.floor(Math.random() * (lvl.width - 35));
+      const type = Math.random() < 0.5 ? 'staph' : 'strep';
+      lvl.enemies.push(new Enemy(col * TILE + 4, 12 * TILE + 8, type));
+    }
+  } else if(d.adjustEnemies < 0){
+    const removeCount = Math.floor(lvl.enemies.length * Math.abs(d.adjustEnemies) / 100);
+    for(let i = 0; i < removeCount && lvl.enemies.length > 1; i++){
+      lvl.enemies.splice(Math.floor(Math.random() * lvl.enemies.length), 1);
+    }
+  }
+
+  if(d.adjustItems > 0){
+    const extraItems = Math.floor(lvl.items.length * d.adjustItems / 100);
+    for(let i = 0; i < extraItems; i++){
+      lvl.items.push(new Item(10*TILE + Math.random()*(lvl.width-15)*TILE, 12*TILE+8, 'atp'));
+    }
+  } else if(d.adjustItems < 0){
+    const removeItems = Math.floor(lvl.items.length * Math.abs(d.adjustItems) / 100);
+    for(let i = 0; i < removeItems && lvl.items.length > 2; i++){
+      lvl.items.splice(Math.floor(Math.random() * lvl.items.length), 1);
+    }
+  }
+  Game.totalItems = lvl.items.length;
 }
 
 // ===== 预留扩展接口 =====
@@ -1620,19 +2085,30 @@ function showDeathPanel(){
 }
 
 function retryFromDeath(){
-  if(Game.cells <= 0) return; // 无细胞时不允许重试
+  if(Game.cells <= 0) return;
 
-  const p = Game.player;
   const lvl = Game.level;
-  if(!p || !lvl) return;
+  if(!lvl) return;
 
-  // 重生到检查点
-  p.x = p.checkpointX;
-  p.y = p.checkpointY;
-  p.vx = 0; p.vy = 0;
-  p.health = p.maxHealth;
-  p.invincible = 60;
-  p.jumpsLeft = 1;
+  // v3: 双人模式 — 两个玩家都重生到检查点
+  for(const p of Game.players){
+    if(!p) continue;
+    p.x = p.checkpointX;
+    p.y = p.checkpointY;
+    if(Game.twoPlayer && p.playerIndex === 1) p.x += 40;
+    p.vx = 0; p.vy = 0;
+    p.health = p.maxHealth;
+    p.invincible = 60;
+    p.jumpsLeft = 1;
+  }
+  // 兼容旧代码
+  Game.player = Game.players[0];
+
+  // v3: 记忆细胞 — 恢复保留的能量
+  if(Game._deathEnergyKeep > 0){
+    Game.globalEnergy = Math.min(getMaxEnergy(), Game._deathEnergyKeep);
+    Game._deathEnergyKeep = 0;
+  }
 
   // 隐藏死亡面板
   $('death-panel').classList.add('hidden');
@@ -1647,6 +2123,8 @@ function retryFromDeath(){
 }
 
 function quitFromDeath(){
+  // v3: 更新自适应难度（死亡退出也计入）
+  updateAdaptiveDifficulty(false, Game.deathsThisRun, 0, 0);
   $('death-panel').classList.add('hidden');
   backToHub();
 }
@@ -1659,7 +2137,15 @@ function init(){
 
   loadSprites();
 
+  // v3: 迁移旧版单存档 → 多栏位
+  migrateOldSave();
+  // 读取当前栏位
+  try{
+    const cs = localStorage.getItem('cellQuest_currentSlot');
+    if(cs != null) Game.currentSlot = parseInt(cs) || 0;
+  }catch(e){}
   loadGame();
+  loadAdaptiveDifficulty();  // v3: AI自适应难度
   setupInput();
 
   $('btn-start').onclick = ()=>{ Sfx.init(); showHub(); $('game-container').focus(); };
@@ -1689,6 +2175,29 @@ function init(){
   $('btn-confirm-no').onclick=e=>{e.stopPropagation();hideConfirm();};
   $('confirm-dialog').addEventListener('click',e=>{if(e.target===$('confirm-dialog'))hideConfirm();});
   $('home-btn').onclick=e=>{e.stopPropagation();if(Game.state!=='playing'&&Game.state!=='paused')return;showConfirm('确定要离开当前关卡吗？\n进度将不会保存。',()=>{backToHub();});};
+
+  // v3: AI 生成关卡按钮
+  $('btn-hub-ai').onclick = ()=>{ showAIGeneratePanel(); };
+
+  // v3: 存档管理
+  $('btn-hub-slots').onclick = ()=>{ showSlotPanel(); };
+
+  // v3: 排行榜
+  $('btn-hub-lb').onclick = ()=>{ showLeaderboard(); };
+
+  // v3: 双人模式切换
+  const btn2p = $('btn-hub-2p');
+  if(btn2p){
+    btn2p.onclick = ()=>{
+      Game.twoPlayer = !Game.twoPlayer;
+      btn2p.textContent = Game.twoPlayer ? '👥 双人模式: ON' : '👥 双人模式: OFF';
+      btn2p.style.borderColor = Game.twoPlayer ? '#81c784' : '#4fc3f7';
+      btn2p.style.color = Game.twoPlayer ? '#81c784' : '#4fc3f7';
+      if(Game.twoPlayer){
+        showToast('双人模式已开启 | P1: WASD+Space/E/Shift | P2: IJKL+U/O | 技能: P1=1234 P2=7890');
+      }
+    };
+  }
 
   showMenu();
   requestAnimationFrame(loop);

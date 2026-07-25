@@ -5,7 +5,7 @@
 
 // ===== 玩家 =====
 class Player {
-  constructor(x, y){
+  constructor(x, y, playerIndex){
     this.x = x; this.y = y;
     this.w = PLAYER_W; this.h = STAND_H;
     this.vx = 0; this.vy = 0;
@@ -13,6 +13,7 @@ class Player {
     this.crouching = false;
     this.facing = 1;
     this.cellType = 1;           // 1=WBC 2=PLT 3=RBC
+    this.playerIndex = playerIndex || 0; // v3: 0=P1, 1=P2
     this.health = 100;
     this.maxHealth = 100;
     this.invincible = 0;
@@ -66,7 +67,8 @@ class Player {
   }
 
   update(level){
-    const k = Game.keys;
+    const k = this.playerIndex === 1 ? Game.keysP2 : Game.keys;
+    const pk = this.playerIndex === 1 ? Game.prevKeysP2 : Game.prevKeys;
     const cell = this.cell;
     this.animT++;
 
@@ -117,7 +119,8 @@ class Player {
         }
       }
       if(this.dashTimer <= 0) this.vx *= 0.3;
-      Game.prevKeys = {...Game.keys};
+      if(this.playerIndex === 1) Game.prevKeysP2 = {...Game.keysP2};
+      else Game.prevKeys = {...Game.keys};
       return; // 突进中跳过其他逻辑
     }
     if(this.dashCooldown > 0) this.dashCooldown--;
@@ -178,6 +181,8 @@ class Player {
 
     // ===== 水平移动 =====
     let speedMul = cell.speedMul;
+    // v3: 记忆细胞移速加成
+    speedMul *= (1 + getMemoryBonus(Game.memoryCells).speedPct / 100);
     if(Game.globalEnergy < LOW_ENERGY) speedMul *= LOW_SPEED_MULT;
     if(this.onBloodLoss) speedMul *= 0.85;
     // 潮涌时额外减速
@@ -195,7 +200,7 @@ class Player {
     if(Math.abs(this.vx) < 0.05) this.vx = 0;
 
     // ===== 跳跃（变跳高 + 土狼时间 + 跳跃缓冲 + 二段跳） =====
-    if(k.jump && !Game.prevKeys.jump) this.jumpBuffer = JUMP_BUFFER;
+    if(k.jump && !pk.jump) this.jumpBuffer = JUMP_BUFFER;
     if(this.jumpBuffer > 0) this.jumpBuffer--;
     if(this.coyote > 0) this.coyote--;
 
@@ -311,19 +316,19 @@ class Player {
     }
 
     // ===== 技能：突进 / 搭桥 / 挥剑 =====
-    if(k.dash && !Game.prevKeys.dash && this.cellType === 1){
+    if(k.dash && !pk.dash && this.cellType === 1){
       this.useDash(level);
     }
-    if(k.skill && !Game.prevKeys.skill){
+    if(k.skill && !pk.skill){
       if(this.cellType === 1) this.swordAttack(level);
       else if(this.cellType === 2) this.useBridge(level);
     }
     // ===== WBC 新主动技能 1/2/3/4 =====
     if(this.cellType === 1){
-      if(k.skill1 && !Game.prevKeys.skill1) this.phagocyticBite(level);
-      if(k.skill2 && !Game.prevKeys.skill2) this.oxidativeBurst(level);
-      if(k.skill3 && !Game.prevKeys.skill3) this.elastaseLance(level);
-      if(k.skill4 && !Game.prevKeys.skill4) this.bactericidalDash(level);
+      if(k.skill1 && !pk.skill1) this.phagocyticBite(level);
+      if(k.skill2 && !pk.skill2) this.oxidativeBurst(level);
+      if(k.skill3 && !pk.skill3) this.elastaseLance(level);
+      if(k.skill4 && !pk.skill4) this.bactericidalDash(level);
     }
   }
 
@@ -841,19 +846,32 @@ class Player {
     Game.cells--;
     if(Game.cells < 0) Game.cells = 0;
 
-    // 清除 buff 和状态（但不重置玩家位置，由 retryFromDeath 处理）
-    this.vx = 0; this.vy = 0;
-    this.dashTimer = 0; this.dashCooldown = 0;
-    this.swordTimer = 0; this.swordCooldown = 0;
-    this.aoeStomp = 0;
-    this.shield = 0; this.oxygen = 0; this.complementAmmo = 0;
-    this.oxyFieldTimer = 0;
-    this.onPus = false;
+    // v3: 记忆细胞 — 死亡保留部分能量
+    const memBonus = getMemoryBonus(Game.memoryCells);
+    if(memBonus.deathEnergyKeep > 0){
+      const keepAmt = Game.globalEnergy * (memBonus.deathEnergyKeep / 100);
+      Game._deathEnergyKeep = Math.round(keepAmt);
+    } else {
+      Game._deathEnergyKeep = 0;
+    }
+
+    // v3: 双人模式 — 两个玩家都重置状态
+    for(const pl of Game.players){
+      if(!pl) continue;
+      pl.vx = 0; pl.vy = 0;
+      pl.dashTimer = 0; pl.dashCooldown = 0;
+      pl.swordTimer = 0; pl.swordCooldown = 0;
+      pl.aoeStomp = 0;
+      pl.shield = 0; pl.oxygen = 0; pl.complementAmmo = 0;
+      pl.oxyFieldTimer = 0;
+      pl.onPus = false;
+    }
     Game.oxyField = false;
     Game.pusTiles = [];
     level.respawnEnemies();
 
     // 显示死亡面板
+    Game.deathsThisRun++;    // v3: 自适应难度追踪
     Game.state = 'dead';
     showDeathPanel();
   }
@@ -1005,7 +1023,7 @@ class Player {
         actionState = 'jump';
       } else if(this.crouching) {
         actionState = 'crouch';
-      } else if(Game.keys.left || Game.keys.right || Math.abs(this.vx) > 1.2) {
+      } else if(k.left || k.right || Math.abs(this.vx) > 1.2) {
         actionState = 'walk';
       }
 
@@ -1185,7 +1203,7 @@ class Player {
         ctx.restore();
       }
       // ★ 走路用 v1 6 帧 walk 精灵表循环（视频提取）
-      else if(this.onGround && (Game.keys.left || Game.keys.right || Math.abs(this.vx) > 0.5) && Game.rbcWalkLeft && Game.rbcWalkLeft.complete && Game.rbcWalkLeft.naturalWidth > 0){
+      else if(this.onGround && ((this.playerIndex===1?Game.keysP2:Game.keys).left || (this.playerIndex===1?Game.keysP2:Game.keys).right || Math.abs(this.vx) > 0.5) && Game.rbcWalkLeft && Game.rbcWalkLeft.complete && Game.rbcWalkLeft.naturalWidth > 0){
         // 逐帧角色bbox数据（在256x372源帧内），用于对齐消除抖动 + 脚贴地
         // [cx, bottom] — cx: 角色质心X, bottom: 角色bbox底部Y
         const RBC_D = [[94.5,345],[105.0,340],[119.0,344],[131.0,343],[144.5,340],[156.5,344]];
@@ -1522,7 +1540,7 @@ class Enemy {
 
     // 玩家碰撞
     if(rectOverlap(this, player)){
-      const stomp = player.vy > 0 && (player.y + player.h - this.y) < 16;
+      const stomp = player.vy > 0 && (player.y + player.h - this.y) < 28;
       if(stomp){
         // 踩踏
         if(player.cellType === 1){
@@ -1668,6 +1686,39 @@ class Boss {
     this.biofilmLastHit = 0;    // 上次被攻击的帧
     // 遭遇触发
     this.encountered = false;
+    // ===== v3: Boss AI 三阶段系统 =====
+    this.currentPhase = 1;      // 1/2/3
+    this.phaseTransition = 0;   // 阶段切换动画帧数
+    this.phaseLabel = '';       // 当前阶段名称
+  }
+
+  // 获取当前阶段
+  getPhase(){
+    const pct = this.hp / this.maxHp;
+    if(pct > 0.70) return 1;
+    if(pct > 0.30) return 2;
+    return 3;
+  }
+
+  // 阶段切换检测
+  checkPhaseTransition(){
+    const newPhase = this.getPhase();
+    if(newPhase !== this.currentPhase){
+      const oldPhase = this.currentPhase;
+      this.currentPhase = newPhase;
+      this.phaseTransition = 60; // 1秒过渡动画
+      Game.camera.shake = 8;
+      const labels = {1:'远程压制', 2:'防守反击', 3:'狂暴模式'};
+      this.phaseLabel = labels[newPhase];
+      const colors = {1:'#4fc3f7', 2:'#ffd740', 3:'#ff3030'};
+      spawnParticles(this.x+this.w/2, this.y+this.h/2, colors[newPhase], 25, 4);
+      showToast('⚠ Boss 进入阶段 ' + newPhase + '：' + this.phaseLabel + '！');
+      // 阶段3自动激活生物膜
+      if(newPhase === 3 && !this.biofilmActive){
+        this.biofilmActive = true;
+        showToast('⚠ Boss 分泌生物膜！防御提升，持续近身攻击阻止回血');
+      }
+    }
   }
 
   reset(){
@@ -1683,12 +1734,20 @@ class Boss {
     this.biofilmActive = false; this.biofilmRegenTimer = 0; this.biofilmLastHit = 0;
     this.encountered = false;
     this.vx = 0; this.vy = 0;
+    // v3: 阶段重置
+    this.currentPhase = 1;
+    this.phaseTransition = 0;
+    this.phaseLabel = '';
   }
 
   update(level, player){
     if(!this.alive) return;
     this.animT++;
     if(this.flashTimer > 0) this.flashTimer--;
+    if(this.phaseTransition > 0) this.phaseTransition--;
+
+    // v3: 阶段切换检测
+    if(this.encountered) this.checkPhaseTransition();
 
     // ===== WBC 技能附加状态 tick =====
     if(this.dotTimer > 0){
@@ -1726,8 +1785,9 @@ class Boss {
       return;
     }
 
-    // 缓慢巡逻
-    this.vx = this.dir * 0.4;
+    // 阶段化移速
+    const moveSpeed = this.currentPhase === 3 ? 0.75 : 0.4;
+    this.vx = this.dir * moveSpeed;
     this.x += this.vx;
     const frontCol = Math.floor((this.dir > 0 ? this.x + this.w : this.x) / TILE);
     if(level.solidAt(frontCol, Math.floor(this.y / TILE))) this.dir *= -1;
@@ -1785,50 +1845,65 @@ class Boss {
     }
   }
 
-  // === 六个技能 ===
+  // === v3: 三阶段技能系统 ===
   updateSkills(level, player){
     // 未遭遇前不激活任何技能
     if(!this.encountered) return;
 
-    // 技能一：血盾 — 周期性上盾
-    if(this.shieldCooldown > 0){
-      this.shieldCooldown--;
-    } else if(!this.shieldActive && this.stunTimer <= 0){
-      this.activateShield();
+    const phase = this.currentPhase;
+    // 阶段化CD倍率
+    const cdMult = phase === 3 ? 0.7 : 1.0;
+
+    // ========== 技能一：血盾（仅阶段二、三可用） ==========
+    if(phase >= 2){
+      if(this.shieldCooldown > 0){
+        this.shieldCooldown--;
+      } else if(!this.shieldActive && this.stunTimer <= 0){
+        this.activateShield();
+      }
     }
 
-    // 技能二：溶血环 — 周期性释放
+    // ========== 技能二：溶血环（全阶段可用，CD随阶段变化） ==========
     if(this.ringCooldown > 0){
       this.ringCooldown--;
     } else {
       this.activateRing();
     }
 
-    // 技能三：杀白细胞素 — 点名锁定
+    // ========== 技能三：杀白细胞素（阶段一优先，阶段二、三可用但CD更长） ==========
     if(this.leukocidinCooldown > 0) this.leukocidinCooldown--;
     if(this.leukocidinCast > 0){
       this.leukocidinCast--;
       if(this.leukocidinCast === 0){
-        // 读条完毕，造成伤害
         player.takeDamage(level);
-        player.takeDamage(level); // 双倍伤害（约等于高额）
+        player.takeDamage(level);
         player.leukocidinMarked = 0;
-        this.leukocidinCooldown = BOSS_CD_LEUKOCIDIN;
+        this.leukocidinCooldown = Math.floor(BOSS_CD_LEUKOCIDIN * cdMult);
         Game.camera.shake = 6;
         spawnParticles(player.x+player.w/2, player.y+player.h/2, '#ff4444', 15, 3);
       }
     } else if(this.leukocidinCooldown <= 0 && this.leukocidinCast <= 0){
-      this.activateLeukocidin(player);
+      // 阶段一：优先使用，CD更短
+      if(phase === 1){
+        this.activateLeukocidin(player);
+        this.leukocidinCooldown = 0; // activateLeukocidin内会设置，这里覆盖
+      } else if(phase >= 2 && Math.random() < 0.4){
+        // 阶段二、三：40%概率使用
+        this.activateLeukocidin(player);
+      }
     }
 
-    // 技能四：增殖 — 召唤小怪
-    this.spawnTimer++;
-    if(this.spawnTimer >= BOSS_CD_SPAWN){
-      this.spawnTimer = 0;
-      this.activateProliferation(level);
+    // ========== 技能四：增殖（仅阶段二、三可用） ==========
+    if(phase >= 2){
+      this.spawnTimer++;
+      const spawnCD = phase === 3 ? Math.floor(BOSS_CD_SPAWN * 0.7) : BOSS_CD_SPAWN;
+      if(this.spawnTimer >= spawnCD){
+        this.spawnTimer = 0;
+        this.activateProliferation(level);
+      }
     }
 
-    // 技能五：毒休克 — 读条全屏AOE
+    // ========== 技能五：毒休克（全阶段可用，阶段三CD缩短） ==========
     if(this.shockCooldown > 0) this.shockCooldown--;
     if(this.shockCast > 0){
       this.shockCast--;
@@ -1836,14 +1911,20 @@ class Boss {
         this.executeShock(player);
       }
     } else if(this.shockCooldown <= 0 && this.stunTimer <= 0){
-      this.shockCast = 180; // 3s读条
-      this.shockCooldown = BOSS_CD_SHOCK;
+      const shockCD = phase === 3 ? Math.floor(BOSS_CD_SHOCK * 0.55) : BOSS_CD_SHOCK;
+      this.shockCast = 180;
+      this.shockCooldown = shockCD;
     }
 
-    // 技能六：生物膜 — 40%血量自动激活
-    if(!this.biofilmActive && this.hp <= this.maxHp * BOSS_BIOFILM_HP_PCT){
+    // ========== 技能六：生物膜（阶段三自动激活，阶段一不可用） ==========
+    if(phase === 3 && !this.biofilmActive){
       this.biofilmActive = true;
-      showToast('⚠ Boss 分泌生物膜！防御提升，持续近身攻击阻止回血');
+      showToast('⚠ Boss 分泌生物膜！防御提升 30%');
+    }
+    // 阶段一：生物膜不可用（被动阻止）
+    // 阶段二：40%血量自动激活（保留原逻辑但已被phase覆盖）
+    if(phase === 1 && this.biofilmActive){
+      this.biofilmActive = false; // 阶段一强制关闭
     }
 
     // 玩家贫血计时
@@ -2037,21 +2118,32 @@ class Boss {
       ctx.fillStyle = '#8b0000';
       ctx.fillRect(barX, barY, barW * (this.shieldHP / this.shieldMaxHP), 3);
     }
-    // HP条
-    ctx.fillStyle = C.bossBar;
-    const hpPct = Math.max(0, this.hp / this.maxHp);
-    ctx.fillRect(barX, barY + (this.shieldActive ? 3 : 0), barW * hpPct, this.shieldActive ? 4 : 7);
+    // v3: HP条颜色随阶段变化
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
     ctx.strokeRect(barX, barY, barW, 7);
 
-    // 技能名 + HP数字
+    // 技能名 + HP数字 + v3阶段标签
     ctx.fillStyle = '#fff'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
     let label = `HP:${this.hp}/${this.maxHp}`;
     if(this.stunTimer > 0) label = 'STUN!';
     else if(this.shockCast > 0) label = `💀毒休克 ${Math.ceil(this.shockCast/60)}s`;
     else if(this.leukocidinCast > 0) label = `🎯点名 ${Math.ceil(this.leukocidinCast/60)}s`;
     else if(this.shieldActive) label = `🛡️盾 ${this.shieldHP}/${this.shieldMaxHP}`;
-    ctx.fillText(label, px + this.w/2, barY - 3);
+    // v3: 阶段标签 + 阶段指示条
+    const phaseColors = {1:'#4fc3f7', 2:'#ffd740', 3:'#ff3030'};
+    const phaseNames = {1:'P1·远程压制', 2:'P2·防守反击', 3:'P3·狂暴'};
+    const pc = phaseColors[this.currentPhase];
+    ctx.fillStyle = pc;
+    ctx.fillText(phaseNames[this.currentPhase], px + this.w/2, barY - 14);
+    // HP条颜色随阶段变化
+    ctx.fillStyle = pc;
+    const hpPct2 = Math.max(0, this.hp / this.maxHp);
+    ctx.fillRect(barX, barY + (this.shieldActive ? 3 : 0), barW * hpPct2, this.shieldActive ? 4 : 7);
+    // 阶段切换闪光
+    if(this.phaseTransition > 0 && Math.floor(this.phaseTransition/3)%2===0){
+      ctx.fillStyle = `rgba(${this.currentPhase===3?'255,48,48':this.currentPhase===2?'255,215,64':'79,195,247'},0.4)`;
+      ctx.fillRect(px-10, py-10, this.w+20, this.h+20);
+    }
 
     // 溶血环绘制
     for(const w of this.ringWaves){
@@ -2149,10 +2241,12 @@ class Item {
         Sfx.coin();
         showToast('喝水！能量 +' + DRINK_ENERGY);
       } else if(this.type === 'memory'){
-        Game.stats.foundMemory = true;
         Sfx.memory();
-        showToast('★ 发现记忆细胞！\n免疫记忆已记录');
+        const isNew = collectMemoryCell(Game.levelIndex); // v3: 全局收集
         showMemoryCard();
+        if(!isNew){
+          showToast('🧬 记忆细胞（已收集过，不重复计入）');
+        }
       } else if(this.type === 'nutrition'){
         // 营养包：仅红细胞可收集
         if(player.cellType !== 3){
@@ -2565,5 +2659,135 @@ class QBlock {
       ctx.textAlign = 'center';
       ctx.fillText('?', x + TILE/2, y + TILE/2 + 7);
     }
+  }
+}
+
+// ===== v3: 树突状细胞 NPC（AI 上下文对话） =====
+class DendriticCell {
+  constructor(x, y, id){
+    this.x = x; this.y = y;
+    this.w = 28; this.h = 32;
+    this.id = id || 0;
+    this.animT = Math.random() * 100;
+    this.dialogues = [];       // [{condition, speaker, color, body}]
+    this.triggered = false;    // 是否已触发（每次进关卡可触发一次）
+    this.range = 100;          // 触发距离(px)
+    this.active = true;
+  }
+
+  update(player){
+    if(!this.active || this.triggered) return;
+    if(Game.tutorialPause || Game.memoryCardOpen || Game.paused) return;
+    this.animT++;
+
+    const dx = Math.abs(player.x + player.w/2 - (this.x + this.w/2));
+    const dy = Math.abs(player.y + player.h/2 - (this.y + this.h/2));
+    if(dx < this.range && dy < 60){
+      this.triggered = true;
+      this.showDialogue(player);
+    }
+  }
+
+  showDialogue(player){
+    const p = player;
+    // 根据玩家状态选择对话
+    const hpPct = p.health / p.maxHealth;
+    const energy = Game.globalEnergy;
+    const enemiesLeft = Game.level ? Game.level.enemies.filter(e => e.alive).length : 0;
+    const totalEnemies = Game.level ? Game.level.enemies.length : 0;
+    const progress = totalEnemies > 0 ? (1 - enemiesLeft / totalEnemies) : 0;
+    const isBeforeBoss = Game.boss && Game.boss.alive && !Game.boss.encountered;
+
+    let dialogue = null;
+
+    if(isBeforeBoss){
+      dialogue = {
+        speaker: '树突状细胞', color: '#ab47bc',
+        body: '前方侦测到病原体大本营！我已完成抗原呈递，T细胞正在集结。做好战斗准备！'
+      };
+    } else if(hpPct < 0.3){
+      dialogue = {
+        speaker: '树突状细胞', color: '#ab47bc',
+        body: '你的细胞膜严重受损（HP<30%）！附近应该有ATP分子可以补充能量。坚持住，不要放弃！'
+      };
+    } else if(energy < 20){
+      dialogue = {
+        speaker: '树突状细胞', color: '#ab47bc',
+        body: 'ATP储备告急！试试顶开前方的？方块，或者击杀细菌可以获取能量。'
+      };
+    } else if(progress > 0.7 && enemiesLeft > 0){
+      dialogue = {
+        speaker: '树突状细胞', color: '#ab47bc',
+        body: '太棒了！你已经消灭了大部分细菌（' + Math.round(progress*100) + '%）。还剩' + enemiesLeft + '个，乘胜追击！'
+      };
+    } else if(progress < 0.2 && enemiesLeft > 3){
+      dialogue = {
+        speaker: '树突状细胞', color: '#ab47bc',
+        body: '我是树突状细胞，免疫系统的侦察兵。这片区域有' + totalEnemies + '个细菌需要清除。踩踏是最基本的攻击方式，试试看！'
+      };
+    } else if(Game.stats.kills >= 10){
+      dialogue = {
+        speaker: '树突状细胞', color: '#ab47bc',
+        body: '已击杀' + Game.stats.kills + '个细菌！你的战斗力让我想起了记忆中的那次免疫应答。继续前进吧！'
+      };
+    } else {
+      dialogue = {
+        speaker: '树突状细胞', color: '#ab47bc',
+        body: '你好，免疫战士！我是树突状细胞（DC），负责侦察敌情和呈递抗原。前方有细菌入侵，请小心应对。'
+      };
+    }
+
+    showTutorial(dialogue.speaker, dialogue.color, dialogue.body);
+  }
+
+  draw(ctx, camX){
+    if(!this.active) return;
+    const px = Math.round(this.x) - Math.round(camX);
+    const py = Math.round(this.y);
+    const bob = Math.sin(this.animT * 0.05) * 4;
+
+    // 光晕
+    ctx.fillStyle = 'rgba(171,71,188,0.15)';
+    ctx.beginPath(); ctx.arc(px+this.w/2, py+this.h/2+bob, 24, 0, Math.PI*2); ctx.fill();
+
+    // 树突（分支）
+    ctx.strokeStyle = '#9c5ab8';
+    ctx.lineWidth = 2;
+    const cx = px + this.w/2, cy = py + this.h/2 + bob;
+    const branches = [
+      {a:-0.6, l:16}, {a:-0.2, l:20}, {a:0.3, l:14}, {a:0.8, l:18},
+      {a:-1.2, l:12}, {a:1.5, l:15}, {a:2.2, l:14}, {a:2.8, l:16},
+    ];
+    for(const b of branches){
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(b.a + this.animT*0.02)*b.l, cy + Math.sin(b.a)*b.l);
+      ctx.stroke();
+    }
+
+    // 细胞体
+    const grad = ctx.createRadialGradient(cx-2, cy-2, 2, cx, cy, 12);
+    grad.addColorStop(0, '#e1bee7');
+    grad.addColorStop(0.5, '#ab47bc');
+    grad.addColorStop(1, '#6a1b9a');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI*2); ctx.fill();
+
+    // 细胞核
+    ctx.fillStyle = '#4a148c';
+    ctx.beginPath(); ctx.arc(cx-1, cy-1, 4, 0, Math.PI*2); ctx.fill();
+
+    // "!" 提示（未触发时）
+    if(!this.triggered){
+      const pulse = Math.sin(this.animT * 0.1) * 0.3 + 0.7;
+      ctx.fillStyle = `rgba(255,215,0,${pulse})`;
+      ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('!', cx, py - 14);
+    }
+
+    // 标识符
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '9px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('DC#' + this.id, cx, py + this.h + 14);
   }
 }

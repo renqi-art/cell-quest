@@ -17,3 +17,9 @@ images/sprites/rbc-walk-sheet-*
 images/sprites/anim/
 output/
 .hermes/
+
+# Tencent Cloud EdgeOne
+.env
+.edgeone/*
+.tef_dist/*
+  
