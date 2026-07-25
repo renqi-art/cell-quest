@@ -22,4 +22,4 @@ output/
 .env
 .edgeone/*
 .tef_dist/*
-  
+.worktrees/
