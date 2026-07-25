@@ -523,6 +523,7 @@ const KEY_MAP = {
   ArrowDown:'down', s:'down', S:'down',
   e:'skill', E:'skill',
   Shift:'dash',
+  q:'switchCell', Q:'switchCell',
   '1':'skill1', '2':'skill2', '3':'skill3', '4':'skill4',
 };
 
@@ -534,6 +535,7 @@ const KEY_MAP_P2 = {
   'k':'down', 'K':'down',
   'u':'skill', 'U':'skill',
   'o':'dash', 'O':'dash',
+  'y':'switchCell', 'Y':'switchCell',
   '7':'skill1', '8':'skill2', '9':'skill3', '0':'skill4',
 };
 
@@ -1197,9 +1199,9 @@ function updateHUD(){
     const sprint = Game.player.sprinting;
     const sprintHint = ' <span class="sep">|</span> <span style="color:#ffd740;">🏃双击方向奔跑</span>';
     if(Game.player.cellType === 1){
-      ctrlEl.innerHTML = '<span><kbd>←→</kbd>移动</span> <span class="sep">|</span> <span><kbd>空格</kbd>跳跃</span> <span class="sep">|</span> <span><kbd>↓</kbd>下蹲</span> <span class="sep">|</span> <span><kbd>E</kbd>挥剑</span> <span class="sep">|</span> <span><kbd>Shift</kbd>突进</span>' + sprintHint;
+      ctrlEl.innerHTML = '<span><kbd>←→</kbd>移动</span> <span class="sep">|</span> <span><kbd>空格</kbd>跳跃</span> <span class="sep">|</span> <span><kbd>↓</kbd>下蹲</span> <span class="sep">|</span> <span><kbd>E</kbd>挥剑</span> <span class="sep">|</span> <span><kbd>Shift</kbd>突进</span> <span class="sep">|</span> <span><kbd>Q</kbd>切换细胞</span>' + sprintHint;
     } else {
-      ctrlEl.innerHTML = '<span><kbd>←→</kbd>移动</span> <span class="sep">|</span> <span><kbd>空格</kbd>跳跃</span> <span class="sep">|</span> <span><kbd>↓</kbd>下蹲</span>' + sprintHint;
+      ctrlEl.innerHTML = '<span><kbd>←→</kbd>移动</span> <span class="sep">|</span> <span><kbd>空格</kbd>跳跃</span> <span class="sep">|</span> <span><kbd>↓</kbd>下蹲</span> <span class="sep">|</span> <span><kbd>Q</kbd>切换细胞</span>' + sprintHint;
     }
     // 奔跑中高亮
     if(sprint){

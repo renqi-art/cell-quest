@@ -19,6 +19,7 @@ class Player {
     this.lastTapDir = 0;         // 上次按下的方向
     this.lastTapTime = 0;        // 上次按下的时间(帧)
     this.sprintDrainTimer = 0;   // 奔跑额外消耗计时
+    this._switchCD = 0;          // 细胞切换冷却
     this.health = 100;
     this.maxHealth = 100;
     this.invincible = 0;
@@ -74,6 +75,18 @@ class Player {
   update(level){
     const k = this.playerIndex === 1 ? Game.keysP2 : Game.keys;
     const pk = this.playerIndex === 1 ? Game.prevKeysP2 : Game.prevKeys;
+    // v3: 游戏内切换细胞 (Q键 / P2: Y键)
+    if(k.switchCell && !pk.switchCell && !this._switchCD){
+      this._switchCD = 60;
+      const newType = this.cellType === 1 ? 3 : 1;
+      this.cellType = newType;
+      this.atk = newType === 1 ? WBC_BASE_ATK + getMemoryBonus(Game.memoryCells).swordDmg : 0;
+      Sfx.switchCell();
+      spawnParticles(this.x+this.w/2, this.y+this.h/2, CELLS[newType].color, 15, 3);
+      showToast('切换为 ' + CELLS[newType].name + ' | ' + (newType===1?'击杀评分':'收集评分'));
+      if(Game.winCondition) Game.winCondition = newType === 3 ? WIN_COLLECT_ALL : WIN_KILL_ALL;
+    }
+    if(this._switchCD > 0) this._switchCD--;
     const cell = this.cell;
     this.animT++;
 
@@ -224,6 +237,10 @@ class Player {
       if(this.sprintDrainTimer >= 30){
         this.sprintDrainTimer = 0;
         Game.globalEnergy = Math.max(0, Game.globalEnergy - 1);
+      }
+      // 奔跑尘土粒子(每4帧)
+      if(Game.frame % 4 === 0 && this.onGround){
+        spawnParticles(this.x + this.w/2, this.y + this.h - 2, '#c8a860', 1, 0.8);
       }
     }
 
