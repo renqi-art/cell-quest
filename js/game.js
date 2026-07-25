@@ -610,52 +610,81 @@ function setupInput(){
 
 // ===== 背景渲染 =====
 function drawBackground(ctx, camX, bg){
-  // 绘制场景背景图（视差滚动）
-  if(Game.bgImg && Game.bgImg.complete){
-    const img = Game.bgImg;
-    // cover 模式：图片铺满整个画布
-    const scale = Math.max(CW / img.width, CH / img.height);
-    const w = img.width * scale;
-    const h = img.height * scale;
-    const offsetX = Math.round(((camX * 0.2) % w + w) % w); // 视差
-    ctx.drawImage(img, -offsetX, 0, w, h);
-    ctx.drawImage(img, -offsetX + w, 0, w, h); // 无缝衔接
-  } else {
-    // 图片未加载时用渐变兜底
-    const grad = ctx.createLinearGradient(0,0,0,CH);
-    grad.addColorStop(0, bg[0]);
-    grad.addColorStop(1, bg[1]);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0,0,CW,CH);
-  }
+  const preset = getParallaxPreset(Game.levelIndex);
 
-  const farX = Math.round(camX * 0.15);
+  // 底层渐变
+  const grad = ctx.createLinearGradient(0,0,0,CH);
+  grad.addColorStop(0, bg[0]);
+  grad.addColorStop(1, bg[1]);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,CW,CH);
+
+  // 远景层: 大圆点/细胞轮廓 (scroll 0.1x)
+  const far = preset.far;
+  const farX = Math.round(camX * 0.1) % CW;
   ctx.save();
-  ctx.globalAlpha = 0.12;
-  ctx.fillStyle = '#ff6b8a';
-  for(let i=0;i<12;i++){
-    const baseX = i*180;
-    const x = ((baseX - farX) % (12*180) + 12*180) % (12*180) - 100;
-    const y = 40 + (i%4)*100;
-    ctx.beginPath();
-    ctx.arc(x, y, 35+(i%3)*15, 0, Math.PI*2);
-    ctx.fill();
+  ctx.globalAlpha = far.alpha;
+  ctx.fillStyle = far.color;
+  for(let i = 0; i < 10; i++){
+    const x = ((i * 140 - farX) % (CW + 200) + CW + 200) % (CW + 200) - 80;
+    const y = 30 + (i % 4) * 100 + Math.sin(i * 1.7) * 20;
+    const r = far.pattern === 'dots' ? 25 + (i%3)*12 : far.pattern === 'bubbles' ? 20 + Math.abs(Math.sin(i))*15 : 30;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
   }
   ctx.restore();
 
-  const midX = Math.round(camX * 0.4);
+  // 中景层: 波纹/网格/气泡 (scroll 0.25x)
+  const mid = preset.mid;
+  const midX = Math.round(camX * 0.25);
   ctx.save();
-  ctx.globalAlpha = 0.08;
-  ctx.strokeStyle = '#ff4466';
-  ctx.lineWidth = 6;
-  for(let i=0;i<4;i++){
-    const y = 80 + i*100;
-    ctx.beginPath();
-    for(let x=-60; x<CW+60; x+=8){
-      const wy = y + Math.sin((x+midX)*0.015 + i) * 18;
-      if(x===-60) ctx.moveTo(x,wy); else ctx.lineTo(x,wy);
+  ctx.globalAlpha = mid.alpha;
+  ctx.strokeStyle = mid.color;
+  ctx.lineWidth = 4;
+  if(mid.pattern === 'flow'){
+    for(let i = 0; i < 6; i++){
+      const y = 70 + i * 70;
+      ctx.beginPath();
+      for(let x = -60; x < CW+60; x += 6){
+        const wy = y + Math.sin((x+midX)*0.02 + i*0.8) * 22;
+        if(x === -60) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
+      }
+      ctx.stroke();
     }
-    ctx.stroke();
+  } else if(mid.pattern === 'bubbles'){
+    for(let i = 0; i < 20; i++){
+      const x = ((i * 100 - midX/2) % (CW + 150) + CW + 150) % (CW + 150) - 50;
+      const y = 30 + (i * 47) % 400;
+      ctx.beginPath(); ctx.arc(x, y, 8 + (i%4)*3, 0, Math.PI*2); ctx.fill();
+    }
+  } else {
+    for(let i = 0; i < 8; i++){
+      const y = 50 + i * 55;
+      ctx.beginPath();
+      for(let x = -40; x < CW+40; x += 9){
+        const wy = y + Math.sin((x+midX)*0.018 + i) * 16;
+        if(x === -40) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
+      }
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  // 近景层: 小颗粒/血细胞 (scroll 0.5x)
+  const near = preset.near;
+  const nearX = Math.round(camX * 0.5) % CW;
+  ctx.save();
+  ctx.globalAlpha = near.alpha;
+  ctx.fillStyle = near.color;
+  for(let i = 0; i < 30; i++){
+    const x = ((i * 50 + 23 - nearX) % (CW + 100) + CW + 100) % (CW + 100) - 30;
+    const y = 20 + (i * 67) % 440;
+    ctx.beginPath();
+    if(near.pattern === 'cells'){
+      ctx.arc(x, y, 3 + (i%3), 0, Math.PI*2);
+    } else {
+      ctx.arc(x, y, 2.5, 0, Math.PI*2);
+    }
+    ctx.fill();
   }
   ctx.restore();
 }
@@ -773,6 +802,9 @@ function update(){
   }
   // 清除死亡敌人（保留非迷你死亡敌人用于重生）
   lvl.enemies = lvl.enemies.filter(e => e.alive || !e.isMini);
+
+  // v3: 成就检测(每120帧检查一次,避免频繁check)
+  if(Game.frame % 120 === 0) checkAchievements();
 
   // v2: 击杀回能
   const killedThisFrame = Game.stats.kills - prevKills;
@@ -1365,6 +1397,38 @@ function changeNickname(){
   }
 }
 
+// ===== v3: 成就面板 =====
+function showAchievements(){
+  const achs = loadAchievements();
+  const unlocked = Object.keys(achs).length;
+  let html = '<h3>🎖️ 成就 (' + unlocked + '/' + ACHIEVEMENTS.length + ')</h3>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;max-height:350px;overflow-y:auto;margin:8px 0;">';
+  for(const a of ACHIEVEMENTS){
+    const earned = !!achs[a.id];
+    const bg = earned ? 'rgba(224,64,251,.12)' : 'rgba(255,255,255,.03)';
+    const opacity = earned ? '1' : '0.45';
+    const date = earned ? new Date(achs[a.id]) : null;
+    const dateStr = date ? (date.getMonth()+1)+'/'+date.getDate() : '';
+    html += `<div style="flex:0 0 48%;background:${bg};border-radius:6px;padding:8px;opacity:${opacity};font-size:11px;">
+      <b>${a.icon} ${a.name}</b> ${earned?'<span style="color:#81c784;">✓</span>':'<span style="color:#666;">🔒</span>'}
+      <div style="color:#888;font-size:10px;">${a.desc}</div>
+      ${earned?`<div style="color:#666;font-size:9px;">${dateStr}</div>`:''}
+    </div>`;
+  }
+  html += '</div>';
+  html += '<button class="btn-small" style="margin-top:6px;" onclick="document.getElementById(\'achs-panel\').remove()">关闭</button>';
+
+  const existing = document.getElementById('achs-panel');
+  if(existing) existing.remove();
+  const panel = document.createElement('div');
+  panel.id = 'achs-panel';
+  panel.className = 'overlay';
+  panel.style.cssText = 'display:flex;align-items:center;justify-content:center;z-index:1000;';
+  panel.innerHTML = `<div class="confirm-inner" style="max-width:480px;">${html}</div>`;
+  panel.addEventListener('click', e => { if(e.target === panel) panel.remove(); });
+  document.getElementById('game-container').appendChild(panel);
+}
+
 // ===== v3: 排行榜面板 =====
 function showLeaderboard(){
   const configs = buildLevelConfigs();
@@ -1788,12 +1852,28 @@ function levelComplete(){
   // v3: 录入本地排行榜
   const rank = recordLevelScore(idx, Game.levelTime, Game._lastCompletionPct, Game.stats.deaths, Game.playerLevel);
 
+  // v3: 成就检测
+  Game._justCleared = true;
+  Game._lifetimeKills += Game.stats.kills;
+  saveGame();
+  checkAchievements();
+  Game._justCleared = false;
+
   $('complete-level-name').textContent = buildLevelConfigs()[idx].name;
   $('stat-kills').textContent = Game.stats.kills;
   $('stat-items').textContent = Game.stats.items;
   // v3: 完成度
   $('stat-completion').textContent = Math.round(Game._lastCompletionPct * 100) + '%'
     + (Game._lastIsPerfect ? ' 👑 完美' : '');
+  // v3: 科普卡片
+  const kc = KNOWLEDGE_CARDS[idx];
+  const knowEl = document.getElementById('stat-knowledge');
+  if(knowEl && kc){
+    knowEl.innerHTML = '<b style="color:#ffd700;">📖 ' + kc.title + '</b><br><small style="color:#aaa;">' + kc.text + '</small>';
+    knowEl.style.display = 'block';
+  } else if(knowEl){
+    knowEl.style.display = 'none';
+  }
   $('stat-energy').textContent = Math.round(Game.globalEnergy);
   $('stat-rating').textContent = '★'.repeat(stars) + '☆'.repeat(3-stars)
     + (Game._lastIsPerfect ? ' 👑' : '')
@@ -2184,6 +2264,9 @@ function init(){
 
   // v3: 排行榜
   $('btn-hub-lb').onclick = ()=>{ showLeaderboard(); };
+
+  // v3: 成就
+  $('btn-hub-achs').onclick = ()=>{ showAchievements(); };
 
   // v3: 双人模式切换
   const btn2p = $('btn-hub-2p');

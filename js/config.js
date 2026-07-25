@@ -249,6 +249,24 @@ function getEquipStat(s){let t=0;for(const sl of['weapon','armor','accessory']){
 function equipItem(eid){const e=findEquip(eid);if(!e)return false;const i=Game.inventory.indexOf(eid);if(i<0)return false;const o=Game.equipment[e.slot];if(o)Game.inventory.push(o);Game.equipment[e.slot]=eid;Game.inventory.splice(i,1);saveGame();Sfx.pickup();return true;}
 function unequipItem(slot){const id=Game.equipment[slot];if(!id)return false;if(Game.inventory.length>=20){showToast('背包已满！');return false;}Game.inventory.push(id);Game.equipment[slot]=null;saveGame();return true;}
 
+// ===== v3: 视差背景配置 =====
+const PARALLAX_PRESETS = {
+  default: {far:{color:'#2a1020',alpha:0.15,pattern:'dots'}, mid:{color:'#3e1828',alpha:0.25,pattern:'grid'}, near:{color:'#5a2030',alpha:0.2,pattern:'cells'}},
+  vessel:  {far:{color:'#1a0a1a',alpha:0.15,pattern:'dots'}, mid:{color:'#3a1a3a',alpha:0.3,pattern:'flow'}, near:{color:'#5a0a2a',alpha:0.2,pattern:'cells'}},
+  alveoli: {far:{color:'#0a1a2a',alpha:0.15,pattern:'dots'}, mid:{color:'#1a3a5a',alpha:0.25,pattern:'bubbles'}, near:{color:'#2a4a6a',alpha:0.2,pattern:'cells'}},
+  boss:    {far:{color:'#2a0a0a',alpha:0.2,pattern:'dots'}, mid:{color:'#4a0a0a',alpha:0.3,pattern:'grid'}, near:{color:'#6a0a0a',alpha:0.25,pattern:'cells'}},
+  lymph:   {far:{color:'#0a0a1a',alpha:0.15,pattern:'dots'}, mid:{color:'#1a1a3a',alpha:0.25,pattern:'grid'}, near:{color:'#2a2a5a',alpha:0.2,pattern:'cells'}},
+};
+function getParallaxPreset(levelIndex){
+  if(levelIndex === 0) return PARALLAX_PRESETS.default;
+  if(levelIndex === 1) return PARALLAX_PRESETS.vessel;
+  if(levelIndex === 2) return PARALLAX_PRESETS.alveoli;
+  if(levelIndex === 3) return PARALLAX_PRESETS.vessel;
+  if(levelIndex === 4) return PARALLAX_PRESETS.lymph;
+  if(levelIndex === 5) return PARALLAX_PRESETS.boss;
+  return PARALLAX_PRESETS.default;
+}
+
 // ===== 速通 =====
 const SPEEDRUN_KEY = 'cellQuest_bestTime_1';
 
@@ -490,6 +508,10 @@ const Game = {
   prevKeysP2: {},
   // v3: DC NPC 数组
   dcNPCs: [],
+  // v3: 成就追踪
+  _lifetimeKills: 0,
+  _sprintDistance: 0,
+  _justCleared: false,
   // v3: AI 自适应难度系统
   adaptiveDifficulty:{
     level:'normal',          // 'easy' | 'normal' | 'hard' | 'extreme'
@@ -502,6 +524,17 @@ const Game = {
     adjustDamage:0,          // 敌人伤害调整（±1）
   },
 };
+
+// ===== v3: 科普卡片 =====
+const KNOWLEDGE_CARDS = {
+  0: {title:'血液循环', text:'人体血管总长约10万公里,可绕地球2.5圈。红细胞在其中的平均寿命为120天,每秒约有200万个红细胞被替换。心脏每天跳动约10万次,泵送约7600升血液。'},
+  1: {title:'白细胞与先天免疫', text:'白细胞(中性粒细胞)是最先到达感染部位的免疫细胞,占白细胞总数的50-70%。它们通过趋化作用感知细菌释放的化学信号,在几分钟内就能到达战场。'},
+  2: {title:'肺泡与气体交换', text:'成人肺泡总面积约70-100平方米,相当于半个网球场。气体交换仅需0.3秒,二氧化碳和氧气通过扩散穿过仅0.5微米厚的肺泡膜。'},
+  3: {title:'循环系统与失血', text:'人体失血超过30%(约1.5L)会导致失血性休克。血小板在血管受损时迅速聚集,释放凝血因子形成血栓。正常凝血时间约2-8分钟。'},
+  4: {title:'淋巴结与适应性免疫', text:'淋巴结是免疫细胞的"训练营"。T细胞和B细胞在此学习识别特定病原体。一次感染后产生的记忆细胞可在体内存活数十年,这就是疫苗起效的原理。'},
+  5: {title:'败血症', text:'败血症是感染引起的全身炎症反应综合征,全球每年约4900万人受影响,其中1100万人死亡。早期识别黄金1小时:抗生素+液体复苏可大幅提高存活率。'},
+};
+const ATP_KNOWLEDGE = {title:'ATP——生命的能量货币', text:'三磷酸腺苷(ATP)是所有细胞通用的能量分子。线粒体通过氧化磷酸化将食物中的化学能转化为ATP。每个细胞每天消耗约1000万个ATP分子。当一个ATP的磷酸键断裂时释放约30.5kJ/mol的能量,驱动肌肉收缩、细胞分裂等一切生命活动。'};
 
 // ===== v3: 记忆细胞永久加成系统 =====
 const MEMORY_BONUS_TIERS = [
@@ -638,6 +671,44 @@ function loadAdaptiveDifficulty(){
 }
 
 // ===== 存档系统 =====
+// ===== v3: 成就系统 =====
+const ACHIEVEMENTS = [
+  {id:'first_clear', name:'免疫先锋', desc:'首次通关任意关卡', icon:'🛡️', check:()=>Game.completed.some(Boolean)},
+  {id:'no_hit', name:'无伤战神', desc:'通关时零受伤', icon:'⭐', check:()=>Game._justCleared && Game.stats.deaths===0},
+  {id:'speedrun', name:'速通达人', desc:'通关时间 < 60秒', icon:'⚡', check:()=>Game._justCleared && Game.levelTime<60000},
+  {id:'energy_master', name:'能量管理专家', desc:'通关时ATP > 80', icon:'🔋', check:()=>Game._justCleared && Game.globalEnergy>80},
+  {id:'perfect_clear', name:'完美清除', desc:'100%完成度通关', icon:'💯', check:()=>Game._justCleared && Game._lastCompletionPct>=1},
+  {id:'kills_50', name:'百人斩', desc:'累计击杀50个敌人', icon:'💀', check:()=>Game._lifetimeKills>=50},
+  {id:'no_death', name:'不死传说', desc:'0死亡通关任意3关', icon:'👑', check:()=>{if(!Game._justCleared)return false; let c=0; for(let i=0;i<Game.stars.length;i++){if(Game.completed[i]&&Game.stars[i]>=2)c++;} return c>=3;}},
+  {id:'collector', name:'收藏家', desc:'收集3个记忆细胞', icon:'🧬', check:()=>Game.memoryCells>=3},
+  {id:'level5', name:'终极免疫', desc:'通关第5关(Boss)', icon:'☠️', check:()=>Game.completed[5]},
+  {id:'all_stars', name:'星光熠熠', desc:'累计获得10颗星', icon:'🌟', check:()=>(Game.stars||[]).reduce((a,b)=>a+b,0)>=10},
+  {id:'sprinter', name:'奔跑吧细胞', desc:'使用奔跑模式跑过1000像素', icon:'🏃', check:()=>Game._sprintDistance>=1000},
+  {id:'custom_creator', name:'关卡设计师', desc:'创建1个自定义关卡', icon:'🎨', check:()=>loadCustomLevels().length>0},
+];
+
+function loadAchievements(){
+  try{
+    const raw = localStorage.getItem('cellQuest_achievements');
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return {};
+}
+function saveAchievements(achs){ try{ localStorage.setItem('cellQuest_achievements', JSON.stringify(achs)); }catch(e){} }
+
+function checkAchievements(){
+  let achs = loadAchievements();
+  let changed = false;
+  for(const a of ACHIEVEMENTS){
+    if(!achs[a.id] && a.check()){
+      achs[a.id] = Date.now();
+      changed = true;
+      showToast('🏆 成就解锁: ' + a.icon + ' ' + a.name + '\n' + a.desc);
+    }
+  }
+  if(changed) saveAchievements(achs);
+}
+
 // ===== v3: 本地排行榜系统 =====
 const LB_MAX_ENTRIES = 5;
 
@@ -709,6 +780,7 @@ function saveGame(slot){
       skills:Game.skills,equipment:Game.equipment,inventory:Game.inventory,
       memoryCells:Game.memoryCells, memoryCellsCollected:Game.memoryCellsCollected,
       playerName:Game.playerName,
+      lifetimeKills:Game._lifetimeKills, sprintDistance:Game._sprintDistance,
       saveVersion:3, lastSaved: Date.now(),
     }));
     localStorage.setItem('cellQuest_currentSlot', String(s));
@@ -733,6 +805,7 @@ function loadGame(slot){
       Game.memoryCells = d.memoryCells || 0;
       Game.memoryCellsCollected = d.memoryCellsCollected || {};
       Game.playerName = d.playerName || '';
+      Game._lifetimeKills = d.lifetimeKills || 0; Game._sprintDistance = d.sprintDistance || 0;
       // 扩容关卡数组
       const total = buildLevelConfigs().length;
       while(Game.unlocked.length < total) Game.unlocked.push(false);

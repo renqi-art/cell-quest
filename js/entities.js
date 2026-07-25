@@ -14,6 +14,11 @@ class Player {
     this.facing = 1;
     this.cellType = 1;           // 1=WBC 2=PLT 3=RBC
     this.playerIndex = playerIndex || 0; // v3: 0=P1, 1=P2
+    // 奔跑模式
+    this.sprinting = false;
+    this.lastTapDir = 0;         // 上次按下的方向
+    this.lastTapTime = 0;        // 上次按下的时间(帧)
+    this.sprintDrainTimer = 0;   // 奔跑额外消耗计时
     this.health = 100;
     this.maxHealth = 100;
     this.invincible = 0;
@@ -191,13 +196,44 @@ class Player {
     // 脓液地块减速
     if(this.onPus) speedMul *= PUS_SLOW_MULT;
 
+    // v3: 奔跑模式 — 双击方向键触发(300ms内)
+    if(this.onGround && !this.crouching){
+      if(k.left && !pk.left && !this.sprinting){
+        if(this.lastTapDir === -1 && Game.frame - this.lastTapTime < 18){
+          this.sprinting = true; // 双击左→奔跑
+        }
+        this.lastTapDir = -1; this.lastTapTime = Game.frame;
+      }
+      if(k.right && !pk.right && !this.sprinting){
+        if(this.lastTapDir === 1 && Game.frame - this.lastTapTime < 18){
+          this.sprinting = true; // 双击右→奔跑
+        }
+        this.lastTapDir = 1; this.lastTapTime = Game.frame;
+      }
+      // 松开方向键停止奔跑
+      if(!k.left && !k.right) this.sprinting = false;
+      // 跳跃或能量过低时停止奔跑
+      if(!this.onGround || Game.globalEnergy < 15) this.sprinting = false;
+    } else {
+      this.sprinting = false;
+    }
+    if(this.sprinting){
+      speedMul *= 1.5; // 奔跑1.5倍速
+      Game._sprintDistance += Math.abs(this.vx); // 成就追踪
+      this.sprintDrainTimer++;
+      if(this.sprintDrainTimer >= 30){
+        this.sprintDrainTimer = 0;
+        Game.globalEnergy = Math.max(0, Game.globalEnergy - 1);
+      }
+    }
+
     if(k.left){ this.vx -= MOVE_ACCEL * speedMul; this.facing = -1; }
     if(k.right){ this.vx += MOVE_ACCEL * speedMul; this.facing = 1; }
     this.vx *= this.onGround ? GROUND_FRICTION : AIR_FRICTION;
     const maxV = MOVE_MAX * speedMul;
     if(this.vx > maxV) this.vx = maxV;
     if(this.vx < -maxV) this.vx = -maxV;
-    if(Math.abs(this.vx) < 0.05) this.vx = 0;
+    if(Math.abs(this.vx) < 0.05){ this.vx = 0; this.sprinting = false; }
 
     // ===== 跳跃（变跳高 + 土狼时间 + 跳跃缓冲 + 二段跳） =====
     if(k.jump && !pk.jump) this.jumpBuffer = JUMP_BUFFER;
