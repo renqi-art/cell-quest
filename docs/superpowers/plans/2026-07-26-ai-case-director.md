@@ -2,11 +2,25 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Architecture amendment — 2026-07-26:** Complete the Vue/TypeScript foundation before browser work. Server contracts and security tests remain executable. Browser AI clients move to typed services; Vue owns loading/error/source state; editor generation and patch UI are replaced by `2026-07-26-vue-case-designer.md` Tasks 10–11.
+
+**Migration routing:**
+
+| Existing task area | Updated execution target |
+|---|---|
+| `server/director.js`, `server/case-generator.js` and Node tests | Remain server-side tasks; keep exact validation, timeout and environment-key rules |
+| `js/case-director.js` or direct browser `fetch` | Typed client service under `src/game/services/` with Pinia view state |
+| AI HUD, crisis cards and report DOM changes | Vue components under `src/game/components/` |
+| `js/case-templates.js` and `js/case-compiler.js` | Pure TypeScript shared/editor services using `CaseDraft` and `CaseSchema` |
+| `editor.html` and `js/ai-levels.js` changes | Replaced by the Vue case designer plan; do not implement |
+
+Tasks 5, 8 and 9 contain legacy paths. Their security requirements remain binding, but their browser/editor file lists and commit commands are superseded by this routing table.
+
 **Goal:** 让服务端 AI 根据玩家表现从四种白名单病例危机中选择下一阶段事件，并以安全、可解释、可离线回退的方式真实改变核心玩法。
 
-**Architecture:** Node 服务端验证输入、调用兼容 Chat Completions 的模型并再次验证输出；浏览器客户端只提交最小病例上下文。`CaseDirectorClient` 在网络失败时调用确定性 `LocalCaseDirector`，`CaseEngine` 是唯一能执行事件和修改患者状态的组件。
+**Architecture:** Node 服务端验证输入、调用兼容 Chat Completions 的模型并再次验证输出；TypeScript浏览器客户端只提交最小病例上下文，Vue/Pinia只显示请求状态和决策。网络失败时使用确定性 `LocalCaseDirector`，无框架依赖的 `CaseEngine` 是唯一能执行事件和修改患者状态的组件。
 
-**Tech Stack:** Node.js built-in `http`/`fetch`/`AbortController`、原生 JavaScript、Playwright、Node `node:test`。
+**Tech Stack:** Node.js `http`/`fetch`/`AbortController`、TypeScript strict、Vue 3、Pinia、Vitest、Playwright、Node `node:test`。
 
 ## Global Constraints
 
@@ -313,12 +327,13 @@ git add server/director.js server.js tests/server.test.cjs package.json README.m
 git commit -m "feat: add secure patient crisis director proxy"
 ```
 
-### Task 3: Browser CaseDirectorClient and fallback
+### Task 3: Typed browser CaseDirectorClient and fallback
 
 **Files:**
-- Create: `js/case-director.js`
-- Modify: `index.html:229`
-- Modify: `js/config.js:421-524`
+- Create: `src/game/services/CaseDirectorClient.ts`
+- Create: `src/game/services/LocalCaseDirector.ts`
+- Create: `tests/unit/case-director-client.spec.ts`
+- Modify: `src/game/stores/game-ui.ts`
 - Create: `tests/case-director.spec.js`
 
 **Interfaces:**
@@ -339,7 +354,7 @@ Use a fixed `runId` so fallback output is repeatable.
 
 - [ ] **Step 2: Implement browser validators matching server contract**
 
-Do not import server code into the browser. Implement the same allow-list, target check and numeric bounds in `js/case-director.js`.
+Do not import server code into the browser. Implement the same allow-list, target check and numeric bounds in the typed client service.
 
 - [ ] **Step 3: Implement local browser director**
 
@@ -378,13 +393,12 @@ class CaseDirectorClient {
 
 - [ ] **Step 5: Add run state**
 
-Add:
+Add the equivalent typed Pinia state; do not add fields to the legacy global:
 
 ```js
-Game.caseDirector = null;
-Game.caseDirectorPhase = 0;
-Game.caseDirectorHistory = [];
-Game.caseDirectorPending = false;
+const directorPhase = ref(0)
+const directorHistory = ref<readonly DirectorHistoryEntry[]>([])
+const directorPending = ref(false)
 ```
 
 - [ ] **Step 6: Run tests**
@@ -396,16 +410,17 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add js/case-director.js js/config.js index.html tests/case-director.spec.js
+git add src/game/services/CaseDirectorClient.ts src/game/services/LocalCaseDirector.ts src/game/stores/game-ui.ts tests/unit/case-director-client.spec.ts tests/case-director.spec.js
 git commit -m "feat: add resilient browser case director"
 ```
 
 ### Task 4: Whitelisted crisis execution
 
 **Files:**
-- Modify: `js/case-engine.js`
-- Modify: `js/case-entities.js`
-- Modify: `js/game.js:736-916`
+- Modify: `src/game/domain/CaseEngine.ts`
+- Modify: `src/game/domain/case-events.ts`
+- Modify: `src/game/bridge/GameEngineEvents.ts`
+- Test: `tests/unit/case-crisis.spec.ts`
 - Modify: `tests/case-director.spec.js`
 
 **Interfaces:**
@@ -489,7 +504,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add js/case-engine.js js/case-entities.js js/game.js tests/case-director.spec.js
+git add src/game/domain/CaseEngine.ts src/game/domain/case-events.ts src/game/bridge/GameEngineEvents.ts tests/unit/case-crisis.spec.ts tests/case-director.spec.js
 git commit -m "feat: let AI crises change case objectives"
 ```
 
@@ -551,17 +566,18 @@ git add js/ai-levels.js js/entities.js editor.html js/game.js tests/security.spe
 git commit -m "security: remove browser AI credentials"
 ```
 
-### Task 6: Visible AI decision trace and report
+### Task 6: Visible Vue AI decision trace and report
 
 **Files:**
-- Modify: `index.html`
-- Modify: `css/style.css`
-- Modify: `js/game.js:1038-1220`
-- Modify: `js/game.js:1994-2117`
+- Create: `src/game/components/case/DirectorCrisisCard.vue`
+- Create: `src/game/components/result/DirectorTimeline.vue`
+- Modify: `src/game/stores/game-ui.ts`
+- Modify: `src/game/GameApp.vue`
+- Create: `tests/component/DirectorCrisisCard.spec.ts`
 - Modify: `tests/case-director.spec.js`
 
 **Interfaces:**
-- Consumes: `Game.caseDirectorHistory`.
+- Consumes: readonly typed director history from Pinia.
 - Produces: AI source badge, crisis card, objective highlight, report decision timeline.
 
 - [ ] **Step 1: Write failing visible evidence test**
@@ -576,7 +592,7 @@ Mock an AI response and assert:
 
 - [ ] **Step 2: Add crisis card**
 
-Use text nodes for:
+Use Vue text interpolation and these stable test IDs:
 
 - `#director-source`
 - `#director-event`
@@ -631,7 +647,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add index.html css/style.css js/game.js tests/case-director.spec.js
+git add src/game/components/case/DirectorCrisisCard.vue src/game/components/result/DirectorTimeline.vue src/game/stores/game-ui.ts src/game/GameApp.vue tests/component/DirectorCrisisCard.spec.ts tests/case-director.spec.js
 git commit -m "feat: expose AI crisis decisions to players"
 ```
 
@@ -698,19 +714,19 @@ git add server/case-generator.js tests/case-generator.test.cjs server.js package
 git commit -m "feat: generate validated patient case blueprints"
 ```
 
-### Task 8: Deterministic template compiler and playability gate
+### Task 8: TypeScript deterministic template compiler and playability gate
 
 **Files:**
-- Create: `js/case-templates.js`
-- Create: `js/case-compiler.js`
+- Create: `src/shared/types/case-blueprint.ts`
+- Create: `src/shared/services/CaseCompiler.ts`
+- Modify: `src/shared/models/case-templates.ts`
+- Test: `tests/unit/case-compiler.spec.ts`
 - Create: `tests/case-generator.spec.js`
-- Modify: `index.html`
-- Modify: `editor.html`
 
 **Interfaces:**
 - Consumes: validated `CaseBlueprint` and integer seed.
-- Produces: `CaseCompiler.compile(blueprint, { seed })` returning `{ map, caseConfig, metadata }`.
-- Produces: `CaseCompiler.validateReachability(map, caseConfig)`.
+- Produces: `compileCaseBlueprint(blueprint, { seed }): CaseCompilationResult` returning a parsed `CaseDraft` plus metadata.
+- Consumes: `CaseSchema`, `CaseReachabilityService` and the shared safe-template registry from Vue case designer Tasks 1, 6 and 7.
 
 - [ ] **Step 1: Write compiler invariants first**
 
@@ -722,7 +738,7 @@ Each segment has exactly 15 rows, declared entrance/exit anchors, compatible ves
 
 - [ ] **Step 3: Compile the blueprint**
 
-Resolve only registered IDs, order segments with the seeded PRNG, place exactly one `P`, place `L`, `T` and `i` markers from goals, derive stable case/node IDs, and normalize the result through `CaseSchema`.
+Resolve only registered IDs, order segments with the seeded PRNG, create exactly one typed spawn, create oxygen, tissue and infection nodes from goals, derive stable case/node IDs, and normalize the result through `parseCaseDraft`.
 
 - [ ] **Step 4: Implement a conservative reachability check**
 
@@ -738,6 +754,8 @@ Run:
 
 ```powershell
 npx playwright test tests/case-generator.spec.js
+npm run test:unit -- tests/unit/case-compiler.spec.ts
+npm run typecheck
 npm run test:all
 ```
 
@@ -746,11 +764,13 @@ Expected: every generated seed validates and can enter the playable case flow.
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add js/case-templates.js js/case-compiler.js tests/case-generator.spec.js index.html editor.html
+git add src/shared/types/case-blueprint.ts src/shared/services/CaseCompiler.ts src/shared/models/case-templates.ts tests/unit/case-compiler.spec.ts tests/case-generator.spec.js
 git commit -m "feat: compile AI case blueprints into safe maps"
 ```
 
-### Task 9: AI generation and constrained assistance in the editor
+### Task 9: Superseded editor integration requirements
+
+> Do not execute the legacy file changes below. Implement these requirements through Tasks 10–11 of `2026-07-26-vue-case-designer.md`. This retained section is an acceptance checklist for generation fields, source visibility, patch confirmation, offline behavior and security.
 
 **Files:**
 - Modify: `editor.html`

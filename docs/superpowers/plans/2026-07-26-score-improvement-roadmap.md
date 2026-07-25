@@ -4,9 +4,9 @@
 
 **Goal:** 将《细胞远征》从“带细胞主题的平台闯关”升级为由 AI 推动病例危机、以红白细胞协作稳定患者指标为核心，并具备完整叙事、科普价值、产品闭环和比赛证据的可发布游戏。
 
-**Architecture:** 保留原生 Canvas、现有实体和地图系统，引入独立 `CaseEngine` 管理确定性生理规则，服务端 AI 病情导演只从白名单事件中选择下一阶段危机。地图编辑器输出版本化病例配置，单人用脚本化友军，双人由红白细胞玩家共同执行同一病例。
+**Architecture:** 先完成 Vite、Vue 3、TypeScript、Pinia 与 `GameEngine` 兼容基础，再将病例规则迁入无框架依赖的 TypeScript 领域层、界面迁入 Vue、运行时通过遗留或 Phaser 适配器接入。服务端 AI 只返回白名单危机或病例蓝图；手动、模板、AI和导入内容统一进入 Vue 病例设计器的 `CaseDraft` 流程。
 
-**Tech Stack:** HTML5 Canvas、原生 JavaScript、Node.js HTTP server、Playwright 1.61.1、Node `node:test`、localStorage、服务端兼容 OpenAI Chat Completions 格式的模型接口。
+**Tech Stack:** Vite、Vue 3、TypeScript strict、Pinia、Canvas 2D、阶段性遗留引擎适配器、最终 Phaser 适配器、Vitest、Vue Test Utils、Playwright、Node.js HTTP server、服务端兼容 OpenAI Chat Completions 格式的模型接口。
 
 ## Global Constraints
 
@@ -20,6 +20,9 @@
 - AI 不可用时必须使用相同结构的本地导演，不得阻塞游戏。
 - 旧自定义地图和旧分享码必须继续以“经典模式”运行。
 - 所有新增文本通过 `textContent` 或既有 `escapeHtml()` 输出。
+- Vue组件使用普通文本插值，禁止 `v-html`、内联事件和直接访问 `window.Game`。
+- `09e301c` 对应的 Vue/TypeScript 基础计划是所有新前端业务计划的前置门禁。
+- 新业务逻辑不得继续加入 `editor.html`、`js/ai-levels.js` 或遗留全局脚本；遗留文件只允许增加有测试的窄适配钩子。
 - 每个任务先写失败测试，再实现最小代码，再运行相关回归，最后独立提交。
 - 不修改或提交 `audit/` 与 `js/levels/backup/level2_alveoli.js` 中现有的用户改动。
 
@@ -42,17 +45,22 @@
 
 按以下顺序执行；每一册都必须产生可运行、可测试、可评审的软件：
 
-1. [核心病例玩法与编辑器计划](2026-07-26-core-case-gameplay.md)
-2. [AI病情导演与服务端安全计划](2026-07-26-ai-case-director.md)
-3. [叙事、科普与玩家体验计划](2026-07-26-story-education-player-experience.md)
-4. [产品化、UGC与运营计划](2026-07-26-product-ugc-operations.md)
-5. [质量、平衡、可访问性与发布计划](2026-07-26-quality-balance-release.md)
-6. [CodeBuddy证据、演示与评分材料计划](2026-07-26-evidence-demo-scoring.md)
+1. [Vue 3与TypeScript兼容基础计划](2026-07-26-vue-typescript-foundation.md)
+2. [核心病例玩法计划](2026-07-26-core-case-gameplay.md)，按文件顶部的迁移修订执行，旧路径仅作需求参考。
+3. [Vue TypeScript病例设计器计划](2026-07-26-vue-case-designer.md)
+4. [AI病情导演与服务端安全计划](2026-07-26-ai-case-director.md)
+5. [叙事、科普与玩家体验计划](2026-07-26-story-education-player-experience.md)
+6. [产品化、UGC与运营计划](2026-07-26-product-ugc-operations.md)
+7. [质量、平衡、可访问性与发布计划](2026-07-26-quality-balance-release.md)
+8. [CodeBuddy证据、演示与评分材料计划](2026-07-26-evidence-demo-scoring.md)
 
 依赖关系：
 
 ```text
-核心病例玩法
+Vue/TypeScript兼容基础
+        ↓
+TypeScript病例领域与运行时
+├── Vue病例设计器
 ├── AI病情导演
 ├── 叙事与科普
 └── 产品化与UGC
@@ -62,20 +70,39 @@
 证据、演示与评分材料
 ```
 
-AI 服务端可以与编辑器 UI 并行开发，但 AI 事件执行器必须等待 `CaseEngine` 的接口稳定。
+AI 服务端可以与 Vue 病例设计器并行开发，但 AI 事件执行器必须等待 TypeScript `CaseEngine` 接口稳定；AI蓝图客户端必须等待共享 `CaseDraft`、schema和编译器稳定。
+
+`2026-07-26-core-case-gameplay.md` 目前保留玩法需求、验收和测试清单，旧JavaScript文件任务不可直接执行。完成兼容基础后，必须先依据实际生成的 `GameEngine` 接口将其重写为独立TypeScript运行时实施计划；病例设计器Task 8和官方病例Task 12等待该运行时接口。
 
 ## 3. 建议代码边界
 
-### 新增文件
+### 新架构权威边界
+
+| 文件/目录 | 单一职责 |
+|---|---|
+| `src/shared/types/case.ts` | 病例、节点、目标、AI危机和发布类型 |
+| `src/shared/models/case-draft.ts` | 统一手动、模板、AI和导入草稿 |
+| `src/shared/services/CaseSchema.ts` | 游戏、编辑器、生成器共用的严格解析与规范化 |
+| `src/shared/services/CaseValidationService.ts` | 病例职责闭环和发布校验 |
+| `src/shared/services/CaseReachabilityService.ts` | 基于版本化移动边界的可达性分析 |
+| `src/shared/services/CaseCodec.ts` | `CQ!`兼容和`CQ2!`安全编解码 |
+| `src/editor/` | Vue病例设计器、Pinia状态、Canvas工具和预览适配器 |
+| `src/game/bridge/` | Vue与遗留/Phaser运行时之间的类型化边界 |
+| `src/game/domain/` | 确定性病例引擎、目标和评分规则 |
+| `src/game/components/` | HUD、病例卡、AI提示和结算Vue组件 |
+| `server/director.js` | 运行时AI导演服务端白名单接口 |
+| `server/case-generator.js` | AI病例蓝图和补丁服务端白名单接口 |
+
+### 遗留文件迁移映射（不得按下表继续新增模块）
 
 | 文件 | 单一职责 |
 |---|---|
-| `js/case-engine.js` | 患者指标、目标、事件、稳定倒计时和胜负 |
+| `js/case-engine.js` | 旧计划路径；迁移为 `src/game/domain/CaseEngine.ts` |
 | `js/case-entities.js` | 供氧点、目标组织、感染灶和自动友军视觉实体 |
 | `js/case-director.js` | 浏览器导演客户端、本地回退和事件计划记录 |
-| `js/case-schema.js` | 游戏、编辑器和生成器共用的病例配置与地图校验 |
-| `js/case-templates.js` | 已注册的安全地图模板和地形片段库 |
-| `js/case-compiler.js` | 将AI病例蓝图确定性编译成可达病例地图 |
+| `js/case-schema.js` | 旧计划路径；由 `src/shared/services/CaseSchema.ts` 替代 |
+| `js/case-templates.js` | 旧计划路径；由 `src/shared/models/case-templates.ts` 替代 |
+| `js/case-compiler.js` | 旧计划路径；迁移为纯TypeScript病例编译服务 |
 | `js/case-content.js` | 六章病例文案、知识卡和来源元数据 |
 | `server/director.js` | 服务端请求/响应校验、模型调用、超时和本地回退 |
 | `server/case-generator.js` | AI病例蓝图与编辑器补丁的服务端白名单接口 |
@@ -88,20 +115,20 @@ AI 服务端可以与编辑器 UI 并行开发，但 AI 事件执行器必须等
 | `scripts/validate-content.cjs` | 检查知识来源、病例配置和文案完整性 |
 | `scripts/generate-test-report.cjs` | 汇总自动化和人工验收结果 |
 
-### 重点修改文件
+### 遗留重点文件的允许修改范围
 
 | 文件 | 修改范围 |
 |---|---|
-| `index.html` | 新HUD、病例卡、AI提示、报告、设置与脚本加载顺序 |
+| `index.html` | 只保留元数据、挂载点和Vite模块入口；不新增业务逻辑 |
 | `css/style.css` | 病例HUD、指标状态、响应式、可访问性和统一视觉 |
 | `js/config.js` | 状态持久化、分享格式v2、设置、内容版本 |
 | `js/entities.js` | 删除可达的切换输入、上报供氧/感染/死亡事件、停用浏览器直连AI |
-| `js/game.js` | 加载病例、更新引擎、角色锁定、双人协作、完成流程 |
+| `js/game.js` | 只允许有测试的 `LegacyGameEngineAdapter` / 预览窄桥接；新规则进入TypeScript |
 | `js/levels.js` | 六关病例配置和经典模式兼容 |
 | `js/levels/level*.js` | 放置 `L/T/i` 节点并移除马里奥式目标 |
-| `editor.html` | 病例设置、节点瓦片、校验、导入导出 |
+| `editor.html` | 最终仅保留Vue挂载点；全部病例设计器能力进入 `src/editor/` |
 | `server.js` | `/api/director`、`/healthz`、安全响应头和测试注入点 |
-| `deck.html` | 新核心循环、AI决策证据、病例报告和产品闭环 |
+| `deck.html` | 最终仅保留Vue挂载点；展示内容进入 `src/deck/` |
 | `README.md` | 新玩法、环境变量、测试和演示说明 |
 | `package.json` | 全量测试、内容校验和报告命令 |
 

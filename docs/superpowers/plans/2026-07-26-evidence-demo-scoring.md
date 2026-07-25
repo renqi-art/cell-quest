@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Architecture amendment — 2026-07-26:** Capture the Vue/TypeScript foundation, typed engine boundary, manual case designer and legacy cutover as real CodeBuddy architecture evidence. `deck.html` becomes a Vite mount page and visible deck changes belong in `src/deck/`; legacy inline deck instructions are presentation requirements, not final file boundaries.
+
 **Goal:** 将真实的 AI 协作过程、工程验证结果和游戏价值整理为可审计证据，并制作一套4分钟内清晰证明八个评分模块的现场演示与离线备份。
 
 **Architecture:** 证据以版本控制内的 Markdown 索引为中心，链接到真实提交、测试输出、截图和决策记录。演示材料从同一份评分映射生成，现场、视频、PPT和备用截图使用一致叙事，不制造或夸大 AI 参与记录。
 
-**Tech Stack:** Markdown、Git、HTML deck、Playwright截图、Node报告脚本、浏览器录屏。
+**Tech Stack:** Markdown、Git、Vue/Vite deck、Vitest与Playwright报告、Node报告脚本、浏览器录屏。
 
 ## Global Constraints
 
@@ -16,6 +18,8 @@
 - 每项评分证据必须能在60秒内打开或展示。
 - 现场演示目标时长4分钟，硬上限4分30秒。
 - 在线演示失败时，离线包必须在30秒内接管。
+- 证据索引必须区分架构设计、兼容基础、Vue病例设计器、遗留适配器和未来Phaser切换，不得把计划文档写成已实现功能。
+- 测试报告必须分别列出TypeScript、ESLint、Vitest领域测试、Vue组件测试、Playwright、生产构建和服务端测试结果。
 - 所有截图和视频隐藏 API Key、个人路径、邮箱和无关私人信息。
 
 ---

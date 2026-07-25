@@ -2,11 +2,26 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Architecture amendment — 2026-07-26:** Do not execute this document against the legacy file paths until `2026-07-26-vue-typescript-foundation.md` is complete. The gameplay requirements and acceptance tests remain authoritative, but new domain rules belong in TypeScript modules and new UI belongs in Vue. Task 7 is fully replaced by `2026-07-26-vue-case-designer.md`.
+
+**Migration routing:**
+
+| Legacy instruction in this plan | Authoritative target after `09e301c` |
+|---|---|
+| Create `js/case-engine.js` | Create `src/game/domain/CaseEngine.ts` with Vitest domain tests |
+| Create `js/case-entities.js` | Create typed case-node/system modules; expose only events through the engine adapter |
+| Modify HUD or dialogs in `index.html`/`js/game.js` | Create Vue components and Pinia actions under `src/game/` |
+| Create `js/case-schema.js` UMD | Use `src/shared/services/CaseSchema.ts` from the Vue case designer plan |
+| Modify `editor.html` | Use `src/editor/`; `editor.html` remains a Vite mount document |
+| Read or write `Game` directly from Vue | Prohibited; use `GameEngine` commands/events |
+
+Tasks 1–6 and 8–9 are retained as product behavior specifications and test inventories. Their legacy code snippets and `git add` commands are reference-only and must be replaced by a dedicated TypeScript runtime plan before execution. This prevents implementing the redesigned gameplay in files scheduled for deletion during the Vue/Phaser migration.
+
 **Goal:** 建立红细胞供氧、白细胞清除感染、患者指标稳定通关的通用病例引擎，并通过编辑器配置六个内置病例和双人红白协作。
 
-**Architecture:** `CaseEngine` 作为独立确定性状态机，实体只发送领域事件，HUD只读取快照。病例节点由地图字符生成；单人固定主控并使用脚本友军，双人将友军职责交给第二名玩家。
+**Architecture:** `CaseEngine` 作为无Vue/Pinia/Phaser依赖的TypeScript确定性状态机，运行时适配器只发送领域事件，Vue HUD只读取不可变快照。病例节点由共享类型和解析器生成；单人固定主控并使用脚本友军，双人将友军职责交给第二名玩家。
 
-**Tech Stack:** 原生 JavaScript、HTML5 Canvas、localStorage、Playwright。
+**Tech Stack:** TypeScript strict、Vitest、Vue 3、Pinia、类型化 `GameEngine` 适配器、阶段性遗留Canvas、最终Phaser、Playwright。
 
 ## Global Constraints
 
@@ -684,7 +699,9 @@ git add index.html css/style.css js/game.js tests/case-engine.spec.js
 git commit -m "feat: add patient HUD and case reports"
 ```
 
-### Task 7: Case editor schema, validation and round trip
+### Task 7: Superseded case editor requirements
+
+> Do not execute the legacy file changes below. The complete replacement is `2026-07-26-vue-case-designer.md`, which implements TypeScript `CaseDraft`, shared schema, Vue manual editing, validation, preview, publishing and compatibility. Keep the requirements below only as backward-compatibility acceptance checks.
 
 **Files:**
 - Create: `js/case-schema.js`

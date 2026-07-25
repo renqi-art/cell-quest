@@ -1402,4 +1402,10 @@ This plan is complete only when all of the following are true:
 6. Unit, browser, build, lint, and server tests pass.
 7. The migration records reflect the actual implemented interface.
 
-After this gate, create the next implementation plan for shared domain extraction and Vue UI replacement. That plan must use the real files and interfaces produced here rather than assuming their final implementation.
+After this gate:
+
+1. Execute `2026-07-26-vue-case-designer.md` for the editor-specific shared case domain and Vue editor replacement.
+2. Rewrite the retained runtime requirements in `2026-07-26-core-case-gameplay.md` into a dedicated TypeScript runtime plan before implementing new gameplay rules.
+3. Keep `LegacyGameEngineAdapter` until the Vue UI and later Phaser adapter pass the same characterization tests.
+
+Every follow-up plan must use the actual files and interfaces produced here rather than assuming their final implementation.

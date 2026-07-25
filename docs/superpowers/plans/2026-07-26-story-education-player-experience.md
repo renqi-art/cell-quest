@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Architecture amendment — 2026-07-26:** Execute after the Vue/TypeScript foundation. Story and education data move to typed, framework-free modules under `src/shared/`; visible cards, reports and settings move to Vue components. Legacy `case-content.js`, `index.html` UI edits and string-built DOM in later tasks are requirement references only.
+
 **Goal:** 将六关串成一名患者从擦伤感染到恢复的完整故事，让医学知识通过病例判断影响玩法，并以清晰、沉浸、可复述的反馈强化主题与社会价值。
 
-**Architecture:** `case-content.js` 保存版本化故事、学习目标、知识卡和来源；UI 层只按章节状态展示病例卡、AI危机、章节过渡和最终报告。知识判断通过安全的预设选项影响小幅准备加成，不把教育内容变成惩罚性考试。
+**Architecture:** TypeScript内容模块保存版本化故事、学习目标、知识卡和来源；Vue UI只按章节状态展示病例卡、AI危机、章节过渡和最终报告。知识判断通过类型化领域命令影响小幅准备加成，不把教育内容变成惩罚性考试。
 
-**Tech Stack:** 原生 JavaScript、HTML/CSS、Canvas、Playwright、Node 内容校验脚本。
+**Tech Stack:** TypeScript strict、Vue 3、Pinia、Vitest、Playwright、Node内容校验脚本。
 
 ## Global Constraints
 

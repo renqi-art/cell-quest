@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Architecture amendment — 2026-07-26:** Execute frontend work after the Vue/TypeScript foundation. Task 3 sharing and every direct `editor.html` change are routed through `2026-07-26-vue-case-designer.md`, `CaseCodec`, `CaseDraftRepository` and Vue dialogs. Legacy file paths in those tasks are not executable targets.
+
 **Goal:** 建立“学习玩法—完成病例—生成报告—AI生成病例草案—编辑试玩—分享挑战—每日回访”的产品闭环，并提供可公开访问、可监控、可持续扩展的演示版本。
 
-**Architecture:** 用户进度继续以版本化 localStorage 为主；AI只生成受限病例蓝图，由确定性编译器生成可玩草案；病例通过编辑器验证后再用 `CQ2!` 分享码跨设备传播；每日病例使用日期种子保证公平；排行榜通过受限服务端接口保存最小成绩数据；内容包、AI草案与病例编辑器共享同一配置结构。
+**Architecture:** Pinia调用版本化TypeScript服务管理用户进度和本地存储；AI只生成受限病例蓝图，由纯TypeScript编译器生成 `CaseDraft`；病例通过Vue设计器验证后再用 `CQ2!` 分享。每日病例使用日期种子保证公平，排行榜通过受限服务端接口保存最小成绩数据。
 
-**Tech Stack:** 原生 JavaScript、Canvas、Node.js HTTP server、JSON、Playwright、Node `node:test`。
+**Tech Stack:** Vite、Vue 3、TypeScript strict、Pinia、Canvas、Vitest、Playwright、Node.js HTTP server、Node `node:test`。
 
 ## Global Constraints
 
@@ -170,7 +172,9 @@ git add js/daily-case.js index.html css/style.css js/game.js js/config.js tests/
 git commit -m "feat: add deterministic daily patient cases"
 ```
 
-### Task 3: Safe versioned UGC sharing and metadata
+### Task 3: Superseded UGC codec and editor requirements
+
+> Do not execute the legacy file list below. Vue case designer Tasks 3, 9 and 11 implement slot storage, `CQ2!` publishing, import preview and `CQ!` compatibility through typed shared services. This section remains the product metadata and payload-limit acceptance checklist.
 
 **Files:**
 - Modify: `js/config.js:598-688`
@@ -384,6 +388,8 @@ git commit -m "feat: add bounded daily case leaderboard"
 ```
 
 ### Task 6: Content packs and operational roadmap
+
+> Architecture routing: keep the content-pack schema, validator, tests and roadmap in this task, but replace every direct `editor.html` change with a typed pack-import service and Vue dialog under `src/editor/`. Import must still pass `CaseSchema` before creating a draft.
 
 **Files:**
 - Create: `content/case-pack.schema.json`

@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Architecture amendment — 2026-07-26:** Quality gates now cover the Vite production build, strict TypeScript, ESLint, Vitest domain/component suites, Playwright and server tests. CSS/DOM work belongs in Vue components and scoped styles; legacy script performance remains measured only while the adapter is active.
+
 **Goal:** 将六关病例打磨为稳定、平衡、可读、可访问、可线上发布的比赛版本，并建立可重复的自动化与人工质量门。
 
 **Architecture:** 以自动化测试覆盖关键状态机和流程，以配置化平衡预设控制数值，以统一视觉令牌和设置系统处理可读性与可访问性。发布候选必须同时通过功能、性能、内容、安全和人工通关检查。
 
-**Tech Stack:** Playwright、Node `node:test`、Canvas Performance API、原生 JavaScript/CSS、PowerShell/NPM脚本。
+**Tech Stack:** Vite、Vue 3、TypeScript strict、Pinia、Vitest、Vue Test Utils、Playwright、Node `node:test`、Canvas/Phaser Performance API、PowerShell/NPM脚本。
 
 ## Global Constraints
 
@@ -16,6 +18,9 @@
 - 所有核心状态不能只依赖颜色传达。
 - 所有菜单必须可用键盘完成。
 - `prefers-reduced-motion: reduce` 时取消屏幕震动、闪烁和非必要过渡。
+- 每个发布候选必须依次通过 `npm run typecheck`、`npm run lint`、`npm run test:unit`、`npm run test:component`、`npm test`、`npm run build` 和 `npm run test:server`。
+- Playwright必须同时验证Vite开发服务器和至少一轮生产 `preview` 冒烟，不能只验证遗留 `node server.js` 静态页面。
+- 性能报告必须注明当前运行时适配器是legacy还是Phaser，两个结果不得混合比较。
 - 六个内置病例必须分别完成单人通关；至少一个病例完成双人通关。
 - 发布候选不得有未处理的控制台错误、资源404或不可达目标。
 
