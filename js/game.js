@@ -2508,5 +2508,3 @@ function renderEquipment(){['weapon','armor','accessory'].forEach(slot=>{const e
 function statsText(stats){const n={atk:'攻',def:'防',spd:'速',maxHp:'命',maxEnergy:'能'};return Object.keys(stats).map(k=>n[k]+'+'+stats[k]).join(' ');}
 
 window.addEventListener('load', init);
-
-window.addEventListener('load', init);
