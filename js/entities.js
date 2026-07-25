@@ -2737,7 +2737,78 @@ class DendriticCell {
       };
     }
 
+    // 保存上下文供AI使用
+    this._context = { hpPct, energy, enemiesLeft, totalEnemies, progress, kills: Game.stats.kills,
+      cellName: p.cell.name, levelName: (buildLevelConfigs()[Game.levelIndex]||{}).name || '' };
+    this._speaker = dialogue.speaker;
+    this._color = dialogue.color;
+
     showTutorial(dialogue.speaker, dialogue.color, dialogue.body);
+    // v3: 注入AI深度分析按钮
+    this._injectAIButton();
+  }
+
+  _injectAIButton(){
+    // 延迟注入，等 showTutorial 渲染完 DOM
+    setTimeout(() => {
+      const btns = document.querySelector('#dialogue-bubble .bubble-buttons');
+      if(!btns) return;
+      // 移除旧按钮
+      const old = btns.querySelector('.btn-dc-ai');
+      if(old) old.remove();
+      const btn = document.createElement('button');
+      btn.className = 'btn-small btn-dc-ai';
+      btn.textContent = 'AI深度分析';
+      btn.style.cssText = 'background:#ab47bc;color:#fff;border-color:#ab47bc;margin-left:4px;font-size:11px;';
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        this._callAI();
+      };
+      btns.appendChild(btn);
+    }, 50);
+  }
+
+  async _callAI(){
+    const key = getDeepSeekKey();
+    if(!key){
+      document.getElementById('bubble-body').textContent = '请先在 AI 关卡面板设置 DeepSeek API Key。';
+      return;
+    }
+    const bodyEl = document.getElementById('bubble-body');
+    if(!bodyEl) return;
+    bodyEl.textContent = 'AI 正在分析免疫状态...';
+
+    const ctx = this._context;
+    const prompt = `你是免疫系统中的树突状细胞NPC,正在对免疫战士(玩家)进行战术分析。
+当前状态:
+- 角色: ${ctx.cellName}
+- 关卡: ${ctx.levelName}
+- 血量: ${Math.round(ctx.hpPct*100)}%
+- 能量ATP: ${Math.round(ctx.energy)}
+- 杀敌进度: ${Math.round(ctx.progress*100)}% (已杀${ctx.kills}/${ctx.totalEnemies+ctx.kills-ctx.totalEnemies+ctx.enemiesLeft})
+- 剩余敌人: ${ctx.enemiesLeft}
+
+请用中文简短回复(≤80字),给玩家一句实用的战术建议或免疫学科普。风格:专业但不枯燥,偶尔带点幽默。`;
+
+    try{
+      const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: '你是免疫系统中的树突状细胞NPC。用中文简短回复(≤80字),专业但不枯燥。' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.9, max_tokens: 200,
+        }),
+      });
+      const data = await resp.json();
+      const reply = data.choices?.[0]?.message?.content || 'AI暂时无法响应,请稍后重试。';
+      bodyEl.textContent = '【AI分析】' + reply;
+    }catch(e){
+      bodyEl.textContent = 'AI连接失败: ' + e.message;
+    }
   }
 
   draw(ctx, camX){
