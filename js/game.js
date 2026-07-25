@@ -2447,9 +2447,11 @@ function init(){
   $('btn-resume').onclick = ()=>{ togglePause(); };
   $('btn-quit').onclick = ()=>{ backToHub(); };
   $('btn-next-level').onclick = ()=>{ backToHub(); };
+  try{ $('btn-complete-menu').onclick = ()=>{ showMenu(); }; }catch(e){}
   // 死亡面板按钮
   $('btn-retry').onclick = ()=>{ retryFromDeath(); };
   $('btn-death-quit').onclick = ()=>{ quitFromDeath(); };
+  try{ $('btn-death-menu').onclick = ()=>{ $('death-panel').classList.add('hidden'); showMenu(); }; }catch(e){}
   // 对话气泡按钮
   $('btn-bubble-next').onclick = ()=>{ dismissTutorial(); };
   $('btn-bubble-skip').onclick = ()=>{ skipAllTutorials(); };
