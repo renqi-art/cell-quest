@@ -163,3 +163,36 @@ https://cell-quest-au7hiwjl.edgeone.cool?eo_token=9f91b25fa5a9768dd423f876eec7ea
 - **Gitee**: pushed ✅
 - **EdgeOne**: deployed ✅ (dpnrujsjnnwl)
 - **URL**: `cell-quest-au7hiwjl.edgeone.cool`
+
+---
+
+## 更新 2026-07-25 (批次2)
+
+### 奔跑模式
+- 双击 ← 或 → (300ms内) 触发奔跑状态
+- 1.5倍移速，每30帧额外消耗1ATP
+- 松开方向/跳跃/能量<15/离地时自动停止
+- 成就追踪累计奔跑距离
+
+### 科普内容 (7关 + ATP)
+- 通关结算面板底部展示该关卡对应医学科普
+- Level 0 血液循环 / 1 白细胞先天免疫 / 2 肺泡气体交换
+- Level 3 循环系统失血 / 4 淋巴结适应性免疫 / 5 败血症
+- ATP百科: "生命的能量货币"
+- 来源: 医学生理学教材
+
+### 视差滚动背景
+- 3层Canvas滚动: 远景0.1x / 中景0.25x / 近景0.5x
+- 5套主题配色: 默认/血管/肺泡/Boss/淋巴结
+- 3种图案模式: 圆点dots / 波纹flow/grid / 气泡bubbles
+- 中景层支持正弦波纹动画
+
+### 成就系统 (12枚勋章)
+- 免疫先锋 / 无伤战神 / 速通达人 / 能量管理专家
+- 完美清除 / 百人斩 / 不死传说 / 收藏家
+- 终极免疫 / 星光熠熠 / 奔跑吧细胞 / 关卡设计师
+- localStorage持久化，解锁时弹Toast
+- Hub面板查看进度(X/12) + 解锁日期
+
+### 部署
+- URL: https://cell-quest-au7hiwjl.edgeone.cool?eo_token=40e5291de88be725aed2cd98d163b106&eo_time=1784942989

@@ -60,6 +60,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',monospace;background:#0a0a18;color
 <div class="main-area">
   <div class="toolbar">
     <button onclick="newMap()">新建</button>
+    <button onclick="editorAIGenerate()" style="background:#6a2a8a;border-color:#9a4aba">🤖 AI生成</button>
     <select id="levelSelect" onchange="loadPreset(this.value)">
       <option value="">加载现有关卡...</option>
     </select>
@@ -890,6 +891,48 @@ function parseExtraConfig(text){
 }
 
 init();
+
+// v3: AI生成关卡(独立,不依赖外部JS)
+async function editorAIGenerate(){
+  const prompt = prompt('输入主题词,AI生成关卡地图:\n(如: 海底世界、太空站、僵尸入侵)', '战斗训练场');
+  if(!prompt) return;
+
+  const key = localStorage.getItem('cellQuest_ds_key');
+  if(!key){ alert('请先在游戏中设置 DeepSeek API Key (Hub→AI生成关卡→设置API Key)'); return; }
+
+  const sysPrompt = [
+    '你是2D平台跳跃关卡地图生成器。输出JSON:{"name":"≤10字","cellType":1或3,"map":["15×80列字符串"]}',
+    '瓦片:#=地面 ==平台 P=出生点 F=终点 g=葡萄球菌 t=链球菌 ^=尖刺 ?=隐藏方块 V=弹簧 _=碎裂 a=ATP o=金币',
+    '规则:P在第13行列2-5,F在第13行列75-79。平台间距≤5格。敌人6-12个。cellType:战斗=1,收集=3。第0/14行全#。'
+  ].join('\n');
+
+  showToast('AI正在生成...');
+  try{
+    const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+      body:JSON.stringify({model:'deepseek-chat',messages:[{role:'system',content:sysPrompt},{role:'user',content:'主题:'+prompt}],temperature:0.8,max_tokens:4096})
+    });
+    const data = await resp.json();
+    const raw = data.choices?.[0]?.message?.content || '';
+    const cleaned = raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+    const start = cleaned.indexOf('{'), end = cleaned.lastIndexOf('}');
+    const json = JSON.parse(cleaned.substring(start, end+1));
+    if(!json.map){ alert('AI返回缺少地图数据'); return; }
+    for(let i=0;i<15;i++) json.map[i] = (json.map[i]||'').substring(0,80).padEnd(80,' ');
+
+    editorMap = json.map;
+    editorCellType = json.cellType||1;
+    editorWinCondition = json.cellType===3 ? 'collectAll' : 'killAll';
+    document.getElementById('cellTypeSelect').value = editorCellType;
+    document.getElementById('winConditionSelect').value = editorWinCondition;
+    document.getElementById('mapWidth').value = 80;
+    document.getElementById('mapHeight').value = 15;
+    document.getElementById('levelName').value = json.name||prompt;
+    renderGrid();
+    showToast('AI关卡"'+json.name+'"已生成!');
+  }catch(e){ alert('AI生成失败: '+e.message); }
+}
 </script>
 </body>
 </html>

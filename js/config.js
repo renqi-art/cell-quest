@@ -258,12 +258,12 @@ const PARALLAX_PRESETS = {
   lymph:   {far:{color:'#0a0a1a',alpha:0.15,pattern:'dots'}, mid:{color:'#1a1a3a',alpha:0.25,pattern:'grid'}, near:{color:'#2a2a5a',alpha:0.2,pattern:'cells'}},
 };
 function getParallaxPreset(levelIndex){
-  if(levelIndex === 0) return PARALLAX_PRESETS.default;
-  if(levelIndex === 1) return PARALLAX_PRESETS.vessel;
-  if(levelIndex === 2) return PARALLAX_PRESETS.alveoli;
-  if(levelIndex === 3) return PARALLAX_PRESETS.vessel;
-  if(levelIndex === 4) return PARALLAX_PRESETS.lymph;
-  if(levelIndex === 5) return PARALLAX_PRESETS.boss;
+  if(levelIndex === 0) return PARALLAX_PRESETS.default; // Level 1
+  if(levelIndex === 1) return PARALLAX_PRESETS.vessel;  // Level 2
+  if(levelIndex === 2) return PARALLAX_PRESETS.alveoli; // Level 3
+  if(levelIndex === 3) return PARALLAX_PRESETS.vessel;  // Level 4
+  if(levelIndex === 4) return PARALLAX_PRESETS.lymph;   // Level 5
+  if(levelIndex === 5) return PARALLAX_PRESETS.boss;    // Level 6
   return PARALLAX_PRESETS.default;
 }
 
@@ -527,12 +527,12 @@ const Game = {
 
 // ===== v3: 科普卡片 =====
 const KNOWLEDGE_CARDS = {
-  0: {title:'血液循环', text:'人体血管总长约10万公里,可绕地球2.5圈。红细胞在其中的平均寿命为120天,每秒约有200万个红细胞被替换。心脏每天跳动约10万次,泵送约7600升血液。'},
-  1: {title:'白细胞与先天免疫', text:'白细胞(中性粒细胞)是最先到达感染部位的免疫细胞,占白细胞总数的50-70%。它们通过趋化作用感知细菌释放的化学信号,在几分钟内就能到达战场。'},
-  2: {title:'肺泡与气体交换', text:'成人肺泡总面积约70-100平方米,相当于半个网球场。气体交换仅需0.3秒,二氧化碳和氧气通过扩散穿过仅0.5微米厚的肺泡膜。'},
-  3: {title:'循环系统与失血', text:'人体失血超过30%(约1.5L)会导致失血性休克。血小板在血管受损时迅速聚集,释放凝血因子形成血栓。正常凝血时间约2-8分钟。'},
-  4: {title:'淋巴结与适应性免疫', text:'淋巴结是免疫细胞的"训练营"。T细胞和B细胞在此学习识别特定病原体。一次感染后产生的记忆细胞可在体内存活数十年,这就是疫苗起效的原理。'},
-  5: {title:'败血症', text:'败血症是感染引起的全身炎症反应综合征,全球每年约4900万人受影响,其中1100万人死亡。早期识别黄金1小时:抗生素+液体复苏可大幅提高存活率。'},
+  1: {title:'血液循环', text:'人体血管总长约10万公里,可绕地球2.5圈。红细胞在其中的平均寿命为120天,每秒约有200万个红细胞被替换。心脏每天跳动约10万次,泵送约7600升血液。'},
+  2: {title:'白细胞与先天免疫', text:'白细胞(中性粒细胞)是最先到达感染部位的免疫细胞,占白细胞总数的50-70%。它们通过趋化作用感知细菌释放的化学信号,在几分钟内就能到达战场。'},
+  3: {title:'肺泡与气体交换', text:'成人肺泡总面积约70-100平方米,相当于半个网球场。气体交换仅需0.3秒,二氧化碳和氧气通过扩散穿过仅0.5微米厚的肺泡膜。'},
+  4: {title:'循环系统与失血', text:'人体失血超过30%(约1.5L)会导致失血性休克。血小板在血管受损时迅速聚集,释放凝血因子形成血栓。正常凝血时间约2-8分钟。'},
+  5: {title:'淋巴结与适应性免疫', text:'淋巴结是免疫细胞的"训练营"。T细胞和B细胞在此学习识别特定病原体。一次感染后产生的记忆细胞可在体内存活数十年,这就是疫苗起效的原理。'},
+  6: {title:'败血症', text:'败血症是感染引起的全身炎症反应综合征,全球每年约4900万人受影响,其中1100万人死亡。早期识别黄金1小时:抗生素+液体复苏可大幅提高存活率。'},
 };
 const ATP_KNOWLEDGE = {title:'ATP——生命的能量货币', text:'三磷酸腺苷(ATP)是所有细胞通用的能量分子。线粒体通过氧化磷酸化将食物中的化学能转化为ATP。每个细胞每天消耗约1000万个ATP分子。当一个ATP的磷酸键断裂时释放约30.5kJ/mol的能量,驱动肌肉收缩、细胞分裂等一切生命活动。'};
 
@@ -811,7 +811,7 @@ function loadGame(slot){
       while(Game.unlocked.length < total) Game.unlocked.push(false);
       while(Game.completed.length < total) Game.completed.push(false);
       while(Game.stars.length < total) Game.stars.push(0);
-      Game.unlocked[0] = true; Game.unlocked[1] = true;
+      Game.unlocked[0] = true; // Level 1 always unlocked
       for(let i = 2; i < Game.unlocked.length; i++){
         if(!Game.completed[i - 1]) Game.unlocked[i] = false;
       }
@@ -869,7 +869,7 @@ function resetSlot(slot){
       while(Game.unlocked.length < total) Game.unlocked.push(false);
       while(Game.completed.length < total) Game.completed.push(false);
       while(Game.stars.length < total) Game.stars.push(0);
-      Game.unlocked[0] = true; Game.unlocked[1] = true;
+      Game.unlocked[0] = true; // Level 1 always unlocked
       saveGame();
       refreshCustomLevels();
     }

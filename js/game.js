@@ -1194,10 +1194,16 @@ function updateHUD(){
   // v2: 动态底栏
   const ctrlEl = $('hud-controls');
   if(ctrlEl && Game.player){
+    const sprint = Game.player.sprinting;
+    const sprintHint = ' <span class="sep">|</span> <span style="color:#ffd740;">🏃双击方向奔跑</span>';
     if(Game.player.cellType === 1){
-      ctrlEl.innerHTML = '<span><kbd>←→</kbd>移动</span> <span class="sep">|</span> <span><kbd>空格</kbd>跳跃</span> <span class="sep">|</span> <span><kbd>↓</kbd>下蹲</span> <span class="sep">|</span> <span><kbd>E</kbd>挥剑</span> <span class="sep">|</span> <span><kbd>Shift</kbd>突进</span>';
+      ctrlEl.innerHTML = '<span><kbd>←→</kbd>移动</span> <span class="sep">|</span> <span><kbd>空格</kbd>跳跃</span> <span class="sep">|</span> <span><kbd>↓</kbd>下蹲</span> <span class="sep">|</span> <span><kbd>E</kbd>挥剑</span> <span class="sep">|</span> <span><kbd>Shift</kbd>突进</span>' + sprintHint;
     } else {
-      ctrlEl.innerHTML = '<span><kbd>←→</kbd>移动</span> <span class="sep">|</span> <span><kbd>空格</kbd>跳跃</span> <span class="sep">|</span> <span><kbd>↓</kbd>下蹲</span>';
+      ctrlEl.innerHTML = '<span><kbd>←→</kbd>移动</span> <span class="sep">|</span> <span><kbd>空格</kbd>跳跃</span> <span class="sep">|</span> <span><kbd>↓</kbd>下蹲</span>' + sprintHint;
+    }
+    // 奔跑中高亮
+    if(sprint){
+      ctrlEl.innerHTML = ctrlEl.innerHTML.replace('双击方向奔跑', '奔跑中 <span style="color:#ff5252;">⚡1.5x -1ATP/0.5s</span>');
     }
   }
 }
@@ -1555,6 +1561,101 @@ function renderHub(){
   showHub();
 }
 
+// ===== v3: 细胞选择(Level 3+自由选) =====
+function selectCellAndLoad(n){
+  const idx = n - 1;
+  const cfg = buildLevelConfigs()[idx];
+  // 前两关(Level 1-2)锁定细胞类型，直接进入
+  if(!cfg._isCustom && idx < 2){
+    LoadLevel(n);
+    return;
+  }
+
+  // 双人模式：两个玩家分别选
+  if(Game.twoPlayer){
+    showDualCellSelect(n);
+    return;
+  }
+
+  const cells = [
+    {type:1, name:'白细胞', icon:'⚔️', desc:'战斗型·击杀得分', color:'#f0ede0'},
+    {type:3, name:'红细胞', icon:'🔴', desc:'收集型·探索得分', color:'#d93025'},
+  ];
+
+  let html = '<h3>选择细胞类型 (Level ' + n + ')</h3>';
+  html += '<div style="display:flex;gap:10px;margin:12px 0;">';
+  for(const c of cells){
+    html += `<div onclick="LoadLevel(${n},${c.type});document.getElementById('cell-select-panel').remove()"
+      style="flex:1;background:rgba(255,255,255,.05);border:2px solid ${c.color};border-radius:10px;padding:16px;cursor:pointer;text-align:center;transition:all .15s;"
+      onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">
+      <div style="font-size:32px;">${c.icon}</div>
+      <b style="color:${c.color};">${c.name}</b>
+      <div style="font-size:11px;color:#888;margin-top:4px;">${c.desc}</div>
+    </div>`;
+  }
+  html += '</div><button class="btn-small" onclick="document.getElementById(\'cell-select-panel\').remove()">取消</button>';
+
+  const existing = document.getElementById('cell-select-panel');
+  if(existing) existing.remove();
+  const panel = document.createElement('div');
+  panel.id = 'cell-select-panel';
+  panel.className = 'overlay';
+  panel.style.cssText = 'display:flex;align-items:center;justify-content:center;z-index:1000;';
+  panel.innerHTML = `<div class="confirm-inner" style="max-width:420px;">${html}</div>`;
+  panel.addEventListener('click', e => { if(e.target === panel) panel.remove(); });
+  document.getElementById('game-container').appendChild(panel);
+}
+
+function showDualCellSelect(n){
+  Game._dualSelectN = n;
+  Game._dualSelectP1 = 1;
+  Game._dualSelectP2 = 1;
+  showDualCellStep(1);
+}
+
+function showDualCellStep(step){
+  const label = step === 1 ? 'P1' : 'P2';
+  const cells = [
+    {type:1, name:'白细胞', icon:'⚔️', desc:'战斗型·击杀得分', color:'#f0ede0'},
+    {type:3, name:'红细胞', icon:'🔴', desc:'收集型·探索得分', color:'#d93025'},
+  ];
+
+  let html = '<h3>选择细胞 — ' + label + '</h3>';
+  html += '<div style="display:flex;gap:10px;margin:12px 0;">';
+  for(const c of cells){
+    html += `<div onclick="dualCellPicked(${step},${c.type})"
+      style="flex:1;background:rgba(255,255,255,.05);border:2px solid ${c.color};border-radius:10px;padding:16px;cursor:pointer;text-align:center;"
+      onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">
+      <div style="font-size:32px;">${c.icon}</div>
+      <b style="color:${c.color};">${c.name}</b>
+    </div>`;
+  }
+  html += '</div><button class="btn-small" onclick="document.getElementById(\'cell-select-panel\').remove()">取消</button>';
+
+  const existing = document.getElementById('cell-select-panel');
+  if(existing) existing.remove();
+  const panel = document.createElement('div');
+  panel.id = 'cell-select-panel';
+  panel.className = 'overlay';
+  panel.style.cssText = 'display:flex;align-items:center;justify-content:center;z-index:1000;';
+  panel.innerHTML = `<div class="confirm-inner" style="max-width:420px;">${html}</div>`;
+  panel.addEventListener('click', e => { if(e.target === panel) panel.remove(); });
+  document.getElementById('game-container').appendChild(panel);
+}
+
+function dualCellPicked(step, cellType){
+  if(step === 1){
+    Game._dualSelectP1 = cellType;
+    document.getElementById('cell-select-panel').remove();
+    setTimeout(() => showDualCellStep(2), 100);
+  } else {
+    Game._dualSelectP2 = cellType;
+    Game._p2CellType = cellType;
+    document.getElementById('cell-select-panel').remove();
+    LoadLevel(Game._dualSelectN, Game._dualSelectP1);
+  }
+}
+
 // ===== v3: AI 关卡生成面板 =====
 function showAIGeneratePanel(){
   const key = getDeepSeekKey();
@@ -1603,6 +1704,11 @@ function showAIGeneratePanel(){
   panel.innerHTML = `<div class="confirm-inner" style="max-width:520px;">${html}</div>`;
   panel.addEventListener('click', e => { if(e.target === panel) panel.remove(); });
   document.getElementById('game-container').appendChild(panel);
+  // v3: 自动聚焦输入框，防止失焦bug
+  setTimeout(()=>{
+    const inp = document.getElementById('ai-prompt-input');
+    if(inp) inp.focus();
+  }, 150);
 }
 
 function changeDeepSeekKey(){
@@ -1690,7 +1796,7 @@ function renderLevelGrid(){
 
     if(isLocked){
       innerHTML += `
-        <div class="lv-header">${isCustom ? '<span class="custom-badge">自定义</span>???' : '第'+i+'关'}</div>
+        <div class="lv-header">${isCustom ? '<span class="custom-badge">自定义</span>???' : '第'+(i+1)+'关'}</div>
         <div class="lock-overlay">🔒</div>
         <div class="lv-icon-wrap"><div class="lv-icon">${cfg.icon}</div></div>
         <div class="lv-name">???</div>
@@ -1698,7 +1804,7 @@ function renderLevelGrid(){
     } else {
       const customNum = i - 6 + 1;
       innerHTML += `
-        <div class="lv-header">${isCustom ? '<span class="custom-badge">自订#'+customNum+'</span>'+cfg.name : '第'+i+'关: '+cfg.name} <small>${cellLabel}</small></div>
+        <div class="lv-header">${isCustom ? '<span class="custom-badge">自订#'+customNum+'</span>'+cfg.name : '第'+(i+1)+'关: '+cfg.name} <small>${cellLabel}</small></div>
         <div class="lv-icon-wrap"><div class="lv-icon">${cfg.icon}</div></div>
         <div class="lv-name">${cfg.name}</div>
         ${Game.completed[i] ? `<div class="stars">${'★'.repeat(Game.stars[i])}${'☆'.repeat(3-Game.stars[i])}</div>` : ''}
@@ -1711,7 +1817,7 @@ function renderLevelGrid(){
     card.title = isLocked ? '未解锁' : cfg.desc;
 
     if(!isLocked){
-      card.onclick = ()=>LoadLevel(i);
+      card.onclick = ()=>selectCellAndLoad(i + 1);
     }
 
     grid.appendChild(card);
@@ -1866,7 +1972,7 @@ function levelComplete(){
   $('stat-completion').textContent = Math.round(Game._lastCompletionPct * 100) + '%'
     + (Game._lastIsPerfect ? ' 👑 完美' : '');
   // v3: 科普卡片
-  const kc = KNOWLEDGE_CARDS[idx];
+  const kc = KNOWLEDGE_CARDS[idx + 1]; // 1-based ID mapping
   const knowEl = document.getElementById('stat-knowledge');
   if(knowEl && kc){
     knowEl.innerHTML = '<b style="color:#ffd700;">📖 ' + kc.title + '</b><br><small style="color:#aaa;">' + kc.text + '</small>';
@@ -1918,8 +2024,8 @@ function backToHub(){
 }
 
 // ===== 关卡加载（通用入口函数） =====
-function LoadLevel(n){
-  const idx = n; // v2: 0-based index
+function LoadLevel(n, cellTypeOverride){
+  const idx = n - 1; // v3: 1-based → 0-based array index
   if(idx < 0 || idx >= buildLevelConfigs().length) return false;
   if(!Game.unlocked[idx]){
     showToast('关卡未解锁！');
@@ -1935,22 +2041,29 @@ function LoadLevel(n){
   Game.qBlocks = [];
   Game.dcNPCs = [];     // v3: 重置DC NPC
   Game.level = new Level(mapData);
-  // v3: 双人模式 — 创建两个玩家
   const cfg = buildLevelConfigs()[idx];
+  const isCustom = cfg._isCustom;
+
+  // v3: 从Level 3开始(含自定义关卡)可自由选择细胞类型
+  const defaultCell = cellTypeOverride || cfg.cellType || 1;
   Game.players = [];
   const p1 = new Player(Game.level.playerSpawn.x, Game.level.playerSpawn.y, 0);
-  p1.cellType = cfg.cellType || 1;
+  p1.cellType = defaultCell;
   Game.players.push(p1);
 
   if(Game.twoPlayer){
     const p2 = new Player(Game.level.playerSpawn.x + 40, Game.level.playerSpawn.y, 1);
-    p2.cellType = cfg.cellType || 1;
+    p2.cellType = Game._p2CellType || defaultCell;
     Game.players.push(p2);
+    Game._p2CellType = null; // 用完清掉
   }
 
-  // v2: 关卡锁定细胞类型（兼容旧代码）
   Game.player = Game.players[0];
-  Game.player.cellType = cfg.cellType || 1;
+  Game.player.cellType = defaultCell;
+  // 根据选择的细胞类型决定通关条件
+  if(cellTypeOverride){
+    cfg.winCondition = defaultCell === 3 ? WIN_COLLECT_ALL : WIN_KILL_ALL;
+  }
   Game.winCondition = cfg.winCondition || WIN_KILL_ALL;
   Game.itemsCollected = 0;
   Game.totalItems = Game.level.items.length;
@@ -2229,6 +2342,11 @@ function init(){
   setupInput();
 
   $('btn-start').onclick = ()=>{ Sfx.init(); showHub(); $('game-container').focus(); };
+  // 主菜单快捷按钮: 直接进关卡选择页并弹出对应面板
+  try{ $('btn-menu-slots').onclick = ()=>{ Sfx.init(); showHub(); setTimeout(()=>showSlotPanel(),200); }; }catch(e){}
+  try{ $('btn-menu-lb').onclick = ()=>{ Sfx.init(); showHub(); setTimeout(()=>showLeaderboard(),200); }; }catch(e){}
+  // Hub 左上角返回
+  try{ $('btn-menu-back-top').onclick = ()=>{ showMenu(); }; }catch(e){}
   $('btn-menu-back').onclick = ()=>{ showMenu(); };
   $('btn-hub-pedia').onclick = ()=>{ showPedia(); };
   $('btn-pedia-close').onclick = ()=>{ closePedia(); };

@@ -10,7 +10,7 @@ const LEVEL_0 = {
       "                                        ?                                                                                              ",
       "                                                                                    ?                                                  ",
       "                                                                          oo                                                           ",
-      "                             ?                                           o  o                  ??                             o        ",
+      "                             ?              H   *                        o  o                  ??                             o        ",
       "          o                           =====                             o    o                                               op        ",
       "         o o           ooooo                 o                         o   p  o        oooo                                 opp        ",
       "        o   o     ooo  =====    oooo        ==    oo               o  ==== p   o    p  ====                                oppp        ",

@@ -783,6 +783,10 @@ body{
 .diff-tag.extreme{background:rgba(244,67,54,.25);color:#ff5252;border:1px solid rgba(244,67,54,.4);animation:diffPulse .8s infinite alternate;}
 @keyframes diffPulse{from{opacity:.7;}to{opacity:1;}}
 
+/* v3: Hub左上角返回按钮 */
+.btn-back-hub{position:absolute;top:8px;left:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:#aaa;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;transition:all .15s;z-index:10;}
+.btn-back-hub:hover{background:rgba(255,255,255,.12);color:#fff;}
+
 /* v3: 双人模式 P2 HUD */
 #hud-p2{margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,.12);}
 #p2-indicator{font-size:10px;color:#aac;}

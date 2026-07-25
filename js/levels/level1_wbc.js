@@ -3,7 +3,7 @@ const LEVEL_1 = {
   name: '白细胞觉醒',
   width: 135,
   cellType: 1,
-  winCondition: WIN_COLLECT_ALL,
+  winCondition: WIN_KILL_ALL,
   sky: [C.sky2, '#e8a0a0'],
   map: [
       "                                                                                                                                       ",
@@ -15,7 +15,7 @@ const LEVEL_1 = {
       "        oo  o     ooo  ===                 oo  ===                                          t                                          ",
       "        ==  ^ o   ===            a     p   ==                          o^o    oo        o====                                          ",
       "      =     ===                 o o    p            ===    ooo ==      ===    ==   p   o==                                             ",
-      "                               o   o  =p                                           p   =                p  aaaaaaaaaaaaaaa             ",
+      "                               o   o  =p                   H    *                  p   =                p  aaaaaaaaaaaaaaa             ",
       "P     N                       o  G  o= p       t    ooooo   g     t                p                    p  aaaaaaaaaaaaaaa      b      ",
       "#######################################p###########################################p####################p##############################",
       "#######################################p###########################################p####################p##############################",

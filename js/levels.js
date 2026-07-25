@@ -23,7 +23,7 @@ const _BUILTIN_DEFS = [
 
 // 自定义关卡配置（从 localStorage 数据生成）
 const _CUSTOM_DEFS = _CUSTOM_LEVELS.map((lvl, i) => ({
-  id: 6 + i,
+  id: 7 + i,
   name: lvl.name || '自定义关卡',
   icon: lvl.icon || '🗺️',
   bgMusic: 'tutorial',
@@ -39,24 +39,23 @@ const LEVEL_DEFS = [..._BUILTIN_DEFS, ..._CUSTOM_DEFS];
 // ===== LEVEL_CONFIGS 动态生成（给渲染用）=====
 function buildLevelConfigs(){
   const configs = [
-    { id:0, name:'血液循环', icon:'🫁', cellType:3, winCondition:WIN_COLLECT_ALL,
+    { id:1, name:'血液循环', icon:'🫁', cellType:3, winCondition:WIN_COLLECT_ALL,
       desc:'红细胞教学·体循环+肺循环完整旅程', bg:[C.sky2,'#e8a0a0'] },
-    { id:1, name:'白细胞觉醒', icon:'⚔️', cellType:1, winCondition:WIN_KILL_ALL,
+    { id:2, name:'白细胞觉醒', icon:'⚔️', cellType:1, winCondition:WIN_KILL_ALL,
       desc:'战斗入门·消灭全部细菌通关', bg:[C.sky1,C.sky3] },
-    { id:2, name:'肺泡迷宫', icon:'🫁', cellType:1, winCondition:WIN_KILL_ALL,
+    { id:3, name:'肺泡迷宫', icon:'🫁', cellType:1, winCondition:WIN_KILL_ALL,
       desc:'呼吸系统·链球菌·浮动平台', bg:['#1a2a3a','#3a6a8a'] },
-    { id:3, name:'血管奔流', icon:'🩸', cellType:3, winCondition:WIN_COLLECT_ALL,
+    { id:4, name:'血管奔流', icon:'🩸', cellType:3, winCondition:WIN_COLLECT_ALL,
       desc:'循环系统·失血潮涌·收集挑战', bg:['#2a0a1a','#5a1a3a'] },
-    { id:4, name:'淋巴结',   icon:'⚪', cellType:1, winCondition:WIN_KILL_ALL,
+    { id:5, name:'淋巴结',   icon:'⚪', cellType:1, winCondition:WIN_KILL_ALL,
       desc:'免疫中枢·精英敌人', bg:['#1a1a2a','#3a3a5a'], locked:true },
-    { id:5, name:'Boss感染', icon:'☠️', cellType:1, winCondition:WIN_KILL_ALL,
+    { id:6, name:'Boss感染', icon:'☠️', cellType:1, winCondition:WIN_KILL_ALL,
       desc:'终极决战·Boss', bg:['#2a0a0a','#6a0a0a'], locked:true },
   ];
-  // 追加自定义关卡
   for(let i=0; i<_CUSTOM_LEVELS.length; i++){
     const lvl = _CUSTOM_LEVELS[i];
     configs.push({
-      id: 6 + i,
+      id: 7 + i,
       name: lvl.name || '自定义关卡',
       icon: lvl.icon || '🗺️',
       cellType: lvl.cellType || 3,
@@ -86,7 +85,7 @@ function refreshCustomLevels(){
   // 同步更新 LEVEL_DEFS
   LEVEL_DEFS.length = _BUILTIN_DEFS.length;
   const newDefs = _CUSTOM_LEVELS.map((lvl, i) => ({
-    id: 6 + i,
+    id: 7 + i,
     name: lvl.name || '自定义关卡',
     icon: lvl.icon || '🗺️',
     bgMusic: 'tutorial',
