@@ -249,6 +249,7 @@ body{
   background:url('../images/level-select-new.jpg') center center / cover no-repeat;
   align-items:center;gap:0;
 }
+#hub-screen.hidden{display:none;}
 #hub-screen::before{
   display:none; /* 不需要蒙版，直接用图片 */
 }
@@ -275,8 +276,8 @@ body{
 /* 关卡卡片容器 */
 #level-grid{
   display:flex;gap:0;flex-wrap:nowrap;justify-content:center;align-items:flex-start;
-  max-width:90vw;position:relative;z-index:2;padding:1vh 2vw;
-  flex:1;overflow-y:auto;min-height:0;
+  width:100%;max-width:90vw;position:relative;z-index:2;padding:1vh 2vw;
+  flex:1 1 auto;overflow-y:auto;min-height:0;
 }
 
 /* 卡片之间的连线 */
