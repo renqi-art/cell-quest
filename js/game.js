@@ -1512,7 +1512,8 @@ function showSlotPanel(){
           : '<div style="font-size:11px;color:#666;">空存档</div>'}
       </div>
       <div style="display:flex;gap:4px;">
-        ${!isActive ? `<button class="btn-small" style="font-size:10px;padding:4px 8px;" onclick="switchToSlot(${i})">切换</button>` : '<span style="font-size:10px;color:#81c784;">当前</span>'}
+        ${isActive ? '<span style="font-size:10px;color:#81c784;">当前</span>' : ''}
+        <button class="btn-small" style="font-size:10px;padding:4px 8px;" onclick="switchToSlot(${i})">选择</button>
         <button class="btn-small" style="font-size:10px;padding:4px 8px;border-color:#ff5252;color:#ff5252;" onclick="resetSlotConfirm(${i})">🗑</button>
       </div>
     </div>`;
@@ -2378,7 +2379,17 @@ function init(){
   loadAdaptiveDifficulty();  // v3: AI自适应难度
   setupInput();
 
-  $('btn-start').onclick = ()=>{ Sfx.init(); showHub(); $('game-container').focus(); };
+  $('btn-start').onclick = ()=>{
+    Sfx.init();
+    // 自动找第一个空存档作为新游戏
+    let emptySlot = -1;
+    for(let i=0;i<MAX_SLOTS;i++){ if(!getSlotInfo(i).exists){ emptySlot=i; break; } }
+    if(emptySlot >= 0){
+      switchSlot(emptySlot);
+      showToast('已创建新存档: 存档 '+(emptySlot+1));
+    }
+    showHub(); $('game-container').focus();
+  };
   // 主菜单快捷按钮: 在当前页面弹出面板,不跳转
   try{ $('btn-menu-slots').onclick = ()=>{ Sfx.init(); showSlotPanel(); }; }catch(e){}
   try{ $('btn-menu-lb').onclick = ()=>{ Sfx.init(); showLeaderboard(); }; }catch(e){}

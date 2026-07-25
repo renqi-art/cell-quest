@@ -812,13 +812,26 @@ function loadGame(slot){
       while(Game.completed.length < total) Game.completed.push(false);
       while(Game.stars.length < total) Game.stars.push(0);
       Game.unlocked[0] = true; // Level 1 always unlocked
-      for(let i = 2; i < Game.unlocked.length; i++){
+      for(let i = 1; i < Game.unlocked.length; i++){
         if(!Game.completed[i - 1]) Game.unlocked[i] = false;
       }
       return true; // 读取成功
     }
   }catch(e){}
-  return false; // 空存档
+  // 空存档: 重置为新游戏状态
+  Game.unlocked = [true]; Game.completed = []; Game.stars = [];
+  Game.globalEnergy = 100; Game.playerLevel = 1; Game.xp = 0; Game.skillPoints = 0;
+  Game.skills = {wbc:{damagePlus:0,dashCooldown:0,swordRange:0,slamRadius:0},plt:{bridgeCost:0,bridgeDuration:0,shieldDuration:0,healOnBridge:0},rbc:{energyDrain:0,oxyFieldPower:0,maxEnergy:0,nutritionBonus:0}};
+  Game.equipment = {weapon:null,armor:null,accessory:null}; Game.inventory = [];
+  Game.memoryCells = 0; Game.memoryCellsCollected = {}; Game.playerName = '';
+  Game._lifetimeKills = 0; Game._sprintDistance = 0;
+  Game.adaptiveDifficulty = {level:'normal',recentDeaths:0,recentClears:[],clearStreak:0,adjustEnemies:0,adjustItems:0,adjustTide:0,adjustDamage:0};
+  const total = buildLevelConfigs().length;
+  while(Game.unlocked.length < total) Game.unlocked.push(false);
+  while(Game.completed.length < total) Game.completed.push(false);
+  while(Game.stars.length < total) Game.stars.push(0);
+  Game.unlocked[0] = true;
+  return false;
 }
 
 function getSlotInfo(slot){
