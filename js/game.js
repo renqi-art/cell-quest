@@ -1994,10 +1994,10 @@ function levelComplete(){
   // 综合完成度
   const completionPct = (killPct + collectPct) / 2;
 
-  // 2星：完成度 ≥ 60%
-  if(completionPct >= 0.6) stars++;
-  // 3星：完成度 ≥ 90% + 0死亡 + 记忆细胞
-  if(completionPct >= 0.9 && Game.stats.deaths === 0 && Game.stats.foundMemory) stars++;
+  // 2星：双指标均 ≥ 60%
+  if(killPct >= 0.6 && collectPct >= 0.6) stars++;
+  // 3星：双指标均 100% + 0死亡
+  if(killPct >= 1.0 && collectPct >= 1.0 && Game.stats.deaths === 0) stars++;
   // 完美通关（100%完成+0死亡）：展示特殊标记
   const isPerfect = completionPct >= 1.0 && Game.stats.deaths === 0;
 
