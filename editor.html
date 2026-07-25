@@ -59,7 +59,13 @@ body{font-family:'Segoe UI','Microsoft YaHei',monospace;background:#0a0a18;color
 
 <div class="main-area">
   <div class="toolbar">
-    <button onclick="newMap()">新建</button>
+    <button onclick="newMap()">新建空白</button>
+    <select id="templateSelect" onchange="newFromTemplate(this.value);this.value=''">
+      <option value="">📋 从模板创建...</option>
+      <option value="blank">空白地图</option>
+      <option value="basicPlatform">基础平台</option>
+      <option value="combatArena">战斗竞技场</option>
+    </select>
     <button onclick="editorAIGenerate()" style="background:#6a2a8a;border-color:#9a4aba">🤖 AI生成</button>
     <select id="levelSelect" onchange="loadPreset(this.value)">
       <option value="">加载现有关卡...</option>
@@ -119,6 +125,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',monospace;background:#0a0a18;color
   </div>
 </div>
 
+<script src="js/ai-levels.js?v=1"></script>
 <script>
 // ── 瓦片定义 ──
 const TILES = [
@@ -252,6 +259,37 @@ function buildExtraStr(){
 }
 
 // ── Grid ──
+function newFromTemplate(templateId){
+  if(!EDITOR_TEMPLATES || !EDITOR_TEMPLATES[templateId]) return;
+  const t = EDITOR_TEMPLATES[templateId];
+  mapWidth = t.width; mapHeight = t.height;
+  grid = t.map.map(r => r.split(''));
+  // 确保行列正确
+  if(grid.length < mapHeight){
+    while(grid.length < mapHeight) grid.push(Array(mapWidth).fill(' '));
+  }
+  for(let r=0;r<grid.length;r++){
+    while(grid[r].length < mapWidth) grid[r].push(' ');
+    grid[r] = grid[r].slice(0, mapWidth);
+  }
+  snapshot = grid.map(r=>[...r]);
+  document.getElementById('mapWidth').value = mapWidth;
+  document.getElementById('mapHeight').value = mapHeight;
+  document.getElementById('levelSelect').value = '';
+  document.getElementById('levelName').value = t.name || '自定义关卡';
+  document.getElementById('cellTypeSelect').value = '3';
+  document.getElementById('winConditionSelect').value = 'collectAll';
+  editorPipeSpawners = [];
+  editorKnowledgeCards = [];
+  editorTutorials = [];
+  editingPsIdx = -1;
+  editingKcIdx = -1;
+  currentCustomIdx = -1;
+  document.getElementById('customActions').style.display = 'none';
+  draw();
+  showToast('已加载模板: ' + (t.name||templateId));
+}
+
 function newMap(w,h){
   w = w || parseInt(document.getElementById('mapWidth').value) || 135;
   h = h || 15;
