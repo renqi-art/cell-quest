@@ -35,6 +35,21 @@
 - docs/superpowers/specs/2026-07-26-vue-phaser-typescript-migration-design.md
 - docs/superpowers/plans/2026-07-26-vue-typescript-foundation.md
 
+架构基础阶段门通过后，必须继续完整阅读并实施：
+
+- docs/superpowers/plans/2026-07-26-score-improvement-roadmap.md
+- docs/superpowers/specs/2026-07-25-case-director-core-gameplay-design.md
+- docs/superpowers/specs/2026-07-26-case-designer-manual-editor-design.md
+- docs/superpowers/plans/2026-07-26-vue-case-designer.md
+- docs/superpowers/plans/2026-07-26-core-case-gameplay.md
+- docs/superpowers/plans/2026-07-26-ai-case-director.md
+- docs/superpowers/plans/2026-07-26-story-education-player-experience.md
+- docs/superpowers/plans/2026-07-26-product-ugc-operations.md
+- docs/superpowers/plans/2026-07-26-quality-balance-release.md
+- docs/superpowers/plans/2026-07-26-evidence-demo-scoring.md
+
+旧计划中的文件路径与 Architecture amendment、Superseded 标记或 Vue 病例设计器计划冲突时，以最新架构修订为准；不得照搬已被替代的遗留 `editor.html`、`js/game.js` 或 `js/ai-levels.js` 实现步骤。
+
 并检查：
 
 - AGENTS.md、仓库级指令和可用 skills
@@ -226,6 +241,23 @@ Vite 必须继续支持 server.js 提供的编辑器接口。开发与预览环�
 - 不再建议把逐帧状态复制到 Pinia。
 - 功能之间的共享领域模型已识别。
 - 每个可实施功能都有独立实施计划或明确等待条件。
+
+阶段 2 后续功能优化执行顺序：
+
+```text
+Vue/TypeScript架构基础验收
+→ 病例设计器Tasks 1–7
+→ 基于真实GameEngine接口重写并实施TypeScript病例运行时
+→ AI导演服务端、运行时危机与病例编译器
+→ 病例设计器Tasks 8–12
+→ 六个官方病例迁移
+→ 故事与科普
+→ 产品闭环
+→ 质量、平衡、可访问性与发布
+→ CodeBuddy证据和比赛演示
+```
+
+病例设计器Tasks 1–7与AI服务端无冲突部分可以并行；真实试玩必须等待TypeScript病例运行时，AI病例编辑必须等待 `CaseBlueprint`、`CaseCompiler` 和共享 `CaseDraft` 稳定。不得用模拟成功结果绕过这些阶段依赖。
 
 阶段 3：共享领域和 Vue UI
 
