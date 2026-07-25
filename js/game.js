@@ -1797,8 +1797,21 @@ function renderLevelGrid(){
   const isCustomTab = hubTab === 'custom';
   grid.className = isCustomTab ? 'custom-grid' : '';
   const configs = buildLevelConfigs();
-  const customCount = configs.filter(c=>c._isCustom).length;
+  const builtinCount = configs.filter(c=>!c._isCustom).length;
+  const customCount = configs.length - builtinCount;
   const ccEl = $('custom-count'); if(ccEl) ccEl.textContent = customCount > 0 ? '('+customCount+')' : '';
+
+  // 自定义标签空状态
+  if(isCustomTab && customCount === 0){
+    grid.innerHTML = `<div style="text-align:center;padding:40px 20px;color:#888;width:100%;">
+      <div style="font-size:40px;margin-bottom:12px;">🎨</div>
+      <div style="font-size:15px;margin-bottom:4px;">暂无自定义关卡</div>
+      <div style="font-size:12px;color:#666;">使用<b>地图编辑器</b>或<b>AI生成</b>创建关卡</div>
+      <button class="btn-small" style="margin-top:12px;" onclick="window.open('editor.html','_blank')">🗺️ 打开地图编辑器</button>
+    </div>`;
+    return;
+  }
+
   let idx = 0;
 
   for(let i=0; i < configs.length; i++){
@@ -1831,6 +1844,7 @@ function renderLevelGrid(){
       `;
       card.className = 'level-card custom-small';
       card.style.cssText = 'width:130px;height:auto;padding:0;';
+      idx++;
     } else if(isLocked){
       innerHTML += `
         <div class="lv-header">第${levelNum}关</div>
