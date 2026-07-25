@@ -594,6 +594,40 @@ function collectMemoryCell(levelIndex){
   return true;
 }
 
+// ===== v3: 关卡分享系统 =====
+function exportLevelCode(idx){
+  const configs = buildLevelConfigs();
+  if(idx < 0 || idx >= configs.length) return null;
+  const cfg = configs[idx];
+  if(!cfg._isCustom) return null;
+  const mapData = LEVEL_MAPS[idx];
+  if(!mapData || !mapData.map) return null;
+  const pack = { n:cfg.name||'', c:cfg.cellType||3, w:cfg.winCondition||WIN_COLLECT_ALL, m:mapData.map, s:mapData.sky||['#2a1020','#5a1a3a'] };
+  const json = JSON.stringify(pack);
+  // 简单压缩: 用 Base64 编码后去掉 =
+  return 'CQ!' + btoa(unescape(encodeURIComponent(json))).replace(/=+$/,'');
+}
+
+function importLevelCode(code){
+  if(!code || !code.startsWith('CQ!')) return { error: '无效的关卡代码' };
+  try{
+    const json = decodeURIComponent(escape(atob(code.substring(3))));
+    const pack = JSON.parse(json);
+    if(!pack.n || !pack.m || !Array.isArray(pack.m)) return { error: '关卡代码格式错误' };
+    const levelData = {
+      name: pack.n.substring(0,20),
+      cellType: pack.c||3,
+      winCondition: pack.w||WIN_COLLECT_ALL,
+      sky: pack.s||['#2a1020','#5a1a3a'],
+      map: pack.m.map(r=>String(r).substring(0,200).padEnd(80,' ')),
+      width: 80,
+      floatPlatforms:[], miniSpawnArea:null, pipeSpawners:[],
+      knowledgeCards:[], tutorials:[],
+    };
+    return levelData;
+  }catch(e){ return { error: '解析失败: '+e.message }; }
+}
+
 // ===== v3: AI 自适应难度系统 =====
 const ADAPTIVE_DIFFICULTY = {
   easy:   { name:'🌱 萌新',   enemyMult:0.7, itemMult:1.3, tideMult:0.7, damageAdj:-1, energyBonus:0 },

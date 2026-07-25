@@ -1562,6 +1562,34 @@ function renderHub(){
   showHub();
 }
 
+// ===== v3: 关卡分享 =====
+function exportLevelToClipboard(idx){
+  const code = exportLevelCode(idx);
+  if(!code){ showToast('导出失败'); return; }
+  navigator.clipboard.writeText(code).then(()=>{
+    showToast('关卡代码已复制到剪贴板! 发给朋友即可导入');
+  }).catch(()=>{
+    // 降级方案
+    const ta = document.createElement('textarea');
+    ta.value = code; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('代码已复制! (长度:'+code.length+')');
+  });
+}
+
+function importLevelFromCode(){
+  const code = prompt('粘贴关卡代码 (CQ! 开头):');
+  if(!code || !code.trim()) return;
+  const result = importLevelCode(code.trim());
+  if(result.error){ showToast('导入失败: '+result.error); return; }
+  const idx = addCustomLevel(result, '📥');
+  refreshCustomLevels();
+  showToast('关卡 "'+(result.name||'导入关卡')+'" 已导入!');
+  switchHubTab('custom');
+  renderLevelGrid();
+}
+
 // ===== v3: 细胞选择(Level 3+自由选) =====
 function selectCellAndLoad(n){
   const idx = n - 1;
@@ -1808,6 +1836,8 @@ function renderLevelGrid(){
       <div style="font-size:15px;margin-bottom:4px;">暂无自定义关卡</div>
       <div style="font-size:12px;color:#666;">使用<b>地图编辑器</b>或<b>AI生成</b>创建关卡</div>
       <button class="btn-small" style="margin-top:12px;" onclick="window.open('editor.html','_blank')">🗺️ 打开地图编辑器</button>
+      <br><small style="color:#888;">或</small>
+      <button class="btn-small" style="margin-top:8px;" onclick="importLevelFromCode()">📥 导入关卡代码</button>
     </div>`;
     return;
   }
@@ -1840,6 +1870,7 @@ function renderLevelGrid(){
           <div style="font-size:9px;color:#888;">${cellLabel}</div>
           <button style="position:absolute;top:2px;right:2px;background:rgba(220,50,50,.6);border:none;color:#fff;font-size:10px;width:18px;height:18px;border-radius:50%;cursor:pointer;line-height:1;" onclick="event.stopPropagation();deleteCustomLevelCard(${i})">✕</button>
           <button style="position:absolute;top:2px;right:22px;background:rgba(255,215,0,.4);border:none;color:#fff;font-size:10px;width:18px;height:18px;border-radius:50%;cursor:pointer;line-height:1;" onclick="event.stopPropagation();pickCustomIcon(${i})">🎨</button>
+          <button style="position:absolute;bottom:2px;right:2px;background:rgba(100,180,255,.5);border:none;color:#fff;font-size:10px;width:18px;height:18px;border-radius:50%;cursor:pointer;line-height:1;" title="导出关卡代码" onclick="event.stopPropagation();exportLevelToClipboard(${i})">📋</button>
         </div>
       `;
       card.className = 'level-card custom-small';
