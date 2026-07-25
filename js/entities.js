@@ -83,8 +83,7 @@ class Player {
       this.atk = newType === 1 ? WBC_BASE_ATK + getMemoryBonus(Game.memoryCells).swordDmg : 0;
       Sfx.switchCell();
       spawnParticles(this.x+this.w/2, this.y+this.h/2, CELLS[newType].color, 15, 3);
-      showToast('切换为 ' + CELLS[newType].name + ' | ' + (newType===1?'击杀评分':'收集评分'));
-      if(Game.winCondition) Game.winCondition = newType === 3 ? WIN_COLLECT_ALL : WIN_KILL_ALL;
+      showToast('切换为 ' + CELLS[newType].name);
     }
     if(this._switchCD > 0) this._switchCD--;
     const cell = this.cell;

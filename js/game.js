@@ -508,7 +508,7 @@ class Level {
       // v3: 评分提示
       ctx.fillStyle = '#ffd700';
       ctx.font = '9px sans-serif';
-      const hint = Game.winCondition === WIN_KILL_ALL ? '抵达通关·击杀评分' : '抵达通关·收集评分';
+      const hint = '抵达通关·击杀+收集双评分';
       ctx.fillText(hint, x+TILE/2, y-6);
     }
     ctx.restore();
@@ -1177,20 +1177,21 @@ function updateHUD(){
     if(bar) bar.style.display = 'none';
   }
 
-  // v3: 通关目标 → 评分进度显示
+  // v3: 双评分 — 击杀+收集同时显示
   const objEl = $('objective-display');
   if(objEl){
-    if(Game.winCondition === WIN_KILL_ALL){
-      const totalEnemies = Game.level.enemies.length + (Game.boss&&Game.boss.alive?1:0);
-      const killed = Game.stats.kills;
-      const pct = totalEnemies > 0 ? killed / totalEnemies : 1;
-      objEl.innerHTML = `⚔️ <b style="color:${pct>=0.9?'#66ff66':pct>=0.5?'#ffd700':'#ff6b6b'}">${killed}/${totalEnemies}</b> <small style="color:#888">${Math.round(pct*100)}%</small>`;
-    } else if(Game.winCondition === WIN_COLLECT_ALL){
-      const collected = Game.itemsCollected;
-      const total = Game.totalItems;
-      const pct = total > 0 ? collected / total : 1;
-      objEl.innerHTML = `📦 <b style="color:${pct>=0.9?'#66ff66':pct>=0.5?'#ffd700':'#ff6b6b'}">${collected}/${total}</b> <small style="color:#888">${Math.round(pct*100)}%</small>`;
-    }
+    let html = '';
+    // 击杀进度
+    const totalEnemies = Game.level ? (Game.level.enemies.length + (Game.boss&&Game.boss.alive?1:0)) : 0;
+    const killed = Game.stats.kills;
+    const kpct = totalEnemies > 0 ? killed / totalEnemies : 1;
+    html += `⚔️<b style="color:${kpct>=0.9?'#66ff66':kpct>=0.5?'#ffd700':'#ff6b6b'}">${killed}/${totalEnemies}</b><small>${Math.round(kpct*100)}%</small> `;
+    // 收集进度
+    const collected = Game.itemsCollected;
+    const totalItems = Game.totalItems;
+    const cpct = totalItems > 0 ? collected / totalItems : 1;
+    html += `📦<b style="color:${cpct>=0.9?'#66ff66':cpct>=0.5?'#ffd700':'#ff6b6b'}">${collected}/${totalItems}</b><small>${Math.round(cpct*100)}%</small>`;
+    objEl.innerHTML = html;
   }
 
   // v2: 动态底栏
@@ -1983,20 +1984,15 @@ function levelComplete(){
   const configs = buildLevelConfigs();
   if(idx + 1 < configs.length) Game.unlocked[idx + 1] = true;
 
-  // v3: 评分制星级评定
-  let stars = 1; // 1星：抵达终点
-  const energyPct = Game.globalEnergy / getMaxEnergy();
-
-  // 计算完成度
-  let completionPct = 0;
-  if(Game.winCondition === WIN_KILL_ALL){
-    const totalEnemies = Game.level.enemies.length + (Game.boss ? 1 : 0);
-    completionPct = totalEnemies > 0 ? Game.stats.kills / totalEnemies : 1;
-  } else if(Game.winCondition === WIN_COLLECT_ALL){
-    completionPct = Game.totalItems > 0 ? Game.itemsCollected / Game.totalItems : 1;
-  } else {
-    completionPct = 1;
-  }
+  // v3: 双评分制星级评定
+  let stars = 1;
+  // 击杀完成度
+  const totalEnemies = Game.level.enemies.length + (Game.boss ? 1 : 0);
+  const killPct = totalEnemies > 0 ? Game.stats.kills / totalEnemies : 1;
+  // 收集完成度
+  const collectPct = Game.totalItems > 0 ? Game.itemsCollected / Game.totalItems : 1;
+  // 综合完成度
+  const completionPct = (killPct + collectPct) / 2;
 
   // 2星：完成度 ≥ 60%
   if(completionPct >= 0.6) stars++;
@@ -2049,9 +2045,8 @@ function levelComplete(){
   Game._justCleared = false;
 
   $('complete-level-name').textContent = buildLevelConfigs()[idx].name;
-  $('stat-kills').textContent = Game.stats.kills;
-  $('stat-items').textContent = Game.stats.items;
-  // v3: 完成度
+  $('stat-kills').textContent = Game.stats.kills + ' (' + Math.round(killPct*100) + '%)';
+  $('stat-items').textContent = Game.stats.items + ' (' + Math.round(collectPct*100) + '%)';
   $('stat-completion').textContent = Math.round(Game._lastCompletionPct * 100) + '%'
     + (Game._lastIsPerfect ? ' 👑 完美' : '');
   // v3: 科普卡片
