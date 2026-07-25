@@ -287,9 +287,9 @@ Each section must include:
 
 | Module | Demo moment |
 |---|---|
-| AI方向 | AI根据上一阶段表现激活第二阶段危机 |
+| AI方向 | AI生成受限病例蓝图，运行时再根据表现激活第二阶段危机 |
 | 玩法方向 | 红细胞供氧、白细胞清感染，终点不通关 |
-| 产品方向 | 报告→编辑病例→CQ2分享→每日挑战 |
+| 产品方向 | 报告→AI生成草案→编辑试玩→CQ2分享→每日挑战 |
 | 玩家方向 | 病例指标恶化、角色职责和章节因果 |
 | 行业方向 | 来源明确的知识判断影响准备加成 |
 | 主题契合度 | 六章患者康复与最终协作报告 |
@@ -301,6 +301,7 @@ Each section must include:
 Examples:
 
 - 本地回退不是在线AI。
+- AI生成的是病例蓝图，不是未经验证即可执行的地图或代码。
 - 分享码不是云社区。
 - 分数不是临床指标。
 - 哈希证明不是反作弊。
@@ -334,6 +335,7 @@ Assert the deck includes:
 - one-sentence game pitch.
 - core loop.
 - runtime AI diagram.
+- AI病例生成、确定性编译和编辑器确认流程.
 - red/white responsibilities.
 - patient story.
 - social value and sources.
@@ -350,7 +352,7 @@ Slides:
 3. AI病情导演：35s.
 4. 现场玩法与双人协作：100s.
 5. 病例报告和知识：30s.
-6. UGC和每日病例：25s.
+6. AI生成病例草案、编辑、CQ2分享和每日病例：25s.
 7. CodeBuddy协作证据：25s.
 8. 社会价值、质量与总结：20s.
 
@@ -369,6 +371,7 @@ Document a clean demo profile:
 - expected first crisis.
 - expected second crisis.
 - editor sample share code.
+- prevalidated generated case draft and its local/AI source badge.
 
 Do not embed fake online AI results in production gameplay.
 

@@ -687,6 +687,7 @@ git commit -m "feat: add patient HUD and case reports"
 ### Task 7: Case editor schema, validation and round trip
 
 **Files:**
+- Create: `js/case-schema.js`
 - Modify: `editor.html:61-121`
 - Modify: `editor.html:133-203`
 - Modify: `editor.html:629-755`
@@ -698,7 +699,7 @@ git commit -m "feat: add patient HUD and case reports"
 
 **Interfaces:**
 - Consumes: editor form values and map markers.
-- Produces: `caseConfig.version === 1`, share format `CQ2!`, legacy `CQ!` decoding.
+- Produces: `CaseSchema.normalizeCaseConfig(value)`, `CaseSchema.validateCaseDraft(draft, mapRows)`, `caseConfig.version === 1`, share format `CQ2!`, legacy `CQ!` decoding.
 
 - [ ] **Step 1: Write failing editor save test**
 
@@ -723,9 +724,9 @@ Use named inputs:
 
 Repeat for infection, tissue, goals, stability and briefing strings.
 
-- [ ] **Step 4: Implement exact validation**
+- [ ] **Step 4: Implement shared exact validation**
 
-`validateCaseDraft(draft, mapRows)` returns `{ ok, errors }`. Reject:
+Create `js/case-schema.js` as a UMD module so `editor.html`, `index.html`, Playwright tests and Node-side tooling use the same field names and bounds. `CaseSchema.validateCaseDraft(draft, mapRows)` returns `{ ok, errors, value }`. Reject:
 
 - values outside bounds.
 - missing source/target for oxygen goals.
@@ -733,6 +734,8 @@ Repeat for infection, tissue, goals, stability and briefing strings.
 - invalid primary cell.
 - stability outside `3–10`.
 - missing or multiple spawn points.
+
+Load the shared schema before editor code and before `case-engine.js`. Editor save, share import and AI-generated drafts must all call this function; no caller may keep its own copy of the validation rules.
 
 - [ ] **Step 5: Serialize caseConfig in all save paths**
 
@@ -772,7 +775,7 @@ Expected: PASS.
 - [ ] **Step 8: Commit**
 
 ```powershell
-git add editor.html js/config.js tests/case-editor.spec.js tests/editor-storage.spec.js tests/security.spec.js
+git add js/case-schema.js editor.html index.html js/config.js tests/case-editor.spec.js tests/editor-storage.spec.js tests/security.spec.js
 git commit -m "feat: add versioned case editing"
 ```
 

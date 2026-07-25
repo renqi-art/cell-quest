@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 建立“学习玩法—完成病例—生成报告—创建病例—分享挑战—每日回访”的产品闭环，并提供可公开访问、可监控、可持续扩展的演示版本。
+**Goal:** 建立“学习玩法—完成病例—生成报告—AI生成病例草案—编辑试玩—分享挑战—每日回访”的产品闭环，并提供可公开访问、可监控、可持续扩展的演示版本。
 
-**Architecture:** 用户进度继续以版本化 localStorage 为主；病例通过 `CQ2!` 分享码跨设备传播；每日病例使用日期种子保证公平；排行榜通过受限服务端接口保存最小成绩数据；内容包与病例编辑器共享同一配置结构。
+**Architecture:** 用户进度继续以版本化 localStorage 为主；AI只生成受限病例蓝图，由确定性编译器生成可玩草案；病例通过编辑器验证后再用 `CQ2!` 分享码跨设备传播；每日病例使用日期种子保证公平；排行榜通过受限服务端接口保存最小成绩数据；内容包、AI草案与病例编辑器共享同一配置结构。
 
 **Tech Stack:** 原生 JavaScript、Canvas、Node.js HTTP server、JSON、Playwright、Node `node:test`。
 
@@ -180,12 +180,14 @@ git commit -m "feat: add deterministic daily patient cases"
 - Modify: `tests/security.spec.js`
 
 **Interfaces:**
-- Consumes: validated case map.
+- Consumes: validated hand-authored or AI-compiled case draft.
 - Produces: `exportCaseCode(index)`, `importCaseCode(code)`, `CQ2!` payload.
 
 - [ ] **Step 1: Write failing round-trip test**
 
 Export a case with title, difficulty, primary cell, caseConfig, map and cover palette; import it into a clean slot; assert deep equality of allowed fields.
+
+Repeat the same round trip for an AI-generated draft after it has passed `CaseSchema` and editor validation. Generation provenance may be displayed locally, but prompts, API metadata and model responses must not enter the share code.
 
 - [ ] **Step 2: Define exact payload**
 

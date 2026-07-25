@@ -634,3 +634,178 @@ Expected: PASS.
 git add index.html css/style.css js/game.js tests/case-director.spec.js
 git commit -m "feat: expose AI crisis decisions to players"
 ```
+
+### Task 7: Strict AI case blueprint endpoint
+
+**Files:**
+- Create: `server/case-generator.js`
+- Create: `tests/case-generator.test.cjs`
+- Modify: `server.js`
+- Modify: `package.json`
+
+**Interfaces:**
+- Consumes: `CaseGenerationRequest`.
+- Produces: validated `CaseBlueprint` with `source: 'ai' | 'local'`.
+
+- [ ] **Step 1: Write contract tests before the handler**
+
+Test a valid request, missing fields, unknown fields, oversized text, upstream timeout, malformed AI JSON and offline fallback. The endpoint must never return JavaScript, HTML or raw map rows.
+
+- [ ] **Step 2: Define the exact request**
+
+```js
+{
+  schemaVersion: 1,
+  theme: '肺泡缺氧',
+  primaryCell: 'auto',
+  difficulty: 'standard',
+  durationMinutes: 4,
+  focus: 'mixed',
+  visualTheme: 'alveoli',
+  learningTopic: 'oxygen-transport',
+}
+```
+
+Reject unknown keys. Use enums for every field except the bounded display name.
+
+- [ ] **Step 3: Define the strict blueprint schema**
+
+Allow only these top-level keys: `version`, `name`, `themeId`, `primaryCell`, `difficulty`, `durationMinutes`, `vitals`, `goals`, `layout`, `allowedEvents`, `briefing`, `education`. `layout` may reference registered template and segment IDs, but may not contain final map rows.
+
+- [ ] **Step 4: Implement AI parsing and local fallback**
+
+Call the model only on the server, extract one JSON object, validate exact keys and enum values, then return it. On missing key, timeout, rate limit, invalid JSON or schema failure, return a deterministic local blueprint and set `source: 'local'`.
+
+- [ ] **Step 5: Register the server route safely**
+
+Add `POST /api/generate-case` with the same origin policy, body limit, timeout, request ID and rate limiting as `/api/director`. Never log prompts containing player identifiers or return upstream error bodies.
+
+- [ ] **Step 6: Run server tests**
+
+Run:
+
+```powershell
+node --test tests/case-generator.test.cjs
+npm run test:server
+```
+
+Expected: PASS, including offline fallback.
+
+- [ ] **Step 7: Commit**
+
+```powershell
+git add server/case-generator.js tests/case-generator.test.cjs server.js package.json
+git commit -m "feat: generate validated patient case blueprints"
+```
+
+### Task 8: Deterministic template compiler and playability gate
+
+**Files:**
+- Create: `js/case-templates.js`
+- Create: `js/case-compiler.js`
+- Create: `tests/case-generator.spec.js`
+- Modify: `index.html`
+- Modify: `editor.html`
+
+**Interfaces:**
+- Consumes: validated `CaseBlueprint` and integer seed.
+- Produces: `CaseCompiler.compile(blueprint, { seed })` returning `{ map, caseConfig, metadata }`.
+- Produces: `CaseCompiler.validateReachability(map, caseConfig)`.
+
+- [ ] **Step 1: Write compiler invariants first**
+
+Assert deterministic output for the same blueprint and seed, one player spawn, required node counts, no forbidden legacy symbols, valid dimensions and stable IDs. Generate at least 50 seeds per registered template.
+
+- [ ] **Step 2: Register safe templates and segments**
+
+Each segment has exactly 15 rows, declared entrance/exit anchors, compatible vessel height and bounded traversal gaps. Register transport, infection, recovery and mixed segments. The registry must not contain `F`, `?`, `o`, `p` or other retired Mario-like objects.
+
+- [ ] **Step 3: Compile the blueprint**
+
+Resolve only registered IDs, order segments with the seeded PRNG, place exactly one `P`, place `L`, `T` and `i` markers from goals, derive stable case/node IDs, and normalize the result through `CaseSchema`.
+
+- [ ] **Step 4: Implement a conservative reachability check**
+
+Model the actual movement envelope: walkable surfaces, maximum horizontal gap, maximum upward step and fall recovery. Verify the spawn can reach every required objective and completion zone. This is a safety gate, not an AI judgment.
+
+- [ ] **Step 5: Fall back to a known-safe template**
+
+If compilation or reachability fails, preserve the requested theme and learning topic but substitute the official safe layout. Record `metadata.fallbackReason` for editor diagnostics and evidence.
+
+- [ ] **Step 6: Run browser and stress tests**
+
+Run:
+
+```powershell
+npx playwright test tests/case-generator.spec.js
+npm run test:all
+```
+
+Expected: every generated seed validates and can enter the playable case flow.
+
+- [ ] **Step 7: Commit**
+
+```powershell
+git add js/case-templates.js js/case-compiler.js tests/case-generator.spec.js index.html editor.html
+git commit -m "feat: compile AI case blueprints into safe maps"
+```
+
+### Task 9: AI generation and constrained assistance in the editor
+
+**Files:**
+- Modify: `editor.html`
+- Modify: `js/ai-levels.js`
+- Modify: `server/case-generator.js`
+- Modify: `tests/case-generator.spec.js`
+- Modify: `tests/security.spec.js`
+
+**Interfaces:**
+- Produces: generation form, draft preview, validation report and explicit edit/test/save actions.
+- Optional endpoint: `POST /api/case-assistant` returning a validated `CasePatch`.
+
+- [ ] **Step 1: Replace raw-map generation tests**
+
+Delete expectations that AI emits a 15×80 character matrix. Test the full flow: request blueprint, compile draft, validate, open in editor, test-play, save, export `CQ2!`, import and replay.
+
+- [ ] **Step 2: Add generation controls**
+
+Expose theme, primary cell (`auto`, `rbc`, `wbc`), difficulty, duration, gameplay focus, visual theme and learning topic. Defaults must create a valid case with one click.
+
+- [ ] **Step 3: Show a trustworthy preview**
+
+Before opening the draft, show AI/local source, selected primary cell, goals, initial vitals, learning objective, template summary, validation result and any fallback reason. Provide `打开编辑器`, `试玩`, `重新生成` and `保存` actions.
+
+- [ ] **Step 4: Restrict assistant changes to semantic operations**
+
+Allow only `addNode`, `removeNode`, `setDifficulty`, `setPrimaryCell` and `replaceBriefing`. Validate operation-specific fields and values; do not accept arbitrary JSON Pointer paths, map rows, script, HTML or unknown operations.
+
+- [ ] **Step 5: Require preview and confirmation**
+
+Compile the proposed patch on a copy, show a human-readable before/after diff and validation result, and apply it only after explicit confirmation. A failed or cancelled patch leaves the current draft byte-for-byte unchanged.
+
+- [ ] **Step 6: Remove browser key storage and legacy object vocabulary**
+
+Remove any API Key field and `localStorage` key handling from `js/ai-levels.js`. Ensure prompts, examples and previews no longer create coins, question blocks, finish flags, pipes or stomp-only enemies.
+
+- [ ] **Step 7: Add offline behavior**
+
+When the endpoint is unavailable, generate a local blueprint from the same form, compile it through the same pipeline and label the result `本地规则生成`. All editor and sharing actions remain available.
+
+- [ ] **Step 8: Run security and integration tests**
+
+Run:
+
+```powershell
+npx playwright test tests/case-generator.spec.js tests/security.spec.js
+node --test tests/case-generator.test.cjs
+npm run test:all
+```
+
+Expected: PASS with AI configured and unconfigured.
+
+- [ ] **Step 9: Commit**
+
+```powershell
+git add editor.html js/ai-levels.js server/case-generator.js tests/case-generator.spec.js tests/security.spec.js
+git commit -m "feat: add safe AI-assisted case creation"
+```
