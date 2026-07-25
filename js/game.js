@@ -1564,7 +1564,7 @@ function renderHub(){
 // ===== v3: 细胞选择(Level 3+自由选) =====
 function selectCellAndLoad(n){
   const idx = n - 1;
-  const cfg = buildLevelConfigs()[idx];
+  const cfg = configs[idx];
   // 前两关(Level 1-2)锁定细胞类型，直接进入
   if(!cfg._isCustom && idx < 2){
     LoadLevel(n);
@@ -1753,9 +1753,16 @@ async function generateAILevelFromPrompt(){
   }
 }
 
+let hubTab = 'builtin'; // 当前Hub标签
+
+function switchHubTab(tab){
+  hubTab = tab;
+  document.querySelectorAll('.hub-tab').forEach(b=>b.classList.toggle('active', b.id === 'tab-'+tab));
+  renderLevelGrid();
+}
+
 function showHub(){
   Game.state = 'hub';
-  // 刷新自定义关卡（编辑器可能新保存了关卡）
   refreshCustomLevels();
   $('main-menu').classList.add('hidden');
   $('hub-screen').classList.remove('hidden');
@@ -1764,6 +1771,8 @@ function showHub(){
   $('complete-screen').classList.add('hidden');
   const fp = $('focus-prompt');
   if(fp) fp.classList.add('hidden');
+  hubTab = 'builtin';
+  document.querySelectorAll('.hub-tab').forEach(b=>b.classList.toggle('active', b.id === 'tab-builtin'));
   renderLevelGrid();
 }
 
@@ -1784,35 +1793,61 @@ function renderHubCellIntros(){
 function renderLevelGrid(){
   const grid = $('level-grid');
   grid.innerHTML = '';
+  const isCustomTab = hubTab === 'custom';
+  grid.className = isCustomTab ? 'custom-grid' : '';
   const configs = buildLevelConfigs();
+  const customCount = configs.filter(c=>c._isCustom).length;
+  const ccEl = $('custom-count'); if(ccEl) ccEl.textContent = customCount > 0 ? '('+customCount+')' : '';
+  let idx = 0;
+
   for(let i=0; i < configs.length; i++){
     const cfg = configs[i];
-    const card = document.createElement('div');
-    const isLocked = !Game.unlocked[i];
     const isCustom = cfg._isCustom;
+
+    // 按标签过滤
+    if(isCustomTab && !isCustom) continue;
+    if(!isCustomTab && isCustom) continue;
+
+    const card = document.createElement('div');
+    // 自定义关卡始终解锁,不检查locked
+    const isLocked = isCustom ? false : !Game.unlocked[i];
     const cellLabel = cfg.cellType === 1 ? '⚪WBC' : cfg.cellType === 3 ? '🔴RBC' : '';
+    const levelNum = isCustom ? (idx + 1) : (i + 1);
 
     let innerHTML = '';
-
-    if(isLocked){
+    if(isCustom){
+      // 自定义关卡: 小卡片矩阵风格
       innerHTML += `
-        <div class="lv-header">${isCustom ? '<span class="custom-badge">自定义</span>???' : '第'+(i+1)+'关'}</div>
+        <div style="position:relative;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#888;">自订#${levelNum}</div>
+          <div style="font-size:28px;margin:4px 0;">${cfg.icon}</div>
+          <div style="font-size:11px;color:#e8e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cfg.name}</div>
+          ${Game.completed[i] ? `<div style="font-size:10px;color:#ffd700;">${'★'.repeat(Game.stars[i])}</div>` : ''}
+          <div style="font-size:9px;color:#888;">${cellLabel}</div>
+          <button style="position:absolute;top:2px;right:2px;background:rgba(220,50,50,.6);border:none;color:#fff;font-size:10px;width:18px;height:18px;border-radius:50%;cursor:pointer;line-height:1;" onclick="event.stopPropagation();deleteCustomLevelCard(${i})">✕</button>
+          <button style="position:absolute;top:2px;right:22px;background:rgba(255,215,0,.4);border:none;color:#fff;font-size:10px;width:18px;height:18px;border-radius:50%;cursor:pointer;line-height:1;" onclick="event.stopPropagation();pickCustomIcon(${i})">🎨</button>
+        </div>
+      `;
+      card.className = 'level-card custom-small';
+      card.style.cssText = 'width:130px;height:auto;padding:0;';
+    } else if(isLocked){
+      innerHTML += `
+        <div class="lv-header">第${levelNum}关</div>
         <div class="lock-overlay">🔒</div>
         <div class="lv-icon-wrap"><div class="lv-icon">${cfg.icon}</div></div>
         <div class="lv-name">???</div>
       `;
+      card.className = 'level-card locked';
     } else {
-      const customNum = i - 6 + 1;
       innerHTML += `
-        <div class="lv-header">${isCustom ? '<span class="custom-badge">自订#'+customNum+'</span>'+cfg.name : '第'+(i+1)+'关: '+cfg.name} <small>${cellLabel}</small></div>
+        <div class="lv-header">第${levelNum}关: ${cfg.name} <small>${cellLabel}</small></div>
         <div class="lv-icon-wrap"><div class="lv-icon">${cfg.icon}</div></div>
         <div class="lv-name">${cfg.name}</div>
         ${Game.completed[i] ? `<div class="stars">${'★'.repeat(Game.stars[i])}${'☆'.repeat(3-Game.stars[i])}</div>` : ''}
-        ${isCustom ? `<button class="btn-icon-pick" data-idx="${i}" title="更换图标" onclick="event.stopPropagation();pickCustomIcon(${i})">🎨</button><button class="btn-level-delete" data-idx="${i}" title="删除此关卡" onclick="event.stopPropagation();deleteCustomLevelCard(${i})">✕</button>` : ''}
       `;
+      card.className = 'level-card';
     }
 
-    card.className = 'level-card' + (isLocked ? ' locked' : '') + (isCustom ? ' custom' : '');
     card.innerHTML = innerHTML;
     card.title = isLocked ? '未解锁' : cfg.desc;
 
@@ -2026,8 +2061,10 @@ function backToHub(){
 // ===== 关卡加载（通用入口函数） =====
 function LoadLevel(n, cellTypeOverride){
   const idx = n - 1; // v3: 1-based → 0-based array index
-  if(idx < 0 || idx >= buildLevelConfigs().length) return false;
-  if(!Game.unlocked[idx]){
+  const configs = buildLevelConfigs();
+  if(idx < 0 || idx >= configs.length) return false;
+  // 自定义关卡始终可玩,不检查解锁状态
+  if(!configs[idx]._isCustom && !Game.unlocked[idx]){
     showToast('关卡未解锁！');
     return false;
   }
@@ -2041,7 +2078,7 @@ function LoadLevel(n, cellTypeOverride){
   Game.qBlocks = [];
   Game.dcNPCs = [];     // v3: 重置DC NPC
   Game.level = new Level(mapData);
-  const cfg = buildLevelConfigs()[idx];
+  const cfg = configs[idx];
   const isCustom = cfg._isCustom;
 
   // v3: 从Level 3开始(含自定义关卡)可自由选择细胞类型
@@ -2342,9 +2379,9 @@ function init(){
   setupInput();
 
   $('btn-start').onclick = ()=>{ Sfx.init(); showHub(); $('game-container').focus(); };
-  // 主菜单快捷按钮: 直接进关卡选择页并弹出对应面板
-  try{ $('btn-menu-slots').onclick = ()=>{ Sfx.init(); showHub(); setTimeout(()=>showSlotPanel(),200); }; }catch(e){}
-  try{ $('btn-menu-lb').onclick = ()=>{ Sfx.init(); showHub(); setTimeout(()=>showLeaderboard(),200); }; }catch(e){}
+  // 主菜单快捷按钮: 在当前页面弹出面板,不跳转
+  try{ $('btn-menu-slots').onclick = ()=>{ Sfx.init(); showSlotPanel(); }; }catch(e){}
+  try{ $('btn-menu-lb').onclick = ()=>{ Sfx.init(); showLeaderboard(); }; }catch(e){}
   // Hub 左上角返回
   try{ $('btn-menu-back-top').onclick = ()=>{ showMenu(); }; }catch(e){}
   $('btn-menu-back').onclick = ()=>{ showMenu(); };

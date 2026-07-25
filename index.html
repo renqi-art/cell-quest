@@ -124,9 +124,9 @@
     <h3>CELL QUEST</h3>
     <p>扮演免疫系统细胞，穿越人体组织，消灭入侵细菌<br>切换白细胞·血小板·红细胞，利用各自能力闯关</p>
     <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:16px;">
-      <button class="btn primary" id="btn-start" style="width:200px;">🆕 新的游戏</button>
-      <button class="btn primary" id="btn-menu-slots" style="width:200px;">💾 存档管理</button>
-      <button class="btn primary" id="btn-menu-lb" style="width:200px;">🏆 排行榜</button>
+      <button class="btn primary" id="btn-start" style="width:220px;white-space:nowrap;text-align:center;display:flex;align-items:center;justify-content:center;">🆕 新的游戏</button>
+      <button class="btn primary" id="btn-menu-slots" style="width:220px;white-space:nowrap;text-align:center;display:flex;align-items:center;justify-content:center;">💾 存档管理</button>
+      <button class="btn primary" id="btn-menu-lb" style="width:220px;white-space:nowrap;text-align:center;display:flex;align-items:center;justify-content:center;">🏆 排行榜</button>
     </div>
   </div>
 
@@ -135,6 +135,10 @@
     <button class="btn btn-back-hub" id="btn-menu-back-top">🏠 返回主菜单</button>
     <div class="hub-header">
       <h2>选择关卡</h2>
+    </div>
+    <div class="hub-tabs" style="display:flex;justify-content:center;gap:4px;margin:8px 0;">
+      <button class="btn-small hub-tab active" id="tab-builtin" onclick="switchHubTab('builtin')">📚 内置关卡</button>
+      <button class="btn-small hub-tab" id="tab-custom" onclick="switchHubTab('custom')">🎨 自定义关卡 <span id="custom-count">0</span></button>
     </div>
     <div id="level-grid"></div>
     <div class="hub-footer">

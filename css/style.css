@@ -225,7 +225,7 @@ body{
   background:linear-gradient(135deg,#1a1a2e,#2a2a4e);
   color:#e8e8f0;cursor:pointer;
   transition:all .2s ease;
-  margin:4px;
+  margin:4px;text-align:center;
 }
 .btn:hover{border-color:#e94560;background:linear-gradient(135deg,#2a1a2e,#3a2a4e);transform:translateY(-1px);}
 .btn.primary{
@@ -783,9 +783,16 @@ body{
 .diff-tag.extreme{background:rgba(244,67,54,.25);color:#ff5252;border:1px solid rgba(244,67,54,.4);animation:diffPulse .8s infinite alternate;}
 @keyframes diffPulse{from{opacity:.7;}to{opacity:1;}}
 
+/* v3: Hub标签切换 */
+.hub-tab{opacity:.6;transition:all .15s;}
+.hub-tab.active{opacity:1;border-color:#e94560;color:#fff;background:rgba(233,69,96,.15);}
+#level-grid.custom-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;}
+.level-card.custom-small{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);border-radius:8px;cursor:pointer;transition:all .15s;}
+.level-card.custom-small:hover{border-color:#ab47bc;background:rgba(171,71,188,.1);transform:translateY(-2px);}
+
 /* v3: Hub左上角返回按钮 */
-.btn-back-hub{position:absolute;top:10px;left:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#ccc;padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer;transition:all .15s;z-index:10;}
-.btn-back-hub:hover{background:rgba(255,255,255,.16);color:#fff;}
+.btn-back-hub{position:absolute;top:10px;left:14px;background:#1a1a2e;border:1px solid #3a3a5a;color:#e8e8f0;padding:6px 14px;border-radius:6px;font-size:13px;cursor:pointer;transition:all .15s;z-index:10;}
+.btn-back-hub:hover{background:#2a2a4e;border-color:#e94560;color:#fff;}
 
 /* v3: 双人模式 P2 HUD */
 #hud-p2{margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,.12);}
