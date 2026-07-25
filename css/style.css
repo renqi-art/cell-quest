@@ -514,10 +514,10 @@ body{
   to{opacity:1;transform:translate(-50%,0) scale(1);}
 }
 .bubble-content{
-  background:rgba(12,12,30,.94);
-  border:1px solid #4a6aaa;border-radius:14px;
+  background:rgba(12,12,30,.72);
+  border:1px solid rgba(138,160,210,.45);border-radius:14px;
   padding:14px 20px;
-  box-shadow:0 0 20px rgba(74,106,170,.25),0 4px 12px rgba(0,0,0,.4);
+  box-shadow:0 0 20px rgba(74,106,170,.18),0 4px 12px rgba(0,0,0,.35);
   position:relative;
 }
 .bubble-content::before{
@@ -525,7 +525,7 @@ body{
   width:0;height:0;
   border-left:8px solid transparent;
   border-right:8px solid transparent;
-  border-top:8px solid rgba(12,12,30,.94);
+  border-top:8px solid rgba(12,12,30,.72);
 }
 .bubble-speaker{
   font-size:13px;font-weight:700;margin-bottom:6px;
@@ -542,7 +542,20 @@ body{
 /* ===== Memory Card ===== */
 #memory-card{z-index:35;pointer-events:auto;}
 #pause-menu{z-index:35;pointer-events:auto;}
-#complete-screen{z-index:35;pointer-events:auto;}
+#complete-screen{z-index:100;pointer-events:auto;background:rgba(10,10,24,.95);}
+/* 通关底部 3 颗星：根据表现点亮 */
+.complete-stars{display:flex;justify-content:center;align-items:center;gap:18px;margin:10px 0 4px;}
+.complete-stars .cstar{
+  font-size:46px;line-height:1;color:#5a5f78;
+  filter:grayscale(1) brightness(.55);
+  transition:transform .35s ease, color .35s ease, filter .35s ease, text-shadow .35s ease;
+}
+.complete-stars .cstar.lit{
+  color:#ffd54a;
+  filter:none;
+  text-shadow:0 0 16px rgba(255,213,74,.85),0 0 4px rgba(255,255,200,.6);
+  transform:scale(1.18) rotate(-4deg);
+}
 .memory-card-inner{
   background:rgba(20,15,35,.95);border:1px solid #9c6ade;border-radius:14px;
   padding:24px 32px;max-width:400px;text-align:center;
@@ -568,6 +581,28 @@ body{
   color:#ff6b6b;animation:pulse 1s ease infinite;
 }
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.6;}}
+
+/* ===== 通关庆祝特效 ===== */
+#win-fx{position:fixed;inset:0;z-index:80;pointer-events:none;overflow:hidden;}
+#win-fx.hidden{display:none;}
+.wfx-confetti{position:absolute;top:-24px;border-radius:2px;opacity:0;
+  animation-name:wfx-fall;animation-timing-function:linear;animation-fill-mode:forwards;}
+@keyframes wfx-fall{
+  0%{top:-24px;transform:rotate(0deg);opacity:1;}
+  100%{top:106vh;transform:rotate(720deg);opacity:.85;}
+}
+.wfx-banner{position:absolute;top:13%;left:50%;transform:translateX(-50%);
+  text-align:center;white-space:nowrap;
+  animation:wfx-pop .5s ease-out, wfx-fade .6s ease-in 2.6s forwards;}
+.wfx-title{font-size:42px;font-weight:800;color:#ffd700;
+  text-shadow:0 0 18px rgba(255,215,0,.7),0 2px 6px rgba(0,0,0,.6);letter-spacing:3px;}
+.wfx-sub{margin-top:6px;font-size:16px;color:#e8e8f0;letter-spacing:2px;}
+@keyframes wfx-pop{
+  0%{transform:translateX(-50%) scale(.4);opacity:0;}
+  60%{transform:translateX(-50%) scale(1.12);opacity:1;}
+  100%{transform:translateX(-50%) scale(1);opacity:1;}
+}
+@keyframes wfx-fade{from{opacity:1;}to{opacity:0;}}
 #death-flash{position:absolute;inset:0;background:rgba(255,30,30,.4);z-index:18;display:none;}
 #death-flash.active{display:block;animation:flash .4s ease;}
 @keyframes flash{from{opacity:.6;}to{opacity:0;}}
@@ -806,3 +841,156 @@ body{
 #health-bar-fill-p2.low{background:linear-gradient(90deg,#ff9800,#ffb74d);}
 #health-bar-fill-p2.critical{background:linear-gradient(90deg,#f44336,#ef5350);animation:diffPulse .6s infinite alternate;}
 #health-text-p2{font-size:10px;color:#ccc;vertical-align:middle;}
+
+/* ===== 英雄预选面板 ===== */
+.party-panel .party-grid{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:12px;
+}
+.party-card{
+  position:relative;
+  background:rgba(255,255,255,.04);
+  border:2px solid rgba(255,255,255,.12);
+  border-radius:12px;
+  padding:14px 10px;
+  text-align:center;
+  cursor:pointer;
+  transition:all .15s ease;
+  overflow:hidden;
+}
+.party-card:hover:not(.disabled){
+  background:rgba(255,255,255,.08);
+  transform:translateY(-2px);
+}
+.party-card.picked{
+  background:rgba(255,255,255,.10);
+  border-color:var(--c-border);
+  box-shadow:0 0 16px rgba(255,255,255,.12), inset 0 0 0 1px var(--c-border);
+}
+.party-card.disabled{
+  opacity:.45;
+  cursor:not-allowed;
+}
+.party-avatar{
+  width:56px;height:56px;
+  margin:0 auto 8px;
+  border-radius:10px;
+  background:linear-gradient(135deg, #1a1a2e, #2a2a4e);
+  display:flex;align-items:center;justify-content:center;
+  border:2px solid rgba(255,255,255,.15);
+  overflow:hidden;
+}
+.party-avatar img{width:48px;height:48px;object-fit:contain;}
+.party-card.picked .party-avatar{border-color:var(--c-border);}
+.party-name{font-size:16px;font-weight:700;margin-bottom:2px;}
+.party-subtitle{font-size:11px;color:#8a8aaa;margin-bottom:8px;}
+.party-skills{font-size:11px;color:#c8c8d8;display:flex;flex-direction:column;gap:4px;}
+.party-order{
+  position:absolute;top:6px;right:6px;
+  width:22px;height:22px;border-radius:50%;
+  background:var(--c-border);color:#fff;
+  font-size:12px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 6px rgba(0,0,0,.3);
+}
+.party-mask{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(10,10,24,.55);
+  color:#aaa;font-size:12px;
+  border-radius:12px;
+}
+.party-panel kbd{
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+  border-radius:4px;padding:1px 5px;font-family:monospace;
+}
+#party-confirm-btn.disabled{
+  opacity:.5;cursor:not-allowed;
+}
+@media (max-width:560px){
+  .party-panel .party-grid{grid-template-columns:repeat(2,1fr);}
+}
+
+/* ===== 关卡标题（点后=大标题在图片上方，点前=小标题在图片下方） ===== */
+.level-title-block{ text-align:center; margin-bottom:4px; }
+.level-big-title{
+  font-size:22px; font-weight:800; letter-spacing:1px;
+  color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.5);
+  margin-bottom:8px;
+}
+.level-hero-banner{
+  width:92px; height:92px; margin:0 auto;
+  border-radius:16px;
+  display:flex; align-items:center; justify-content:center;
+  border:2px solid rgba(255,255,255,.18);
+  box-shadow:0 6px 18px rgba(0,0,0,.35);
+}
+.level-hero-icon{ font-size:46px; line-height:1; }
+.level-small-title{
+  font-size:13px; color:#9aa0c0; margin-top:8px; letter-spacing:2px;
+}
+
+/* ===== 第2关专属开局加载页 ===== */
+#lv2-loading .lv2-loading-inner{
+  width:92%; max-width:560px;
+  background:linear-gradient(160deg,#161a2e,#241a30);
+  border:1px solid #3a3a5a; border-radius:14px;
+  padding:22px 22px 18px; box-shadow:0 10px 40px rgba(0,0,0,.5);
+}
+.lv2-channel{
+  text-align:center; font-size:14px; letter-spacing:3px;
+  color:#ffd700; font-weight:700; margin-bottom:14px;
+  text-shadow:0 0 10px rgba(255,215,0,.4);
+}
+.lv2-dialogue{ display:flex; flex-direction:column; gap:10px; }
+.lv2-line{ display:flex; gap:10px; align-items:flex-start; }
+.lv2-avatar{
+  flex:0 0 auto; width:38px; height:38px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:15px; font-weight:800; color:#fff;
+  border:2px solid rgba(255,255,255,.25);
+}
+.lv2-avatar.dc{ background:linear-gradient(135deg,#6a5acd,#9b7bdf); }
+.lv2-avatar.wbc{ background:linear-gradient(135deg,#cfc9b0,#8a8270); color:#3a2f1a; }
+.lv2-avatar.rbc{ background:linear-gradient(135deg,#e53935,#a52015); }
+.lv2-speech{
+  flex:1; background:rgba(255,255,255,.05); border-radius:10px;
+  padding:9px 12px; font-size:13px; line-height:1.55; color:#e6e6f2;
+  border-left:3px solid #5a5a7a;
+}
+.lv2-line.lv2-dc .lv2-speech{ border-left-color:#9b7bdf; }
+.lv2-line.lv2-wbc .lv2-speech{ border-left-color:#cfc9b0; }
+.lv2-line.lv2-rbc .lv2-speech{ border-left-color:#e53935; }
+.lv2-speech b{ display:block; margin-bottom:3px; font-size:12px; letter-spacing:.5px; color:#ffd9a0; }
+.lv2-line.lv2-rbc .lv2-speech b{ color:#ff9a9a; }
+.lv2-line.lv2-wbc .lv2-speech b{ color:#efe8d0; }
+.lv2-tasks{
+  margin-top:14px; padding:12px 14px; border-radius:10px;
+  background:rgba(76,175,80,.1); border:1px solid rgba(76,175,80,.35);
+}
+.lv2-task-title{ font-size:13px; font-weight:700; color:#9ccc65; margin-bottom:6px; letter-spacing:1px; }
+.lv2-task{ font-size:13px; color:#e6e6f2; line-height:1.8; }
+.lv2-task.tip{ color:#ffd700; margin-top:4px; font-size:12px; }
+
+/* ===== 第2关：侧边固定对话（替代弹窗） ===== */
+#scene-info{
+  position:absolute; right:12px; top:74px; width:240px; max-width:42vw;
+  background:rgba(12,14,30,.92); border:1px solid #4a6aaa;
+  border-left:4px solid #6a5acd; border-radius:10px;
+  padding:10px 12px; pointer-events:none; z-index:14;
+  opacity:0; transform:translateX(16px); transition:opacity .18s,transform .18s;
+  box-shadow:0 6px 20px rgba(0,0,0,.45);
+}
+#scene-info.active{ opacity:1; transform:translateX(0); }
+#scene-info.hidden{ display:none; }
+#scene-info .scene-speaker{
+  font-size:12px; font-weight:700; margin-bottom:5px; letter-spacing:.5px;
+  color:#9b7bdf;
+}
+#scene-info.wbc{ border-left-color:#cfc9b0; }
+#scene-info.wbc .scene-speaker{ color:#efe8d0; }
+#scene-info.rbc{ border-left-color:#e53935; }
+#scene-info.rbc .scene-speaker{ color:#ff9a9a; }
+#scene-info .scene-text{ font-size:12px; line-height:1.6; color:#e6e6f2; }
+

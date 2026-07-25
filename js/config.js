@@ -82,7 +82,7 @@ const AOE_DURATION= 180; // 3秒
 
 // ===== 四段生理剧情 =====
 const BLEEDING_PHASE_FRAMES = 480;  // 8秒开局出血期
-const BLEEDING_DRAIN = 0.05;        // 出血期每帧扣能量
+const BLEEDING_DRAIN = 0.02;        // 出血期每帧扣能量（已放慢）
 const GAP_BLOOD_MULT = 2;           // 非血小板过缺口失血倍率
 const INFLAMMATION_X = 39 * TILE;   // 炎症区起始x坐标
 
@@ -112,7 +112,7 @@ const DRINK_ENERGY  = 0;   // 饮料不再提供能量
 const NUTRITION_ENERGY = 0; // 营养包不再提供能量（仅作收集计数）
 
 // ===== ATP 能源系统 =====
-const PASSIVE_DRAIN = 0.015;   // 基础代谢消耗/帧
+const PASSIVE_DRAIN = 0.005;   // 基础代谢消耗/帧（已放慢，能量可在正常游玩时长内维持）
 const RBC_OXY_REGEN = 0.06;    // RBC 氧气领域回能/帧
 const KILL_ATP_SMALL = 15;     // 普通敌人击杀 +ATP
 const KILL_ATP_LARGE = 30;     // 大型敌人击杀 +ATP
@@ -196,7 +196,7 @@ const PDASH_INVUL     = 30;     // 0.5秒不可选中
 
 // ===== XP 经验与等级 =====
 const XP_BASE=100,XP_GROWTH=1.5,MAX_LEVEL=30,SKILL_POINTS_PER_LEVEL=1;
-const XP_PER_KILL={staph:10,staphLarge:30,staphMini:5,strep:20,boss:200};
+const XP_PER_KILL={staph:10,staphLarge:30,staphMini:5,strep:20,boss:200,salmonella:15};
 function xpForLevel(lv){return Math.floor(XP_BASE*Math.pow(XP_GROWTH,lv-1));}
 
 // ===== 技能树 =====
@@ -340,6 +340,7 @@ const C = {
   // 敌人
   staph:'#ffd700', staphDark:'#cca820',
   strep:'#76c043', strepDark:'#5a9030',
+  salmonella:'#b7d40a', salmonellaDark:'#7a8c06',
   staphLarge:'#ff9500', staphLargeDark:'#cc7000',
   miniStaph:'#fff060', miniStaphDark:'#ccb020',
   chargeWarn:'#ff3030',
@@ -422,13 +423,17 @@ const Game = {
   state: 'menu',           // menu | hub | playing | paused | complete | dead
   levelIndex: 0,           // 当前关卡索引 (0-5)
   // 全局进度
-  unlocked: [true, true, false, false, false, false],
+  unlocked: [true, true, true, true, true, true],
   completed: [false, false, false, false, false, false],
   stars:     [0, 0, 0, 0, 0, 0],
   globalEnergy: 100,
   cells: 3,                // 当前关卡剩余细胞（生命数）
   currentSlot: 0,           // v3: 当前存档栏位 (0-4)
   playerName: '',            // v3: 排行榜昵称
+  // 出战队伍：玩家选择 2 名角色，对局内按 Q 切换
+  party: [1, 3],             // 默认 [白细胞, 红细胞]
+  partyIndex: 0,             // 当前激活的角色在 party 中的索引
+  debugMode: false,          // 调试模式：解锁全部关卡，方便并行配置
   // 运行时
   keys: {},
   prevKeys: {},
@@ -845,10 +850,8 @@ function loadGame(slot){
       while(Game.unlocked.length < total) Game.unlocked.push(false);
       while(Game.completed.length < total) Game.completed.push(false);
       while(Game.stars.length < total) Game.stars.push(0);
-      Game.unlocked[0] = true; // Level 1 always unlocked
-      for(let i = 1; i < Game.unlocked.length; i++){
-        if(!Game.completed[i - 1]) Game.unlocked[i] = false;
-      }
+      // 全部关卡默认解锁（已移除顺序通关解锁限制）
+      for(let i = 0; i < Game.unlocked.length; i++) Game.unlocked[i] = true;
       return true; // 读取成功
     }
   }catch(e){}
@@ -906,7 +909,7 @@ function resetSlot(slot){
     localStorage.removeItem(adaptiveKey(slot));
     if(slot === Game.currentSlot){
       // 重置当前栏位
-      Game.unlocked = [true,true]; Game.completed = []; Game.stars = [];
+      Game.unlocked = [true]; Game.completed = []; Game.stars = [];
       Game.globalEnergy = 100; Game.playerLevel = 1; Game.xp = 0; Game.skillPoints = 0;
       Game.skills = {wbc:{damagePlus:0,dashCooldown:0,swordRange:0,slamRadius:0},plt:{bridgeCost:0,bridgeDuration:0,shieldDuration:0,healOnBridge:0},rbc:{energyDrain:0,oxyFieldPower:0,maxEnergy:0,nutritionBonus:0}};
       Game.equipment = {weapon:null,armor:null,accessory:null}; Game.inventory = [];
@@ -916,7 +919,8 @@ function resetSlot(slot){
       while(Game.unlocked.length < total) Game.unlocked.push(false);
       while(Game.completed.length < total) Game.completed.push(false);
       while(Game.stars.length < total) Game.stars.push(0);
-      Game.unlocked[0] = true; // Level 1 always unlocked
+      // 全部关卡默认解锁（已移除顺序通关解锁限制）
+      for(let i = 0; i < Game.unlocked.length; i++) Game.unlocked[i] = true;
       saveGame();
       refreshCustomLevels();
     }
@@ -981,5 +985,214 @@ const Sfx = {
   death(){ this.beep(200, .3, 'sawtooth', .08); this.beep(100, .4, 'sawtooth', .06); },
   complete(){
     [523,659,784,1047].forEach((f,i)=>setTimeout(()=>this.beep(f,.15,'triangle',.07), i*120));
+  },
+
+  // ===== 分层音效系统（新增扩展，不影响 jump / doubleJump 等既有逻辑）=====
+  muted: false,
+  _tiersReady: false,
+  _now(){ return this.ctx ? this.ctx.currentTime : 0; },
+  _initTiers(){
+    this.init();
+    if(!this.ctx || this._tiersReady) return;
+    // 各层级独立增益节点：互不覆盖、互不抢占
+    this._gBgm   = this.ctx.createGain(); this._gBgm.gain.value   = 0.022; // 背景音乐：音量最低（仅微弱点缀）
+    this._gAlarm = this.ctx.createGain(); this._gAlarm.gain.value = 0.55; // 警报心跳：音量最突出
+    this._gWarn  = this.ctx.createGain(); this._gWarn.gain.value  = 0.22; // 能量预警
+    this._gSword = this.ctx.createGain(); this._gSword.gain.value = 0.30; // 战斗打击
+    this._gPick  = this.ctx.createGain(); this._gPick.gain.value  = 0.30; // 拾取
+    [this._gBgm, this._gAlarm, this._gWarn, this._gSword, this._gPick].forEach(g => g.connect(this.ctx.destination));
+    this._tiersReady = true;
+  },
+  resume(){
+    this.init();
+    this._initTiers();
+    if(!this.muted && this.ctx && this.ctx.state === 'suspended'){ try{ this.ctx.resume(); }catch(e){} }
+  },
+  suspendAll(){ if(this.ctx && this.ctx.state === 'running'){ try{ this.ctx.suspend(); }catch(e){} } this.stopAlarm(); },
+  toggleMute(){
+    this.muted = !this.muted;
+    if(this.muted) this.suspendAll(); else this.resume();
+    return this.muted;
+  },
+
+  // 1) 循环背景音乐（音量最低，仅作点缀）
+  //    mode: 'menu'  = 舒缓（主菜单 / 选关界面）
+  //          'level' = 稍活泼、有激情（正式关卡，带轻底鼓律动）
+  startBgm(mode){
+    mode = mode || this._bgmMode || 'menu';
+    this._bgmMode = mode;
+    this._initTiers();
+    if(!this.ctx) return;
+    if(this._bgmOn){
+      if(this._bgmMode === mode) return; // 同模式不重复启动
+      this.stopBgm();                    // 切换模式：先停后启
+    }
+    this._bgmOn = true;
+
+    // 两套风格参数
+    const CFG = mode === 'level'
+      ? { // 关卡：明亮、稍快、带轻底鼓，更"有激情"
+          scale:[261.63, 329.63, 392.00, 440.00, 523.25, 659.25],
+          motif:[0,2,4,5, 4,2,3,4, 5,4,2,0, 3,4,2,-1],
+          bass:[130.81, 130.81, 174.61, 196.00],
+          stepDur:0.34, noteGain:0.5, bassGain:0.55, lp:2200, kick:true
+        }
+      : { // 菜单：低沉、舒缓、留白多
+          scale:[196.00, 233.08, 261.63, 311.13, 349.23, 392.00],
+          motif:[0,2,4,2, 3,2,-1,-1, 4,3,2,0, -1,-1,-1,-1],
+          bass:[98.00, 98.00, 130.81, 116.54],
+          stepDur:0.6, noteGain:0.42, bassGain:0.5, lp:1200, kick:false
+        };
+
+    // 整体低通，去掉高频毛刺
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = CFG.lp;
+    lp.connect(this._gBgm);
+
+    const playNote = (freq, time, dur, peak, type) => {
+      if(!freq || freq <= 0) return;
+      const o = this.ctx.createOscillator();
+      o.type = type || 'triangle';
+      o.frequency.value = freq;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, time);
+      g.gain.exponentialRampToValueAtTime(peak, time + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+      o.connect(g); g.connect(lp);
+      o.start(time); o.stop(time + dur + 0.05);
+    };
+    // 轻底鼓：短促低频下坠，增加律动（仅关卡版）
+    const playKick = (time) => {
+      const o = this.ctx.createOscillator(); o.type = 'sine';
+      const g = this.ctx.createGain();
+      o.frequency.setValueAtTime(120, time);
+      o.frequency.exponentialRampToValueAtTime(45, time + 0.12);
+      g.gain.setValueAtTime(0.0001, time);
+      g.gain.exponentialRampToValueAtTime(0.9, time + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + 0.16);
+      o.connect(g); g.connect(this._gBgm);
+      o.start(time); o.stop(time + 0.18);
+    };
+
+    let step = 0;
+    let nextTime = this._now() + 0.2;
+    const tick = () => {
+      if(!this._bgmOn) return;
+      // 音频上下文未解锁（浏览器自动播放策略）时仅等待，不排程
+      if(!this.ctx || this.ctx.state !== 'running'){ this._bgmTimer = setTimeout(tick, 250); return; }
+      const now = this._now();
+      if(nextTime < now) nextTime = now + 0.2; // 从挂起恢复后纠正排程时间，避免一次性补播
+      const ahead = now + 1.0; // 提前 1 秒排程，避免卡顿
+      while(nextTime < ahead){
+        const idx = CFG.motif[step % CFG.motif.length];
+        if(idx >= 0) playNote(CFG.scale[idx], nextTime, CFG.stepDur * 1.7, CFG.noteGain, 'triangle');
+        if(step % 4 === 0){
+          const b = CFG.bass[(step / 4) % CFG.bass.length];
+          playNote(b, nextTime, CFG.stepDur * 3.4, CFG.bassGain, 'sine');
+          if(CFG.kick) playKick(nextTime);
+        }
+        step++;
+        nextTime += CFG.stepDur;
+      }
+      this._bgmTimer = setTimeout(tick, 250);
+    };
+    tick();
+  },
+  stopBgm(){
+    this._bgmOn = false;
+    if(this._bgmTimer){ clearTimeout(this._bgmTimer); this._bgmTimer = null; }
+    if(this._bgmNodes){ this._bgmNodes.forEach(n => { try{ n.stop && n.stop(); }catch(e){} }); this._bgmNodes = null; }
+  },
+
+  // 2) 血量过低警报：循环心跳 + 急促呼吸（音量最突出，持续提醒）
+  startAlarm(){
+    this._initTiers();
+    if(!this.ctx || this._alarmOn) return;
+    this._alarmOn = true;
+    const beat = () => {
+      if(!this._alarmOn) return;
+      if(this.ctx.state !== 'running'){ this._alarmTimer = setTimeout(beat, 400); return; }
+      this._heartThump(false);
+      this._alarmTimer = setTimeout(() => {
+        if(!this._alarmOn) return;
+        if(this.ctx.state !== 'running'){ this._alarmTimer = setTimeout(beat, 400); return; }
+        this._heartThump(true);
+        this._alarmTimer = setTimeout(beat, 620);
+      }, 300);
+    };
+    beat();
+  },
+  stopAlarm(){
+    this._alarmOn = false;
+    if(this._alarmTimer){ clearTimeout(this._alarmTimer); this._alarmTimer = null; }
+  },
+  _heartThump(second){
+    if(!this.ctx) return;
+    const t = this._now();
+    const o = this.ctx.createOscillator(); o.type = 'sine';
+    const g = this.ctx.createGain();
+    o.frequency.setValueAtTime(second ? 58 : 72, t);
+    o.frequency.exponentialRampToValueAtTime(30, t + 0.18);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(second ? 0.85 : 1.0, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    o.connect(g); g.connect(this._gAlarm);
+    o.start(t); o.stop(t + 0.25);
+  },
+
+  // 3) 能量不足预警（短促两声）
+  energyWarn(){
+    this._initTiers();
+    if(!this.ctx) return;
+    const t = this._now();
+    [0, 0.16].forEach((d, i) => {
+      const o = this.ctx.createOscillator(); o.type = 'square';
+      const g = this.ctx.createGain();
+      o.frequency.value = 520 + i * 180;
+      g.gain.setValueAtTime(0.0001, t + d);
+      g.gain.exponentialRampToValueAtTime(1, t + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.14);
+      o.connect(g); g.connect(this._gWarn);
+      o.start(t + d); o.stop(t + d + 0.16);
+    });
+  },
+
+  // 4) 战斗打击（挥剑 / 攻击怪物）短促打击音
+  swordHit(){
+    this._initTiers();
+    if(!this.ctx) return;
+    const t = this._now();
+    const len = Math.floor(this.ctx.sampleRate * 0.12);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 0.7;
+    const g = this.ctx.createGain(); g.gain.value = 0.9;
+    src.connect(bp); bp.connect(g); g.connect(this._gSword);
+    src.start(t);
+    const o = this.ctx.createOscillator(); o.type = 'square'; o.frequency.value = 900;
+    const g2 = this.ctx.createGain();
+    g2.gain.setValueAtTime(0.5, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    o.connect(g2); g2.connect(this._gSword);
+    o.start(t); o.stop(t + 0.09);
+  },
+
+  // 5) 交互拾取（氧气 / 营养 / 水源 —— 红细胞交互）专属音效
+  rbcPickup(){
+    this._initTiers();
+    if(!this.ctx) return;
+    const t = this._now();
+    [880, 1175].forEach((f, i) => {
+      const o = this.ctx.createOscillator(); o.type = 'triangle';
+      const g = this.ctx.createGain();
+      o.frequency.value = f;
+      const d = i * 0.06;
+      g.gain.setValueAtTime(0.0001, t + d);
+      g.gain.exponentialRampToValueAtTime(1, t + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.18);
+      o.connect(g); g.connect(this._gPick);
+      o.start(t + d); o.stop(t + d + 0.2);
+    });
   },
 };

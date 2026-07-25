@@ -78,7 +78,15 @@ class Player {
     // v3: 游戏内切换细胞 (Q键 / P2: Y键)
     if(k.switchCell && !pk.switchCell && !this._switchCD){
       this._switchCD = 60;
-      const newType = this.cellType === 1 ? 3 : 1;
+      let newType;
+      if(this.playerIndex === 0 && Game.party && Game.party.length >= 2){
+        // 单玩家：按出战队伍循环切换
+        Game.partyIndex = (Game.partyIndex + 1) % Game.party.length;
+        newType = Game.party[Game.partyIndex];
+      } else {
+        // P2 或队伍未就绪：保持原 1↔3 切换
+        newType = this.cellType === 1 ? 3 : 1;
+      }
       this.cellType = newType;
       this.atk = newType === 1 ? WBC_BASE_ATK + getMemoryBonus(Game.memoryCells).swordDmg : 0;
       Sfx.switchCell();
@@ -455,6 +463,7 @@ class Player {
     this.swordTimer = SWORD_DURATION;
     this.swordCooldown = SWORD_COOLDOWN;
     Sfx.dash(); // 复用突进音效
+    Sfx.swordHit(); // 新增：挥剑打击音效
     spawnParticles(this.x + this.w/2 + this.facing * 30, this.y + this.h/2, C.sword, 8, 2);
     // 对范围内敌人造成伤害
     const reach = SWORD_RANGE;
@@ -509,6 +518,7 @@ class Player {
     Game.globalEnergy -= BITE_COST;
     this.biteCooldown = BITE_COOLDOWN;
     Sfx.dash();
+    Sfx.swordHit(); // 新增：吞噬撕咬打击音效
     const ax = this.x + this.w/2;
     const ay = this.y + this.h/2;
     // 找最近敌人
@@ -971,6 +981,8 @@ class Player {
     const px = Math.round(this.x) - Math.round(camX);
     const py = Math.round(this.y);
     const cell = this.cell;
+    // 输入状态引用（与 update() 保持一致；draw() 内不能访问 update 的局部 k）
+    const k = this.playerIndex === 1 ? Game.keysP2 : Game.keys;
 
     // 无敌闪烁
     if(this.invincible>0){const r=this.invincible>30?4:Math.max(1,Math.floor(this.invincible/8));if(Math.floor(this.invincible/r)%2===0)return;}
@@ -1424,6 +1436,11 @@ class Enemy {
         this.hp = 1;
         this.vx = -0.4;
       }
+    } else if(type === 'salmonella'){ // 沙门氏菌：杆状、可自主巡逻移动
+      this.w = 28; this.h = 16;
+      this.hp = 1;
+      this.vx = -0.45;
+      this.isBacteria = true;
     } else { // strep
       this.w = 24; this.h = 20;
       this.hp = 2;
@@ -1452,6 +1469,8 @@ class Enemy {
     if(this.type === 'staph'){
       this.hp = this.isLarge ? STAPH_LARGE_HP : 1;
       this.vx = this.isLarge ? -0.3 : (this.isMini ? -0.6 : -0.4);
+    } else if(this.type === 'salmonella'){
+      this.hp = 1; this.vx = -0.45;
     } else {
       this.hp = 2; this.vx = 0;
     }
@@ -1495,8 +1514,8 @@ class Enemy {
     else this.defPen = 0;
     if(this.knockbackTimer > 0) this.knockbackTimer--;
 
-    if(this.type === 'staph'){
-      // 葡萄球菌：仅在落地后巡逻
+    if(this.type === 'staph' || this.type === 'salmonella'){
+      // 葡萄球菌 / 沙门氏菌：仅在落地后巡逻
       if(!this.onGround){
         this.vx = 0;
       } else {
@@ -1505,7 +1524,10 @@ class Enemy {
         this.x += this.vx;
         const frontCol = Math.floor((this.dir > 0 ? this.x + this.w : this.x) / TILE);
         const checkRow = Math.floor((this.y + this.h + 2) / TILE);
-        if(level.solidAt(frontCol, Math.floor(this.y / TILE))){
+        // 地图边缘强制转向（避免在无墙的开放地形中走出边界、无法击杀）
+        if(frontCol <= 0 || frontCol >= level.width - 1){
+          this.dir *= -1;
+        } else if(level.solidAt(frontCol, Math.floor(this.y / TILE))){
           this.dir *= -1;
         } else if(!level.solidAt(frontCol, checkRow) && this.onGround){
           this.dir *= -1;
@@ -1600,13 +1622,13 @@ class Enemy {
           player.stompEnemy(this, level);
           this.hp--;
           if(Game.oxyField) this.hp -= OXY_FIELD_STOMP_BONUS; // 氧气领域加成
-          spawnParticles(this.x+this.w/2, this.y, this.type==='staph'?C.staph:C.strep, 8, 2);
+          spawnParticles(this.x+this.w/2, this.y, this.type==='salmonella'?C.salmonella:(this.type==='staph'?C.staph:C.strep), 8, 2);
           if(this.hp <= 0){
             this.alive = false;
             if(this.isLarge) this.split(level);
             Game.stats.kills++;
             spawnPusIfNeeded(this);
-            spawnParticles(this.x+this.w/2, this.y, this.type==='staph'?C.staph:C.strep, 14, 3);
+            spawnParticles(this.x+this.w/2, this.y, this.type==='salmonella'?C.salmonella:(this.type==='staph'?C.staph:C.strep), 14, 3);
           }
         } else {
           // 非白细胞：仅弹跳，无法造成任何伤害
@@ -1659,6 +1681,32 @@ class Enemy {
         ctx.fillStyle = '#fff'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
         ctx.fillText(this.hp + '/' + this.maxHp, px+this.w/2, py-3);
       }
+    } else if(this.type === 'salmonella'){
+      // 沙门氏菌：杆状菌体 + 鞭毛，黄绿色调
+      const c = C.salmonella, cd = C.salmonellaDark;
+      const bob = Math.sin(this.animT * 0.15) * 1.5;
+      ctx.save();
+      ctx.translate(px + this.w/2, py + this.h/2 + bob);
+      ctx.scale(this.dir, 1);
+      // 鞭毛（拖尾摆动）
+      ctx.strokeStyle = cd;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-this.w/2, 0);
+      for(let i = -this.w/2; i >= -this.w/2 - 9; i -= 2){
+        ctx.lineTo(i, Math.sin(this.animT * 0.3 + i * 0.5) * 3);
+      }
+      ctx.stroke();
+      // 菌体（胶囊形）
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, this.w/2, this.h/2, 0, 0, Math.PI*2);
+      ctx.fill();
+      // 内部核点缀
+      ctx.fillStyle = cd;
+      ctx.beginPath(); ctx.arc(-3, -1, 2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(4, 2, 1.6, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
     } else {
       // 链球菌
       const charging = this.state === 'windup' || this.state === 'dash';
@@ -2267,8 +2315,23 @@ class Item {
     if(rectOverlap(this, player)){
       this.alive = false;
       Game.stats.items++;
+      // 单位规则：营养/血液物资（食物·营养·饮料·氧气）仅红细胞(cellType===3)可拾取吸收；
+      // 白细胞(1)与血小板(2)无法吸收，物品保持原位、不被消耗。
+      if((this.type === 'food' || this.type === 'nutrition' || this.type === 'drink' || this.type === 'oxygen') && player.cellType !== 3){
+        this.alive = true;
+        Game.stats.items--;
+        if(!Game._lastPickupDeny || performance.now() - Game._lastPickupDeny > 1500){
+          showToast('🚫 白细胞无法吸收营养 / 血液物资');
+          Game._lastPickupDeny = performance.now();
+        }
+        return;
+      }
       if(this.type !== 'atp') Game.itemsCollected++;
-      Sfx.pickup();
+      if(this.type === 'oxygen' || this.type === 'food' || this.type === 'nutrition' || this.type === 'drink'){
+        Sfx.rbcPickup(); // 新增：红细胞专属拾取音效（氧气 / 营养 / 饮水）
+      } else {
+        Sfx.pickup();
+      }
       if(this.type === 'atp'){
         Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + ATP_PICKUP);
         spawnParticles(this.x+this.w/2, this.y+this.h/2, '#ffd700', 10, 2);
@@ -2286,11 +2349,9 @@ class Item {
         Sfx.coin();
       } else if(this.type === 'food'){
         Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + FOOD_ENERGY);
-        Sfx.pickup();
         showToast('进食！能量 +' + FOOD_ENERGY);
       } else if(this.type === 'drink'){
         Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + DRINK_ENERGY);
-        Sfx.coin();
         showToast('喝水！能量 +' + DRINK_ENERGY);
       } else if(this.type === 'memory'){
         Sfx.memory();
@@ -2308,7 +2369,6 @@ class Item {
           return;
         }
         Game.globalEnergy = Math.min(getMaxEnergy(), Game.globalEnergy + NUTRITION_ENERGY + getSkillLevel('rbc','nutritionBonus')*10);
-        Sfx.pickup();
         showToast('营养包！能量 +' + (NUTRITION_ENERGY+getSkillLevel('rbc','nutritionBonus')*10));
       } else if(this.type==='xp'){Game.xp+=this.xpValue;Sfx.coin();spawnParticles(this.x+this.w/2,this.y+this.h/2,'#ffd700',8,1.5);while(Game.playerLevel<MAX_LEVEL&&Game.xp>=xpForLevel(Game.playerLevel+1)){Game.playerLevel++;Game.skillPoints+=SKILL_POINTS_PER_LEVEL;Game.globalEnergy=getMaxEnergy();const effHp=player.maxHealth+getEquipStat('maxHp');if(player.health<effHp)player.health=effHp;Sfx.complete();spawnParticles(player.x+player.w/2,player.y+player.h/2,'#ffd700',24,3);showToast('⚡ LEVEL UP! Lv.'+Game.playerLevel+'\n获得'+SKILL_POINTS_PER_LEVEL+'技能点！');}updateHUD();saveGame();return;}else if(this.type==='equipment'){if(Game.inventory.length>=20){showToast('背包已满！');this.alive=true;Game.stats.items--;return;}Game.inventory.push(this.equipId);const eq=findEquip(this.equipId);showToast('获得装备！\n'+(eq?eq.name:this.equipId)+' ['+(eq?RARITY_NAMES[eq.rarity]:'')+']');saveGame();}
       spawnParticles(this.x+this.w/2, this.y+this.h/2, this.color(), 16, 2.5);

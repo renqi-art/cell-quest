@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>细胞远征 · Cell Quest</title>
-<link rel="stylesheet" href="css/style.css?v=120">
+<link rel="stylesheet" href="css/style.css?v=129">
 </head>
 <body>
 <div id="game-container" tabindex="0">
@@ -146,7 +146,7 @@
       <button class="btn hub-btn" id="btn-hub-pedia">📖 角色图鉴</button>
       <button class="btn hub-btn" id="btn-hub-achs" style="border-color:#e040fb;color:#e040fb">🎖️ 成就</button>
       <button class="btn hub-btn" id="btn-hub-2p" style="border-color:#4fc3f7;color:#4fc3f7">👥 双人模式: OFF</button>
-      <button class="btn hub-btn" id="btn-hub-editor" style="border-color:#ffd700;color:#ffd700" onclick="window.open('editor.html','_blank')">🗺️ 地图编辑器</button>
+      <button class="btn hub-btn" id="btn-hub-editor" style="border-color:#ffd700;color:#ffd700" onclick="openEditor()">🗺️ 地图编辑器</button>
     </div>
   </div>
 
@@ -178,7 +178,7 @@
 
   <!-- ===== Level Complete ===== -->
   <div id="complete-screen" class="overlay hidden">
-    <h1>关卡完成</h1>
+    <h1>🎉 顺利通关！</h1>
     <h3 id="complete-level-name"></h3>
     <div class="stats">
       <div class="row"><span>击杀细菌</span><span class="val" id="stat-kills">0</span></div>
@@ -191,11 +191,20 @@
       <div class="row"><span>最佳速通</span><span class="val" id="stat-best-time">--:--.--</span></div>
       <div class="row"><span>通关评价</span><span class="val" id="stat-rating">★★★</span></div>
     </div>
+    <div class="complete-stars" id="complete-stars" aria-label="通关星级"></div>
     <div class="btn-row">
-      <button class="btn primary" id="btn-next-level">关卡选择</button>
-      <button class="btn" id="btn-complete-menu">🏠 返回首页</button>
+      <button class="btn primary" id="btn-next-level">⚔️ 下一局</button>
+      <button class="btn" id="btn-complete-menu">🔄 再来一局</button>
+      <button class="btn" id="btn-complete-home">🏠 返回主页</button>
     </div>
   </div>
+
+  <!-- ===== 通关庆祝特效层（彩带+横幅） ===== -->
+  <div id="win-fx" class="hidden"></div>
+
+  <!-- ===== 第2关专属加载页（动态创建，此处预留容器锚点） ===== -->
+  <!-- 第2关侧边固定对话（场景互动提示） -->
+  <div id="scene-info" class="scene-info hidden"></div>
 
   <!-- ===== Skill Tree (技能树) ===== -->
   <div id="skill-tree-screen" class="overlay hidden">
@@ -233,17 +242,17 @@
   </div>
 </div>
 
-<script src="js/config.js?v=86"></script>
-<script src="js/entities.js?v=10"></script>
+<script src="js/config.js?v=96"></script>
+<script src="js/entities.js?v=18"></script>
 <script src="js/levels/level0_blood.js?v=4"></script>
-<script src="js/levels/level1_wbc.js?v=5"></script>
+<script src="js/levels/level1_wbc.js?v=8"></script>
 <script src="js/levels/level2_alveoli.js?v=4"></script>
 <script src="js/levels/level3_vessel.js?v=4"></script>
 <script src="js/levels/level4_lymph.js?v=4"></script>
 <script src="js/levels/level5_boss.js?v=4"></script>
-<script src="js/levels.js?v=78"></script>
-<script src="js/sprites.js?_nc=2"></script>
-<script src="js/ai-levels.js?v=1"></script>
-<script src="js/game.js?_nc=5"></script>
+<script src="js/levels.js?v=80"></script>
+<script src="js/sprites.js?_nc=3"></script>
+<script src="js/ai-levels.js?v=2"></script>
+<script src="js/game.js?_nc=19"></script>
 </body>
 </html>

@@ -20,6 +20,7 @@ class Level {
     this.miniSpawnArea = mapData.miniSpawnArea || null;
     this.miniSpawnTimer = 0;
     this.knowledgeCards = mapData.knowledgeCards || [];
+    this.sceneInfos = mapData.sceneInfos || [];
     this.pipeSpawners = mapData.pipeSpawners || [];
     this.pipeTimers = this.pipeSpawners.map(() => 0);
     this.pipeCooldowns = this.pipeSpawners.map(() => 0);
@@ -114,6 +115,9 @@ class Level {
             arr.push('_'); break;
           case 'N':
             Game.dcNPCs.push(new DendriticCell(c*TILE, r*TILE, Game.dcNPCs.length));
+            arr.push(' '); break;
+          case 's':
+            this.enemies.push(new Enemy(c*TILE+4, r*TILE+8, 'salmonella'));
             arr.push(' '); break;
           default:
             arr.push(' ');
@@ -463,54 +467,71 @@ class Level {
   }
 
   drawGate(ctx, camX){
+    if(!this.finish) return;
     const x = Math.round(this.finish.x) - Math.round(camX);
     const y = this.finish.y;
-    const t = Game.frame * 0.06;
-    // v3: 终点门始终开放（抵达即通关，杀怪/收集为评分标准）
-    const winMet = true;
-    
+    const cx = x + TILE/2;
+    const cy = y + TILE/2;
+    const t = Game.frame;
     ctx.save();
-    if(winMet){
-      // 门打开：金色光柱 + 门板向两侧滑开
-      const openAmt = Math.min(1, (Game.frame % 120) / 30); // 渐开动画
-      // 光柱
-      const grad = ctx.createLinearGradient(x+TILE/2, y-60, x+TILE/2, y+TILE);
-      grad.addColorStop(0, 'rgba(255,215,0,0)');
-      grad.addColorStop(0.5, C.gateGlow);
-      grad.addColorStop(1, 'rgba(255,215,0,0.7)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(x, y-60, TILE, TILE+60);
-      // 左门板
-      ctx.fillStyle = C.gateOpen;
-      ctx.fillRect(x + 2 - openAmt * TILE/2, y, TILE/2 - 2, TILE);
-      // 右门板
-      ctx.fillRect(x + TILE/2 + openAmt * TILE/2, y, TILE/2 - 2, TILE);
-      // 顶部门楣
-      ctx.fillStyle = C.gateOpen;
-      ctx.fillRect(x+2, y-4, TILE-4, 8);
-      // 脉冲光环
-      ctx.globalAlpha = 0.3 + Math.sin(t*2)*0.15;
-      ctx.strokeStyle = C.gateOpen;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x+1, y, TILE-2, TILE);
-      ctx.globalAlpha = 1;
-    } else {
-      // 门锁着：深色门 + 锁图标
-      ctx.fillStyle = C.gateLocked;
-      ctx.fillRect(x+2, y, TILE-4, TILE);
-      ctx.fillStyle = '#6a4a0a';
-      ctx.fillRect(x+4, y+2, TILE-8, TILE-4);
-      // 锁
-      ctx.fillStyle = '#ffd700';
-      ctx.font = 'bold 14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('🔒', x+TILE/2, y+TILE/2+5);
-      // v3: 评分提示
-      ctx.fillStyle = '#ffd700';
-      ctx.font = '9px sans-serif';
-      const hint = '抵达通关·击杀+收集双评分';
-      ctx.fillText(hint, x+TILE/2, y-6);
+
+    // 外层绿色光晕（始终存在，不自动消失）
+    const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, TILE * 1.2);
+    glow.addColorStop(0,    'rgba(120,255,160,0.85)');
+    glow.addColorStop(0.35, 'rgba(60,220,120,0.45)');
+    glow.addColorStop(1,    'rgba(60,220,120,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, TILE * 1.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 旋转双光环
+    ctx.translate(cx, cy);
+    const rot = t * 0.04;
+    ctx.rotate(rot);
+    ctx.strokeStyle = 'rgba(140,255,180,0.95)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, TILE * 0.42, TILE * 0.16, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.rotate(Math.PI / 2);
+    ctx.strokeStyle = 'rgba(80,230,140,0.7)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, TILE * 0.42, TILE * 0.16, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 核心光点
+    ctx.rotate(-rot - Math.PI / 2);
+    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, TILE * 0.32);
+    core.addColorStop(0, 'rgba(230,255,235,0.95)');
+    core.addColorStop(1, 'rgba(80,255,140,0.1)');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(0, 0, TILE * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 上升粒子
+    ctx.rotate(rot + Math.PI / 2);
+    for(let i = 0; i < 5; i++){
+      const ph = ((t * 0.02) + i * 0.2) % 1;
+      const py2 = TILE * 0.5 - ph * TILE;
+      const px2 = Math.sin((t * 0.05) + i * 1.3) * TILE * 0.28;
+      const r = 2 + (1 - ph) * 2;
+      ctx.globalAlpha = 0.8 * (1 - ph);
+      ctx.fillStyle = 'rgba(180,255,200,0.9)';
+      ctx.beginPath();
+      ctx.arc(px2, py2, r, 0, Math.PI * 2);
+      ctx.fill();
     }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // 地面「终点」标识
+    ctx.save();
+    ctx.fillStyle = 'rgba(120,255,160,0.9)';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('终点', cx, y - 8);
     ctx.restore();
   }
 }
@@ -558,6 +579,26 @@ function setupInput(){
     if(focusPrompt) focusPrompt.classList.add('hidden');
   });
 
+  // 首次点击/聚焦时解锁音频上下文（浏览器自动播放策略）
+  const unlockAudio = () => { Sfx.resume(); Sfx.startBgm(); }; // 沿用当前模式（默认菜单舒缓）
+  container.addEventListener('click', unlockAudio);
+
+  // 音效静音按钮（覆盖层，不改动原有布局）
+  if(!document.getElementById('sfx-mute-btn')){
+    const mb = document.createElement('button');
+    mb.id = 'sfx-mute-btn';
+    mb.type = 'button';
+    mb.textContent = '🔊';
+    mb.title = '音效开关（或按 M 键）';
+    mb.style.cssText = 'position:fixed;top:10px;right:10px;z-index:2000;width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(20,20,30,.6);color:#fff;font-size:18px;line-height:1;cursor:pointer;backdrop-filter:blur(4px);';
+    mb.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      Sfx.toggleMute();
+      mb.textContent = Sfx.muted ? '🔇' : '🔊';
+    });
+    document.body.appendChild(mb);
+  }
+
   document.addEventListener('keydown', e=>{
     Sfx.init();
     if(KEY_MAP[e.key] !== undefined){
@@ -596,6 +637,12 @@ function setupInput(){
         e.preventDefault();
       }
     }
+    // 音效静音切换（M 键）
+    if(e.key === 'm' || e.key === 'M'){
+      Sfx.toggleMute();
+      const mb = document.getElementById('sfx-mute-btn');
+      if(mb) mb.textContent = Sfx.muted ? '🔇' : '🔊';
+    }
   });
   document.addEventListener('keyup', e=>{
     if(KEY_MAP[e.key] !== undefined){
@@ -611,82 +658,264 @@ function setupInput(){
 }
 
 // ===== 背景渲染 =====
-function drawBackground(ctx, camX, bg){
-  const preset = getParallaxPreset(Game.levelIndex);
+// ===== 像素风关卡背景（按关卡主题定制，置于最底层，不遮挡任何实体/UI）=====
+const _BG_TILE_W = 1200;
+const _bgTileCache = {};
+const BG_THEMES = {
+  // 第1关 皮肤防线·擦伤：浅肉粉、米肤色
+  0:{top:'#f6d9c6',bot:'#e3a39c',cell:'#f8dfcc',cellEdge:'#e3b59d',crack:'#b5564f',bact:'#7cc36b'},
+  // 第2关 肠道危机·食物中毒(上)：橙黄、暗红
+  1:{top:'#5a2c16',bot:'#34130b',villi:'#c8632e',villiEdge:'#8f3d18',food:'#f0b03a',toxin:'#7a1f1f'},
+  // 第3关 蠕虫侵袭·食物中毒(下)：暗褐、深红
+  2:{top:'#3a241a',bot:'#1a0f0a',villi:'#7a4a32',worm:'#cc9270',wormEdge:'#8a5a3a',spore:'#9c3b3b'},
+  // 第4关 呼吸道烽火·流行性感冒：冷调淡蓝、浅紫
+  3:{top:'#26405f',bot:'#3a2c5e',tube:'#82abdc',tubeEdge:'#4a6a9a',virus:'#b18fd8',drop:'#bfe0ff'},
+  // 第5关 组织溃烂·真菌感染：暗紫、灰褐
+  4:{top:'#2a2030',bot:'#151018',tissue:'#5a4a66',fungus:'#8a7a6a',spore:'#b08fd0',hypha:'#6a5a4a'},
+  // 第6关 细胞畸变·癌细胞侵袭：深红、暗紫
+  5:{top:'#3a0e1a',bot:'#1e0814',cancer:'#c01f3a',cancerEdge:'#7a0e22',normal:'#c7a6b0',nucleus:'#3a0a14'},
+};
+function bgTheme(idx){ return BG_THEMES[idx] || BG_THEMES[0]; }
 
-  // 底层渐变
-  const grad = ctx.createLinearGradient(0,0,0,CH);
-  grad.addColorStop(0, bg[0]);
-  grad.addColorStop(1, bg[1]);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0,0,CW,CH);
-
-  // 远景层: 大圆点/细胞轮廓 (scroll 0.1x)
-  const far = preset.far;
-  const farX = Math.round(camX * 0.1) % CW;
-  ctx.save();
-  ctx.globalAlpha = far.alpha;
-  ctx.fillStyle = far.color;
-  for(let i = 0; i < 10; i++){
-    const x = ((i * 140 - farX) % (CW + 200) + CW + 200) % (CW + 200) - 80;
-    const y = 30 + (i % 4) * 100 + Math.sin(i * 1.7) * 20;
-    const r = far.pattern === 'dots' ? 25 + (i%3)*12 : far.pattern === 'bubbles' ? 20 + Math.abs(Math.sin(i))*15 : 30;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-  }
-  ctx.restore();
-
-  // 中景层: 波纹/网格/气泡 (scroll 0.25x)
-  const mid = preset.mid;
-  const midX = Math.round(camX * 0.25);
-  ctx.save();
-  ctx.globalAlpha = mid.alpha;
-  ctx.strokeStyle = mid.color;
-  ctx.lineWidth = 4;
-  if(mid.pattern === 'flow'){
-    for(let i = 0; i < 6; i++){
-      const y = 70 + i * 70;
-      ctx.beginPath();
-      for(let x = -60; x < CW+60; x += 6){
-        const wy = y + Math.sin((x+midX)*0.02 + i*0.8) * 22;
-        if(x === -60) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
+// 像素圆：用方块填充，呈现颗粒像素感
+function _pxBlob(bx, cx, cy, r, color, edge){
+  const s = 4;
+  for(let y=-r; y<=r; y+=s){
+    for(let x=-r; x<=r; x+=s){
+      const d = Math.sqrt(x*x+y*y);
+      if(d <= r){
+        bx.fillStyle = (edge && d > r - s*1.4) ? edge : color;
+        bx.fillRect((cx+x)|0, (cy+y)|0, s, s);
       }
-      ctx.stroke();
     }
-  } else if(mid.pattern === 'bubbles'){
-    for(let i = 0; i < 20; i++){
-      const x = ((i * 100 - midX/2) % (CW + 150) + CW + 150) % (CW + 150) - 50;
-      const y = 30 + (i * 47) % 400;
-      ctx.beginPath(); ctx.arc(x, y, 8 + (i%4)*3, 0, Math.PI*2); ctx.fill();
+  }
+}
+// 随机像素颗粒（纹理感）
+function _speckle(bx, x0, y0, w, h, color, count){
+  for(let i=0;i<count;i++){
+    const x = x0 + Math.random()*w, y = y0 + Math.random()*h;
+    bx.fillStyle = color;
+    bx.fillRect(x|0, y|0, 3, 3);
+  }
+}
+
+// --- 各关卡主题场景（绘制到离屏瓦片，仅建一次）---
+// 第1关：表皮角质层细胞 + 屏障破损裂口 + 少量入侵细菌
+function _sceneSkin(bx,T,W,H){
+  const cw=64, ch=48;
+  for(let y=20; y<H-30; y+=ch){
+    const off = ((y/ch)%2)*(cw/2);
+    for(let x=40; x<W-40; x+=cw){
+      const jx = x+off;
+      bx.fillStyle = T.cell; bx.fillRect(jx, y, cw-9, ch-9);
+      bx.fillStyle = 'rgba(255,255,255,0.28)'; bx.fillRect(jx, y, cw-9, 4);
+      bx.fillStyle = T.cellEdge; bx.fillRect(jx, y+ch-12, cw-9, 4);
+    }
+  }
+  const crackX = W*0.56;
+  for(let y=0; y<H; y+=8){
+    const cx = crackX + Math.sin(y*0.05)*24 + (y>H*0.5? 16:0);
+    bx.fillStyle = T.crack; bx.fillRect(cx, y, 11, 8);
+    bx.fillStyle = 'rgba(0,0,0,0.28)'; bx.fillRect(cx+3, y, 4, 8);
+  }
+  for(let i=0;i<7;i++){
+    const bxx = 120 + (i*150)%(W-220);
+    const byy = 70 + (i*97)%(H-140);
+    bx.fillStyle = T.bact; bx.fillRect(bxx, byy, 16, 8);
+    bx.fillStyle = 'rgba(255,255,255,0.2)'; bx.fillRect(bxx, byy, 16, 3);
+    bx.fillStyle = 'rgba(0,0,0,0.25)'; bx.fillRect(bxx+13, byy, 3, 8);
+  }
+}
+// 第2/3关：小肠绒毛场景（worm=true 增加蠕虫与孢子）
+function _sceneIntestine(bx,T,W,H,worm){
+  const step = 72;
+  for(let x=50; x<W-40; x+=step){
+    const vh = 150 + ((x*7)%90);
+    const w = 34;
+    bx.fillStyle = T.villi; bx.fillRect(x, 0, w, vh);
+    _pxBlob(bx, x+w/2, vh, w/2, T.villi, T.villiEdge);
+    bx.fillStyle = T.villiEdge; bx.fillRect(x, vh-12, w, 6);
+    bx.fillStyle = 'rgba(255,255,255,0.16)'; bx.fillRect(x+5, 4, 6, vh*0.5);
+  }
+  if(worm){
+    for(let k=0;k<4;k++){
+      const baseY = 230 + k*58; const phase = k*1.3;
+      for(let x=40;x<W-40;x+=10){
+        const yy = baseY + Math.sin(x*0.03+phase)*34;
+        _pxBlob(bx, x, yy, 13, T.worm, T.wormEdge);
+      }
+      for(let x=40;x<W-40;x+=40){
+        const yy = baseY + Math.sin(x*0.03+phase)*34;
+        bx.fillStyle = T.wormEdge; bx.fillRect(x-2, yy-13, 4, 26);
+      }
+    }
+    for(let i=0;i<14;i++){
+      _pxBlob(bx, 60+(i*83)%(W-100), 80+(i*53)%(H-120), 7, T.spore, '#5a1414');
     }
   } else {
-    for(let i = 0; i < 8; i++){
-      const y = 50 + i * 55;
-      ctx.beginPath();
-      for(let x = -40; x < CW+40; x += 9){
-        const wy = y + Math.sin((x+midX)*0.018 + i) * 16;
-        if(x === -40) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
-      }
-      ctx.stroke();
+    for(let i=0;i<16;i++){
+      const fx=70+(i*71)%(W-110), fy=120+(i*113)%(H-180);
+      bx.fillStyle = T.food; bx.fillRect(fx, fy, 18, 14);
+      bx.fillStyle = 'rgba(255,255,255,0.22)'; bx.fillRect(fx, fy, 18, 4);
+    }
+    for(let i=0;i<10;i++){
+      const tx=90+(i*109)%(W-120), ty=H-90-(i*37)%(H-150);
+      _pxBlob(bx, tx, ty, 12, T.toxin, '#4a0f0f');
     }
   }
-  ctx.restore();
-
-  // 近景层: 小颗粒/血细胞 (scroll 0.5x)
-  const near = preset.near;
-  const nearX = Math.round(camX * 0.5) % CW;
-  ctx.save();
-  ctx.globalAlpha = near.alpha;
-  ctx.fillStyle = near.color;
-  for(let i = 0; i < 30; i++){
-    const x = ((i * 50 + 23 - nearX) % (CW + 100) + CW + 100) % (CW + 100) - 30;
-    const y = 20 + (i * 67) % 440;
-    ctx.beginPath();
-    if(near.pattern === 'cells'){
-      ctx.arc(x, y, 3 + (i%3), 0, Math.PI*2);
-    } else {
-      ctx.arc(x, y, 2.5, 0, Math.PI*2);
+}
+// 第4关：气管/支气管 + 流感病毒 + 飞沫
+function _sceneRespiratory(bx,T,W,H){
+  const my = H*0.5;
+  bx.fillStyle = T.tube; bx.fillRect(0, my-26, W, 52);
+  bx.fillStyle = T.tubeEdge; bx.fillRect(0, my-26, W, 5); bx.fillRect(0, my+21, W, 5);
+  bx.fillStyle = 'rgba(255,255,255,0.18)';
+  for(let x=20;x<W;x+=44) bx.fillRect(x, my-26, 6, 52);
+  for(let x=80;x<W;x+=180){
+    for(let d=-1; d<=1; d+=2){
+      const sgn=d;
+      bx.fillStyle = T.tube;
+      for(let t=0;t<70;t+=6){
+        const bxp = x + sgn*t*0.5; const byp = my + sgn*t;
+        bx.fillRect(bxp-4, byp-4, 8, 8);
+      }
     }
-    ctx.fill();
+  }
+  for(let i=0;i<16;i++){
+    const vx=60+(i*97)%(W-110), vy=50+(i*61)%(H-90);
+    _pxBlob(bx, vx, vy, 12, T.virus, '#7a5aa0');
+    bx.fillStyle = '#5a3a7a';
+    for(let a=0;a<8;a++){ const ang=a/8*Math.PI*2; bx.fillRect(vx+Math.cos(ang)*14-2, vy+Math.sin(ang)*14-2, 4,4); }
+  }
+  for(let i=0;i<22;i++){
+    _pxBlob(bx, 40+(i*53)%(W-80), 30+(i*89)%(H-60), 4, T.drop, null);
+  }
+}
+// 第5关：病变组织斑块 + 真菌菌丝 + 孢子（蘑菇点）
+function _sceneFungus(bx,T,W,H){
+  for(let i=0;i<26;i++){
+    const px=40+(i*113)%(W-80), py=30+(i*79)%(H-80);
+    _pxBlob(bx, px, py, 26+(i%5)*6, T.tissue, '#3a2e48');
+  }
+  bx.fillStyle = T.hypha;
+  for(let s=0;s<10;s++){
+    let x=60+(s*121)%(W-100), y=40+(s*97)%(H-80);
+    for(let t=0;t<40;t++){
+      x += Math.sin(t*0.6+s)*3; y += 4;
+      bx.fillRect(x|0, y|0, 3, 3);
+      if(t%12===0) bx.fillRect((x+6)|0, (y-4)|0, 3, 3);
+    }
+  }
+  for(let i=0;i<30;i++){
+    const sx=50+(i*67)%(W-90), sy=60+(i*143)%(H-100);
+    bx.fillStyle = T.fungus; bx.fillRect(sx-3, sy, 6, 5);
+    _pxBlob(bx, sx, sy-4, 5, T.spore, null);
+  }
+}
+// 第6关：大量异常增殖癌细胞 + 少量被包围的正常细胞
+function _sceneCancer(bx,T,W,H){
+  for(let i=0;i<60;i++){
+    const cx=40+(i*97)%(W-80), cy=20+(i*131)%(H-40);
+    _pxBlob(bx, cx, cy, 16+(i%4)*4, T.cancer, T.cancerEdge);
+    bx.fillStyle = T.nucleus; _pxBlob(bx, cx, cy, 7, T.nucleus, null);
+  }
+  for(let i=0;i<8;i++){
+    const cx=120+(i*150)%(W-180), cy=80+(i*97)%(H-140);
+    _pxBlob(bx, cx, cy, 14, T.normal, '#9a7a86');
+    bx.fillStyle = '#8a6a76'; _pxBlob(bx, cx, cy, 6, '#8a6a76', null);
+  }
+}
+function _paintScene(bx, idx, T, W, H){
+  if(idx===0 || idx>=6) _sceneSkin(bx,T,W,H);
+  else if(idx===1) _sceneIntestine(bx,T,W,H,false);
+  else if(idx===2) _sceneIntestine(bx,T,W,H,true);
+  else if(idx===3) _sceneRespiratory(bx,T,W,H);
+  else if(idx===4) _sceneFungus(bx,T,W,H);
+  else if(idx===5) _sceneCancer(bx,T,W,H);
+  _speckle(bx, 30, 20, W-60, H-40, 'rgba(0,0,0,0.05)', 2600);
+  _speckle(bx, 30, 20, W-60, H-40, 'rgba(255,255,255,0.045)', 2200);
+}
+function _getBgTile(idx){
+  if(_bgTileCache[idx]) return _bgTileCache[idx];
+  const T = bgTheme(idx);
+  const cv = document.createElement('canvas');
+  cv.width = _BG_TILE_W; cv.height = CH;
+  const bx = cv.getContext('2d');
+  bx.imageSmoothingEnabled = false;
+  const g = bx.createLinearGradient(0,0,0,CH);
+  g.addColorStop(0, T.top); g.addColorStop(1, T.bot);
+  bx.fillStyle = g; bx.fillRect(0,0,_BG_TILE_W,CH);
+  _paintScene(bx, idx, T, _BG_TILE_W, CH);
+  _bgTileCache[idx] = cv;
+  return cv;
+}
+
+function drawBackground(ctx, camX, bg){
+  const idx = Game.levelIndex;
+  const T = bgTheme(idx);
+  const grad = ctx.createLinearGradient(0,0,0,CH);
+  grad.addColorStop(0, T.top); grad.addColorStop(1, T.bot);
+  ctx.fillStyle = grad; ctx.fillRect(0,0,CW,CH);
+
+  const tile = _getBgTile(idx);
+  const par = 0.55; // 视差系数：背景慢于世界移动
+  let off = Math.round(camX * par) % _BG_TILE_W;
+  if(off < 0) off += _BG_TILE_W;
+  ctx.imageSmoothingEnabled = false;
+  for(let x = -off; x < CW; x += _BG_TILE_W){
+    ctx.drawImage(tile, x, 0);
+  }
+}
+
+// ===== 第2关：肠道视觉特效（粘液 + 受损肠道细胞 + 互动物体提示） =====
+function drawIntestineDecor(ctx, camX){
+  if(!Game.level) return;
+  const floorTopAt = (typeof intestineFloorTop === 'function') ? intestineFloorTop : (c => 9);
+  ctx.save();
+  for(let c = 0; c < Game.level.width; c++){
+    const wx = c * TILE - camX;
+    if(wx < -50 || wx > CW + 50) continue;
+    const ft = floorTopAt(c);
+    // 受损 / 发炎肠道上皮细胞：附着于地板表面的玫红-紫斑（随帧脉动）
+    if((c * 7) % 9 === 0){
+      const fy = ft * TILE;
+      const pulse = 0.5 + Math.sin(Game.frame * 0.05 + c) * 0.3;
+      ctx.globalAlpha = 0.18 + 0.3 * pulse;
+      ctx.fillStyle = '#c2185b';
+      ctx.beginPath();
+      ctx.ellipse(wx + TILE/2, fy + 3, 11, 5, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 0.12 + 0.18 * pulse;
+      ctx.fillStyle = '#e040fb';
+      ctx.beginPath();
+      ctx.ellipse(wx + TILE/2 - 3, fy + 1, 4, 2, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+    // 肠道粘液：自顶部肠壁垂下的半透明绿黄团块（随风轻微摆动）
+    if((c * 5) % 11 === 0){
+      const sway = Math.sin(Game.frame * 0.03 + c) * 4;
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = '#9ccc65';
+      ctx.beginPath();
+      ctx.ellipse(wx + TILE/2 + sway, 1*TILE + 14, 9, 15, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 0.14;
+      ctx.beginPath();
+      ctx.ellipse(wx + TILE/2 + sway, 1*TILE + 32, 6, 11, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+  // 互动物体提示（💡）：标出可阅读介绍的地点
+  if(Game.level.sceneInfos && Game.level.sceneInfos.length){
+    for(const si of Game.level.sceneInfos){
+      const wx = si.x - camX;
+      if(wx < -24 || wx > CW + 24) continue;
+      const wy = si.y - 26 + Math.sin(Game.frame * 0.08) * 3;
+      ctx.globalAlpha = 0.85;
+      ctx.font = '15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('💡', wx, wy);
+    }
   }
   ctx.restore();
 }
@@ -890,6 +1119,8 @@ function update(){
   checkTutorials();
   // 知识卡片触发
   checkKnowledgeCards();
+  // 第2关：侧边固定对话（场景互动提示）
+  updateSceneInfo();
 
   // 相机
   updateCamera();
@@ -958,6 +1189,8 @@ function render(){
 
   drawBackground(ctx, camX, lvl.bg);
   lvl.draw(ctx, camX);
+  // 第2关：肠道视觉特效（粘液 + 受损肠道细胞提示）
+  if(Game.levelIndex === 1) drawIntestineDecor(ctx, camX);
   for(const tp of Game.tempPlatforms) tp.draw(ctx, camX);
   for(const pt of Game.pusTiles) pt.draw(ctx, camX);
   for(const fp of Game.floatPlatforms) fp.draw(ctx, camX);
@@ -1068,6 +1301,15 @@ function updateHUD(){
     healthBar.style.width = healthPct + '%';
     healthBar.classList.toggle('low', healthPct <= 50 && healthPct > 25);
     healthBar.classList.toggle('critical', healthPct <= 25);
+  }
+  // 音效：血量过低触发/停止警报；能量不足触发预警（仅在游戏中）
+  if(Game.state === 'playing'){
+    if(healthPct <= 25) Sfx.startAlarm(); else Sfx.stopAlarm();
+    if(Game.globalEnergy < LOW_ENERGY){
+      if(!Game._energyWarned){ Game._energyWarned = true; Sfx.energyWarn(); }
+    } else if(Game.globalEnergy > LOW_ENERGY + 10){
+      Game._energyWarned = false;
+    }
   }
   if(healthText) healthText.textContent = p.health + '/' + p.maxHealth;
 
@@ -1267,11 +1509,23 @@ function showTutorial(speaker, color, body){
 function showNextTutorial(){
   if(tutorialQueue.length === 0) return;
   const tut = tutorialQueue.shift();
-  Game.tutorialPause = true;
+  // 不再暂停游戏、不再要求按空格：自动浮现，数秒后自动消失
+  // （与后续场景对话一致：仅出现、不提示、不打断操作）
   $('bubble-speaker').textContent = tut.speaker.trim();
   $('bubble-speaker').style.color = tut.color;
   $('bubble-body').textContent = tut.body;
   $('dialogue-bubble').classList.add('active');
+  clearTimeout(Game._bubbleTimer);
+  Game._bubbleTimer = setTimeout(dismissTutorialBubble, 3800);
+}
+
+// 自动消失版：与 showNextTutorial 配对，无需玩家按键
+function dismissTutorialBubble(){
+  $('dialogue-bubble').classList.remove('active');
+  clearTimeout(Game._bubbleTimer);
+  if(tutorialQueue.length > 0){
+    setTimeout(showNextTutorial, 350);
+  }
 }
 
 function dismissTutorial(){
@@ -1296,6 +1550,7 @@ function skipAllTutorials(){
     }catch(e){}
   }
   tutorialQueue = [];
+  clearTimeout(Game._bubbleTimer);
   $('dialogue-bubble').classList.remove('active');
   Game.tutorialPause = false;
   Game.tutorialsDone = true;
@@ -1315,6 +1570,9 @@ function showKnowledgeCard(title, text){
   card.classList.remove('hidden');
   Game.memoryCardOpen = true;
   Game.memoryCardOpenTime = performance.now();
+  // 仅出现、不阻塞：数秒后自动消失（与教程气泡一致：仅出现不提示）
+  clearTimeout(Game._kcTimer);
+  Game._kcTimer = setTimeout(closeMemoryCard, 7000);
 }
 
 // 知识卡片位置触发（走到x坐标处触发，不限次数，每张卡独立）
@@ -1340,6 +1598,7 @@ function checkKnowledgeCards(){
 }
 
 function closeMemoryCard(){
+  clearTimeout(Game._kcTimer);
   $('memory-card').classList.add('hidden');
   if(Game.memoryCardOpen){
     // 补偿暂停期间的计时器，避免速通时间包含读卡时间
@@ -1382,6 +1641,7 @@ function closeCharDetail(){
 // ===== 状态转换 =====
 function showMenu(){
   Game.state = 'menu';
+  Sfx.startBgm('menu'); // 主菜单即播放舒缓背景音乐
   $('main-menu').classList.remove('hidden');
   $('hub-screen').classList.add('hidden');
   $('hud').classList.remove('active');
@@ -1593,49 +1853,201 @@ function importLevelFromCode(){
   renderLevelGrid();
 }
 
-// ===== v3: 细胞选择(Level 3+自由选) =====
-function selectCellAndLoad(n){
-  const idx = n - 1;
-  const cfg = configs[idx];
-  // 前两关(Level 1-2)锁定细胞类型，直接进入
-  if(!cfg._isCustom && idx < 2){
-    LoadLevel(n);
+// ===== 英雄预选：选择 2 名角色出战 =====
+function startLevelOrLoading(n, cellTypeOverride){
+  // 第2关：先显示剧情加载页，玩家点击"进入肠道战场"后再加载关卡
+  if(n === 2){
+    showLevel2LoadingPage(n);
     return;
   }
+  LoadLevel(n, cellTypeOverride);
+}
 
-  // 双人模式：两个玩家分别选
+function showLevel2LoadingPage(n){
+  const existing = document.getElementById('lv2-loading');
+  if(existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'lv2-loading';
+  overlay.className = 'overlay';
+  overlay.style.cssText = 'display:flex;align-items:center;justify-content:center;z-index:1100;';
+  overlay.innerHTML = `
+    <div class="lv2-loading-inner">
+      <div class="lv2-channel">📡 免疫通讯频道</div>
+      <div class="lv2-dialogue">
+        <div class="lv2-line lv2-dc">
+          <div class="lv2-avatar dc">树</div>
+          <div class="lv2-speech"><b>树突状细胞</b><span>各位，收到紧急情报！变质食物携带大量沙门氏菌入侵肠道！这些病菌会不断增殖、释放毒素，引发食物中毒，持续侵蚀肠道上皮细胞！</span></div>
+        </div>
+        <div class="lv2-line lv2-wbc">
+          <div class="lv2-avatar wbc">白</div>
+          <div class="lv2-speech"><b>中性粒细胞（白细胞）</b><span>明白了。所有侵入肠道的病菌，我会逐一肃清。</span></div>
+        </div>
+        <div class="lv2-line lv2-rbc">
+          <div class="lv2-avatar rbc">红</div>
+          <div class="lv2-speech"><b>红细胞</b><span>哼哼！守护肠道细胞氧气供给的重任就交由本小姐！要是组织坏死，这场战斗可就彻底陷入劣势咯！</span></div>
+        </div>
+        <div class="lv2-line lv2-dc">
+          <div class="lv2-avatar dc">树</div>
+          <div class="lv2-speech"><b>树突状细胞</b><span>请牢记两项任务：清除全部沙门氏菌，持续输送氧气，守护肠道细胞！</span></div>
+        </div>
+      </div>
+      <div class="lv2-tasks">
+        <div class="lv2-task-title">📋 任务清单</div>
+        <div class="lv2-task">✅ 清除场景内全部沙门氏菌</div>
+        <div class="lv2-task">✅ 运输氧气，维持肠道细胞活性</div>
+        <div class="lv2-task tip">💡 推荐出战组合：白细胞负责灭杀细菌，红细胞负责供氧</div>
+      </div>
+      <div class="btn-row" style="justify-content:center;margin-top:14px;">
+        <button class="btn" onclick="document.getElementById('lv2-loading').remove()">返回</button>
+        <button class="btn primary" id="lv2-start-btn">⚔️ 进入肠道战场</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('game-container').appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+  document.getElementById('lv2-start-btn').onclick = () => {
+    overlay.remove();
+    LoadLevel(n);
+  };
+}
+
+// ===== 第2关：侧边固定区域对话（替代弹窗展示场景互动物体介绍） =====
+function updateSceneInfo(){
+  if(Game.levelIndex !== 1 || !Game.level || !Game.level.sceneInfos || !Game.level.sceneInfos.length) return;
+  const p = Game.player;
+  if(!p) return;
+  let near = null;
+  for(const si of Game.level.sceneInfos){
+    const dx = (p.x + p.w/2) - si.x;
+    const dy = (p.y + p.h/2) - si.y;
+    if(Math.abs(dx) < 48 && Math.abs(dy) < 48){ near = si; break; }
+  }
+  if(near){
+    Game._sceneInfoTimer = 150;
+    showSceneInfo(near);
+  } else if(Game._sceneInfoTimer > 0){
+    Game._sceneInfoTimer--;
+    if(Game._sceneInfoTimer === 0) hideSceneInfo();
+  }
+}
+
+function showSceneInfo(si){
+  const el = document.getElementById('scene-info');
+  if(!el) return;
+  let name = '树突状细胞', cls = 'dc';
+  if(si.speaker === 'wbc'){ name = '中性粒细胞（白细胞）'; cls = 'wbc'; }
+  else if(si.speaker === 'rbc'){ name = '红细胞'; cls = 'rbc'; }
+  el.className = 'scene-info active ' + cls;
+  el.innerHTML = '<div class="scene-speaker">' + name + '</div><div class="scene-text">' + si.text + '</div>';
+}
+
+function hideSceneInfo(){
+  const el = document.getElementById('scene-info');
+  if(el) el.className = 'scene-info hidden';
+}
+
+function selectCellAndLoad(n){
+  const idx = n - 1;
+  const cfg = buildLevelConfigs()[idx];
+
+  // 双人模式：沿用原有双玩家分别选择
   if(Game.twoPlayer){
     showDualCellSelect(n);
     return;
   }
 
-  const cells = [
-    {type:1, name:'白细胞', icon:'⚔️', desc:'战斗型·击杀得分', color:'#f0ede0'},
-    {type:3, name:'红细胞', icon:'🔴', desc:'收集型·探索得分', color:'#d93025'},
-  ];
-
-  let html = '<h3>选择细胞类型 (Level ' + n + ')</h3>';
-  html += '<div style="display:flex;gap:10px;margin:12px 0;">';
-  for(const c of cells){
-    html += `<div onclick="LoadLevel(${n},${c.type});document.getElementById('cell-select-panel').remove()"
-      style="flex:1;background:rgba(255,255,255,.05);border:2px solid ${c.color};border-radius:10px;padding:16px;cursor:pointer;text-align:center;transition:all .15s;"
-      onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">
-      <div style="font-size:32px;">${c.icon}</div>
-      <b style="color:${c.color};">${c.name}</b>
-      <div style="font-size:11px;color:#888;margin-top:4px;">${c.desc}</div>
-    </div>`;
-  }
-  html += '</div><button class="btn-small" onclick="document.getElementById(\'cell-select-panel\').remove()">取消</button>';
-
   const existing = document.getElementById('cell-select-panel');
   if(existing) existing.remove();
+
+  const selected = [];
+  const party = { selected: [], levelN: n };
+  window._partyPick = party;
+
+  const CHARS = [
+    { type:1, key:'wbc', name:'白细胞', subtitle:'中性粒细胞', color:'#f0ede0', border:'#b4a890', avatar:'images/avatar-wbc.png', skills:['⚔️ 挥剑斩杀','💨 游走穿梭'] },
+    { type:3, key:'rbc', name:'红细胞', subtitle:'运氧者', color:'#d93025', border:'#d93025', avatar:'images/avatar-rbc.png', skills:['💨 高速冲刺','🔋 供氧输送'] },
+    { type:2, key:'plt', name:'血小板', subtitle:'凝血者', color:'#ff8a8a', border:'#ff8a8a', avatar:'images/avatar-plt.png', skills:['🧱 凝血铺路','🛡️ 凝血屏障'] },
+  ];
+
+  function renderPartyPanel(){
+    const panel = document.getElementById('cell-select-panel');
+    if(!panel) return;
+    const cardsHtml = CHARS.map(c => {
+      const picked = party.selected.includes(c.type);
+      const order = party.selected.indexOf(c.type) + 1;
+      const disabled = !picked && party.selected.length >= 2;
+      return `
+        <div id="party-card-${c.type}" class="party-card ${picked ? 'picked' : ''} ${disabled ? 'disabled' : ''}"
+          onclick="_partyPick.toggle(${c.type})"
+          style="--c-border:${c.border};--c-color:${c.color};">
+          <div class="party-avatar"><img src="${c.avatar}" alt="${c.name}"></div>
+          <div class="party-name" style="color:${c.color}">${c.name}</div>
+          <div class="party-subtitle">${c.subtitle}</div>
+          <div class="party-skills">
+            <div>${c.skills[0]}</div>
+            <div>${c.skills[1]}</div>
+          </div>
+          ${picked ? `<div class="party-order">${order}</div>` : ''}
+          ${disabled ? '<div class="party-mask">已达上限</div>' : ''}
+        </div>
+      `;
+    }).join('');
+
+    const canConfirm = party.selected.length === 2;
+    // 关卡标题：名称格式 "X·Y" → 大标题=Y(点后,置于图片上方) 小标题=X(点前,置于图片下方)
+    const nameParts = (cfg.name || '').split('·');
+    const bigTitle = nameParts.length > 1 ? nameParts.slice(1).join('·') : (cfg.name || '');
+    const smallTitle = nameParts.length > 1 ? nameParts[0] : '';
+    const bg0 = (cfg.bg && cfg.bg[0]) || '#22263a';
+    const bg1 = (cfg.bg && cfg.bg[1]) || '#3a3f5a';
+    panel.innerHTML = `
+      <div class="confirm-inner party-panel" style="max-width:520px;width:92%;">
+        <div class="level-title-block">
+          <div class="level-big-title">${bigTitle}</div>
+          <div class="level-hero-banner" style="background:linear-gradient(135deg, ${bg0}, ${bg1});">
+            <span class="level-hero-icon">${cfg.icon || '🎮'}</span>
+          </div>
+          <div class="level-small-title">${smallTitle}</div>
+        </div>
+        <p style="font-size:12px;color:#8a8aaa;margin:12px 0;">英雄预选 — 选择 <b>2 名</b> 出战，对局内按 <kbd>Q</kbd> 自由切换</p>
+        <div class="party-grid">${cardsHtml}</div>
+        <div class="btn-row" style="justify-content:center;margin-top:16px;">
+          <button class="btn" onclick="_partyPick.clear()">清空</button>
+          <button class="btn primary ${canConfirm ? '' : 'disabled'}" id="party-confirm-btn" onclick="_partyPick.confirm()" ${canConfirm ? '' : 'disabled'}>确认出战 (${party.selected.length}/2)</button>
+          <button class="btn" onclick="_partyPick.cancel()">取消</button>
+        </div>
+      </div>
+    `;
+  }
+
+  party.toggle = (type) => {
+    const i = party.selected.indexOf(type);
+    if(i >= 0){
+      party.selected.splice(i, 1);
+    } else if(party.selected.length < 2){
+      party.selected.push(type);
+    }
+    renderPartyPanel();
+  };
+  party.clear = () => { party.selected = []; renderPartyPanel(); };
+  party.cancel = () => { const p = document.getElementById('cell-select-panel'); if(p) p.remove(); window._partyPick = null; };
+  party.confirm = () => {
+    if(party.selected.length !== 2) return;
+    Game.party = [...party.selected];
+    Game.partyIndex = 0;
+    const p = document.getElementById('cell-select-panel');
+    if(p) p.remove();
+    window._partyPick = null;
+    startLevelOrLoading(n);
+  };
+
   const panel = document.createElement('div');
   panel.id = 'cell-select-panel';
   panel.className = 'overlay';
   panel.style.cssText = 'display:flex;align-items:center;justify-content:center;z-index:1000;';
-  panel.innerHTML = `<div class="confirm-inner" style="max-width:420px;">${html}</div>`;
-  panel.addEventListener('click', e => { if(e.target === panel) panel.remove(); });
+  panel.addEventListener('click', e => { if(e.target === panel) party.cancel(); });
   document.getElementById('game-container').appendChild(panel);
+  renderPartyPanel();
 }
 
 function showDualCellSelect(n){
@@ -1648,18 +2060,20 @@ function showDualCellSelect(n){
 function showDualCellStep(step){
   const label = step === 1 ? 'P1' : 'P2';
   const cells = [
-    {type:1, name:'白细胞', icon:'⚔️', desc:'战斗型·击杀得分', color:'#f0ede0'},
-    {type:3, name:'红细胞', icon:'🔴', desc:'收集型·探索得分', color:'#d93025'},
+    {type:1, name:'白细胞', icon:'⚔️', desc:'战斗型', color:'#f0ede0'},
+    {type:3, name:'红细胞', icon:'🔴', desc:'收集型', color:'#d93025'},
+    {type:2, name:'血小板', icon:'🛡️', desc:'支援型', color:'#ff8a8a'},
   ];
 
   let html = '<h3>选择细胞 — ' + label + '</h3>';
-  html += '<div style="display:flex;gap:10px;margin:12px 0;">';
+  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0;">';
   for(const c of cells){
     html += `<div onclick="dualCellPicked(${step},${c.type})"
-      style="flex:1;background:rgba(255,255,255,.05);border:2px solid ${c.color};border-radius:10px;padding:16px;cursor:pointer;text-align:center;"
+      style="background:rgba(255,255,255,.05);border:2px solid ${c.color};border-radius:10px;padding:12px 8px;cursor:pointer;text-align:center;"
       onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">
-      <div style="font-size:32px;">${c.icon}</div>
-      <b style="color:${c.color};">${c.name}</b>
+      <div style="font-size:28px;">${c.icon}</div>
+      <b style="color:${c.color};font-size:14px;">${c.name}</b>
+      <div style="font-size:10px;color:#888;margin-top:4px;">${c.desc}</div>
     </div>`;
   }
   html += '</div><button class="btn-small" onclick="document.getElementById(\'cell-select-panel\').remove()">取消</button>';
@@ -1684,7 +2098,7 @@ function dualCellPicked(step, cellType){
     Game._dualSelectP2 = cellType;
     Game._p2CellType = cellType;
     document.getElementById('cell-select-panel').remove();
-    LoadLevel(Game._dualSelectN, Game._dualSelectP1);
+    startLevelOrLoading(Game._dualSelectN, Game._dualSelectP1);
   }
 }
 
@@ -1795,6 +2209,8 @@ function switchHubTab(tab){
 
 function showHub(){
   Game.state = 'hub';
+  Sfx.startBgm('menu'); // 关卡选择菜单持续播放舒缓背景音乐
+  Sfx.stopAlarm();
   refreshCustomLevels();
   $('main-menu').classList.add('hidden');
   $('hub-screen').classList.remove('hidden');
@@ -1838,7 +2254,7 @@ function renderLevelGrid(){
       <div style="font-size:40px;margin-bottom:12px;">🎨</div>
       <div style="font-size:15px;margin-bottom:4px;">暂无自定义关卡</div>
       <div style="font-size:12px;color:#666;">使用<b>地图编辑器</b>或<b>AI生成</b>创建关卡</div>
-      <button class="btn-small" style="margin-top:12px;" onclick="window.open('editor.html','_blank')">🗺️ 打开地图编辑器</button>
+      <button class="btn-small" style="margin-top:12px;" onclick="openEditor()">🗺️ 打开地图编辑器</button>
       <br><small style="color:#888;">或</small>
       <button class="btn-small" style="margin-top:8px;" onclick="importLevelFromCode()">📥 导入关卡代码</button>
     </div>`;
@@ -1856,8 +2272,8 @@ function renderLevelGrid(){
     if(!isCustomTab && isCustom) continue;
 
     const card = document.createElement('div');
-    // 自定义关卡始终解锁,不检查locked
-    const isLocked = isCustom ? false : !Game.unlocked[i];
+    // 全部关卡已解锁，移除锁定限制（自定义关卡同样始终可进入）
+    const isLocked = false;
     const cellLabel = cfg.cellType === 1 ? '⚪WBC' : cfg.cellType === 3 ? '🔴RBC' : '';
     const levelNum = isCustom ? (idx + 1) : (i + 1);
 
@@ -1963,10 +2379,12 @@ function togglePause(){
   if(Game.state === 'playing'){
     Game.state = 'paused';
     Game.paused = true;
+    Sfx.suspendAll(); // 暂停时静音（含警报）
     $('pause-menu').classList.remove('hidden');
   } else if(Game.state === 'paused'){
     Game.state = 'playing';
     Game.paused = false;
+    Sfx.resume(); // 恢复时重启音频
     $('pause-menu').classList.add('hidden');
     // 恢复时重新聚焦
     const container = $('game-container');
@@ -1976,9 +2394,57 @@ function togglePause(){
   }
 }
 
+// 通关庆祝特效：彩带 + 横幅弹出（不阻塞结算面板，pointer-events:none）
+function playWinFx(){
+  const layer = document.getElementById('win-fx');
+  if(!layer) return;
+  layer.innerHTML = '';
+  layer.classList.remove('hidden');
+
+  // 彩带
+  const colors = ['#ffd700','#ff5252','#4caf50','#2196f3','#e040fb','#ff9800','#00e5ff','#ffffff'];
+  const count = 96;
+  for(let i = 0; i < count; i++){
+    const c = document.createElement('div');
+    c.className = 'wfx-confetti';
+    c.style.left = (Math.random() * 100) + 'vw';
+    c.style.background = colors[(Math.random() * colors.length) | 0];
+    const w = 6 + Math.random() * 8;
+    c.style.width = w + 'px';
+    c.style.height = (w * 0.6) + 'px';
+    c.style.animationDelay = (Math.random() * 0.7) + 's';
+    c.style.animationDuration = (2.2 + Math.random() * 1.8) + 's';
+    layer.appendChild(c);
+  }
+
+  // 横幅
+  const cfg = buildLevelConfigs()[Game.levelIndex] || {};
+  const banner = document.createElement('div');
+  banner.className = 'wfx-banner';
+  banner.innerHTML = '<div class="wfx-title">🎉 关卡完成！</div>' +
+    '<div class="wfx-sub">' + (cfg.name || '') + ' · 顺利通过</div>';
+  layer.appendChild(banner);
+
+  // 自动清理（保留结算面板交互）
+  clearTimeout(Game._winFxTimer);
+  Game._winFxTimer = setTimeout(() => {
+    if(layer){ layer.innerHTML = ''; layer.classList.add('hidden'); }
+  }, 3300);
+}
+
 function levelComplete(){
   Game.state = 'complete';
+  Sfx.stopBgm();
+  Sfx.stopAlarm();
+  playWinFx();
   Sfx.complete();
+  // 通关先放彩带；无论如何都调度结算面板（含3个按钮）在彩带之后跳出。
+  // 即使后续填充逻辑出错，面板也保证显示（兜底，避免“只有彩带没有按钮”）。
+  clearTimeout(Game._completeRevealTimer);
+  Game._completeRevealTimer = setTimeout(() => {
+    const cs = document.getElementById('complete-screen');
+    if(cs) cs.classList.remove('hidden');
+  }, 1600);
   const idx = Game.levelIndex;
   Game.completed[idx] = true;
   const configs = buildLevelConfigs();
@@ -2058,6 +2524,9 @@ function levelComplete(){
   } else if(knowEl){
     knowEl.style.display = 'none';
   }
+  // 离开第2关对局时收起侧边对话
+  Game._sceneInfoTimer = 0;
+  hideSceneInfo();
   $('stat-energy').textContent = Math.round(Game.globalEnergy);
   $('stat-rating').textContent = '★'.repeat(stars) + '☆'.repeat(3-stars)
     + (Game._lastIsPerfect ? ' 👑' : '')
@@ -2065,6 +2534,13 @@ function levelComplete(){
   // v3: 排行
   if(rank && rank <= LB_MAX_ENTRIES){
     $('stat-rating').textContent += ' | 🏆 #' + rank;
+  }
+  // 底部 3 颗星：依据本局表现点亮（击杀/收集完成度 + 0 死亡）
+  const csEl = document.getElementById('complete-stars');
+  if(csEl){
+    let sh = '';
+    for(let s = 0; s < 3; s++) sh += '<span class="cstar ' + (s < stars ? 'lit' : '') + '">' + (s < stars ? '★' : '☆') + '</span>';
+    csEl.innerHTML = sh;
   }
   $('stat-time').textContent = formatTime(Game.levelTime);
   $('stat-best-time').textContent = best > 0 ? formatTime(best) : '--:--.--';
@@ -2074,12 +2550,45 @@ function levelComplete(){
   const memEl = $('stat-memory');
   if(memEl) memEl.textContent = Game.stats.foundMemory ? '✓ 已收集' : '✗ 未找到';
   $('death-panel').classList.add('hidden');
-  $('complete-screen').classList.remove('hidden');
   $('hud').classList.remove('active');
+  // 通关先放彩带；随后结算面板（含3个按钮）跳出盖在彩带之上（彩带之后跳转）
+  clearTimeout(Game._completeRevealTimer);
+  const cs = document.getElementById('complete-screen');
+  Game._completeRevealTimer = setTimeout(() => { if(cs) cs.classList.remove('hidden'); }, 1600);
+}
+
+// 通关后：挑战下一关（沿用当前出战队伍；无下一关则回大厅）
+function goNextLevel(){
+  const layer = document.getElementById('win-fx');
+  if(layer){ layer.innerHTML = ''; layer.classList.add('hidden'); }
+  clearTimeout(Game._completeRevealTimer);
+  $('complete-screen').classList.add('hidden');
+  const next = Game.levelIndex + 1;
+  const configs = buildLevelConfigs();
+  if(next < configs.length){
+    // 统一走 startLevelOrLoading，确保第2关等带剧情加载页的关卡正常显示
+    startLevelOrLoading(next + 1);
+  } else {
+    showToast('🏆 已通关全部关卡！');
+    backToHub();
+  }
+}
+
+// 通关后：再来一次（重玩本关，沿用当前出战队伍）
+function replayLevel(){
+  const layer = document.getElementById('win-fx');
+  if(layer){ layer.innerHTML = ''; layer.classList.add('hidden'); }
+  clearTimeout(Game._completeRevealTimer);
+  $('complete-screen').classList.add('hidden');
+  const cur = Game.levelIndex;
+  // 统一走 startLevelOrLoading，确保第2关剧情加载页正常显示
+  startLevelOrLoading(cur + 1);
 }
 
 function backToHub(){
   Game.state = 'hub';
+  Sfx.stopBgm();
+  Sfx.stopAlarm();
   Game.paused = false;
   Game.tutorialPause = false;
   Game.memoryCardOpen = false;
@@ -2093,9 +2602,14 @@ function backToHub(){
   $('pause-menu').classList.add('hidden');
   $('complete-screen').classList.add('hidden');
   $('death-panel').classList.add('hidden');
+  const wfx = document.getElementById('win-fx');
+  if(wfx){ wfx.innerHTML = ''; wfx.classList.add('hidden'); }
+  clearTimeout(Game._bubbleTimer);
   $('dialogue-bubble').classList.remove('active');
   $('memory-card').classList.add('hidden');
   $('hud').classList.remove('active');
+  Game._sceneInfoTimer = 0;
+  hideSceneInfo();
   const fp = $('focus-prompt');
   if(fp){ fp.classList.remove('hidden'); fp.textContent = '点击此处开始游戏'; }
   showHub();
@@ -2106,11 +2620,7 @@ function LoadLevel(n, cellTypeOverride){
   const idx = n - 1; // v3: 1-based → 0-based array index
   const configs = buildLevelConfigs();
   if(idx < 0 || idx >= configs.length) return false;
-  // 自定义关卡始终可玩,不检查解锁状态
-  if(!configs[idx]._isCustom && !Game.unlocked[idx]){
-    showToast('关卡未解锁！');
-    return false;
-  }
+  // 全部关卡已解锁，移除顺序通关解锁限制（自定义关卡亦始终可玩）
   const mapData = LEVEL_MAPS[idx];
   if(!mapData.map || mapData.map.length === 0){
     showToast('该关卡正在建设中...');
@@ -2124,8 +2634,15 @@ function LoadLevel(n, cellTypeOverride){
   const cfg = configs[idx];
   const isCustom = cfg._isCustom;
 
-  // v3: 从Level 3开始(含自定义关卡)可自由选择细胞类型
-  const defaultCell = cellTypeOverride || cfg.cellType || 1;
+  // v3: 单玩家使用出战队伍；双人模式/旧接口仍可用 cellTypeOverride
+  let defaultCell;
+  if(Game.twoPlayer){
+    defaultCell = cellTypeOverride || cfg.cellType || 1;
+  } else {
+    if(!Game.party || Game.party.length < 2) Game.party = [1, 3];
+    Game.partyIndex = 0;
+    defaultCell = Game.party[Game.partyIndex];
+  }
   Game.players = [];
   const p1 = new Player(Game.level.playerSpawn.x, Game.level.playerSpawn.y, 0);
   p1.cellType = defaultCell;
@@ -2183,6 +2700,9 @@ function LoadLevel(n, cellTypeOverride){
   Game.allEnemiesDead = false;
   // 知识卡片触发状态（每张独立，不限制细胞类型）
   Game.knowledgeCardTriggered = new Set();
+  // 第2关侧边对话状态重置
+  Game._sceneInfoTimer = 0;
+  hideSceneInfo();
 
   // 检查是否首次游玩（教程）
   try{
@@ -2214,6 +2734,7 @@ function LoadLevel(n, cellTypeOverride){
   $('complete-screen').classList.add('hidden');
   $('death-panel').classList.add('hidden');
   $('pause-menu').classList.add('hidden');
+  clearTimeout(Game._bubbleTimer);
   $('dialogue-bubble').classList.remove('active');
   $('memory-card').classList.add('hidden');
   $('hud').classList.add('active');
@@ -2223,6 +2744,10 @@ function LoadLevel(n, cellTypeOverride){
   if(fp) fp.classList.add('hidden');
   container.focus();
   updateHUD();
+
+  // 音效：进入关卡后启动循环背景音乐（活泼有激情）
+  Sfx.resume();
+  Sfx.startBgm('level');
 
   return true;
 }
@@ -2309,6 +2834,8 @@ function level5Mechanics(player, level){ /* Boss感染：三阶段Boss战 */ }
 // ===== 死亡面板 =====
 function showDeathPanel(){
   if(!Game.player) return;
+  Sfx.stopBgm();
+  Sfx.stopAlarm();
 
   // 更新细胞名称
   const cellNames = {1:'白细胞（中性粒细胞）', 2:'血小板', 3:'红细胞'};
@@ -2419,7 +2946,18 @@ function init(){
   }catch(e){}
   loadGame();
   loadAdaptiveDifficulty();  // v3: AI自适应难度
+
+  // 调试模式：URL 带 ?debug 或 ?unlock 时解锁全部关卡，方便并行配置
+  try{
+    const params = new URLSearchParams(location.search);
+    Game.debugMode = params.has('debug') || params.has('unlock') || localStorage.getItem('cellQuest_debug_mode') === '1';
+  }catch(e){ Game.debugMode = false; }
+  if(Game.debugMode) showToast('调试模式已开启：全部关卡可进入');
+
   setupInput();
+
+  // 进入即准备背景音乐（首次点击解锁音频后自动开始，菜单与关卡全程持续）
+  Sfx.startBgm('menu');
 
   $('btn-start').onclick = ()=>{
     Sfx.init();
@@ -2437,7 +2975,7 @@ function init(){
   try{ $('btn-menu-lb').onclick = ()=>{ Sfx.init(); showLeaderboard(); }; }catch(e){}
   // Hub 左上角返回
   try{ $('btn-menu-back-top').onclick = ()=>{ showMenu(); }; }catch(e){}
-  $('btn-menu-back').onclick = ()=>{ showMenu(); };
+  try{ $('btn-menu-back').onclick = ()=>{ showMenu(); }; }catch(e){}
   $('btn-hub-pedia').onclick = ()=>{ showPedia(); };
   $('btn-pedia-close').onclick = ()=>{ closePedia(); };
   $('btn-pedia-wbc').onclick = ()=>{ showCharDetail('wbc'); };
@@ -2446,8 +2984,9 @@ function init(){
   $('btn-char-back').onclick = ()=>{ closeCharDetail(); };
   $('btn-resume').onclick = ()=>{ togglePause(); };
   $('btn-quit').onclick = ()=>{ backToHub(); };
-  $('btn-next-level').onclick = ()=>{ backToHub(); };
-  try{ $('btn-complete-menu').onclick = ()=>{ showMenu(); }; }catch(e){}
+  $('btn-next-level').onclick = ()=>{ goNextLevel(); };
+  try{ $('btn-complete-menu').onclick = ()=>{ replayLevel(); }; }catch(e){}
+  try{ $('btn-complete-home').onclick = ()=>{ backToHub(); }; }catch(e){}
   // 死亡面板按钮
   $('btn-retry').onclick = ()=>{ retryFromDeath(); };
   $('btn-death-quit').onclick = ()=>{ quitFromDeath(); };
@@ -2467,13 +3006,13 @@ function init(){
   $('home-btn').onclick=e=>{e.stopPropagation();if(Game.state!=='playing'&&Game.state!=='paused')return;showConfirm('确定要离开当前关卡吗？\n进度将不会保存。',()=>{backToHub();});};
 
   // v3: AI 生成关卡按钮
-  $('btn-hub-ai').onclick = ()=>{ showAIGeneratePanel(); };
+  try{ $('btn-hub-ai').onclick = ()=>{ showAIGeneratePanel(); }; }catch(e){}
 
   // v3: 存档管理
-  $('btn-hub-slots').onclick = ()=>{ showSlotPanel(); };
+  try{ $('btn-hub-slots').onclick = ()=>{ showSlotPanel(); }; }catch(e){}
 
   // v3: 排行榜
-  $('btn-hub-lb').onclick = ()=>{ showLeaderboard(); };
+  try{ $('btn-hub-lb').onclick = ()=>{ showLeaderboard(); }; }catch(e){}
 
   // v3: 成就
   $('btn-hub-achs').onclick = ()=>{ showAchievements(); };
@@ -2506,5 +3045,15 @@ function openEquipment(){renderEquipment();$('equipment-screen').classList.remov
 function closeEquipment(){$('equipment-screen').classList.add('hidden');}
 function renderEquipment(){['weapon','armor','accessory'].forEach(slot=>{const el=$('es-'+slot);const eid=Game.equipment[slot];if(eid){const eq=findEquip(eid);el.innerHTML=(eq?eq.name:eid)+'<br><small style="color:'+(eq?RARITY_COLORS[eq.rarity]:'#aaa')+'">'+(eq?RARITY_NAMES[eq.rarity]:'')+'</small>';el.className='es-item equipped';el.onclick=()=>{if(confirm('卸下'+(eq?eq.name:eid)+'？')){unequipItem(slot);renderEquipment();}};}else{el.innerHTML='空';el.className='es-item';el.onclick=null;}});$('inv-count').textContent=Game.inventory.length+'/20';const grid=$('inventory-grid');grid.innerHTML='';Game.inventory.forEach(eid=>{const eq=findEquip(eid);if(!eq)return;const card=document.createElement('div');card.className='inv-card';card.innerHTML='<div class="ic-name">'+eq.name+'</div><div class="ic-rarity" style="color:'+RARITY_COLORS[eq.rarity]+'">'+RARITY_NAMES[eq.rarity]+'</div><div class="ic-stats">'+statsText(eq.stats)+'</div>';card.onclick=()=>{equipItem(eid);renderEquipment();};grid.appendChild(card);});}
 function statsText(stats){const n={atk:'攻',def:'防',spd:'速',maxHp:'命',maxEnergy:'能'};return Object.keys(stats).map(k=>n[k]+'+'+stats[k]).join(' ');}
+
+// 打开地图编辑器：优先新标签，被拦截时回退同标签跳转
+function openEditor(){
+  try{
+    const w = window.open('editor.html','_blank');
+    if(!w || w.closed) location.href = 'editor.html';
+  }catch(e){
+    location.href = 'editor.html';
+  }
+}
 
 window.addEventListener('load', init);

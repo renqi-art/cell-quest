@@ -13,12 +13,12 @@ const LEVEL_MAPS = [..._BUILTIN_LEVELS, ..._CUSTOM_LEVELS];
 
 // ===== 关卡独立配置表 =====
 const _BUILTIN_DEFS = [
-  { id:0, name:'血液循环', bgMusic:'tutorial', enemies:[], mechanics:['collect','tutorial','pipe'], checkpoint:true },
-  { id:1, name:'擦伤',     bgMusic:'wound',    enemies:['staph','staphLarge','strep','boss'], mechanics:['sword','dash','stomp'], checkpoint:true },
-  { id:2, name:'肺泡迷宫', bgMusic:'lung',     enemies:['strep'], mechanics:['crouch','floatPlatform','tide'], checkpoint:true },
-  { id:3, name:'血管奔流', bgMusic:'vessel',   enemies:[], mechanics:['bloodLoss','tide','oxyField','collect','pipe'], checkpoint:true },
-  { id:4, name:'淋巴结',   bgMusic:'lymph',    enemies:['staph','staphLarge','strep'], mechanics:['sword','dash','stomp'], checkpoint:true },
-  { id:5, name:'Boss感染', bgMusic:'boss',     enemies:['boss'], mechanics:['sword','dash','stomp','pipe'], checkpoint:true },
+  { id:0, name:'皮肤防线·擦伤',        bgMusic:'tutorial', enemies:[], mechanics:['collect','tutorial','pipe'], checkpoint:true },
+  { id:1, name:'肠道危机·食物中毒(上)', bgMusic:'wound',    enemies:['staph','staphLarge','strep','boss'], mechanics:['sword','dash','stomp'], checkpoint:true },
+  { id:2, name:'蠕虫侵袭·食物中毒(下)', bgMusic:'lung',     enemies:['strep'], mechanics:['crouch','floatPlatform','tide'], checkpoint:true },
+  { id:3, name:'呼吸道烽火·流行性感冒', bgMusic:'vessel',   enemies:[], mechanics:['bloodLoss','tide','oxyField','collect','pipe'], checkpoint:true },
+  { id:4, name:'组织溃烂·真菌感染',      bgMusic:'lymph',    enemies:['staph','staphLarge','strep'], mechanics:['sword','dash','stomp'], checkpoint:true },
+  { id:5, name:'细胞畸变·癌细胞侵袭',    bgMusic:'boss',     enemies:['boss'], mechanics:['sword','dash','stomp','pipe'], checkpoint:true },
 ];
 
 // 自定义关卡配置（从 localStorage 数据生成）
@@ -39,18 +39,18 @@ const LEVEL_DEFS = [..._BUILTIN_DEFS, ..._CUSTOM_DEFS];
 // ===== LEVEL_CONFIGS 动态生成（给渲染用）=====
 function buildLevelConfigs(){
   const configs = [
-    { id:1, name:'血液循环', icon:'🫁', cellType:3, winCondition:WIN_COLLECT_ALL,
-      desc:'红细胞教学·体循环+肺循环完整旅程', bg:[C.sky2,'#e8a0a0'] },
-    { id:2, name:'白细胞觉醒', icon:'⚔️', cellType:1, winCondition:WIN_KILL_ALL,
-      desc:'战斗入门·消灭全部细菌通关', bg:[C.sky1,C.sky3] },
-    { id:3, name:'肺泡迷宫', icon:'🫁', cellType:1, winCondition:WIN_KILL_ALL,
-      desc:'呼吸系统·链球菌·浮动平台', bg:['#1a2a3a','#3a6a8a'] },
-    { id:4, name:'血管奔流', icon:'🩸', cellType:3, winCondition:WIN_COLLECT_ALL,
-      desc:'循环系统·失血潮涌·收集挑战', bg:['#2a0a1a','#5a1a3a'] },
-    { id:5, name:'淋巴结',   icon:'⚪', cellType:1, winCondition:WIN_KILL_ALL,
-      desc:'免疫中枢·精英敌人', bg:['#1a1a2a','#3a3a5a'], locked:true },
-    { id:6, name:'Boss感染', icon:'☠️', cellType:1, winCondition:WIN_KILL_ALL,
-      desc:'终极决战·Boss', bg:['#2a0a0a','#6a0a0a'], locked:true },
+    { id:1, name:'皮肤防线·擦伤', icon:'🩹', cellType:3, winCondition:WIN_COLLECT_ALL,
+      desc:'皮肤屏障·抵御外界擦伤感染', bg:[C.sky2,'#e8a0a0'] },
+    { id:2, name:'肠道危机·食物中毒(上)', icon:'🦠', cellType:1, winCondition:WIN_KILL_ALL,
+      desc:'肠道防线·清除入侵病菌', bg:[C.sky1,C.sky3] },
+    { id:3, name:'蠕虫侵袭·食物中毒(下)', icon:'🪱', cellType:1, winCondition:WIN_KILL_ALL,
+      desc:'蠕虫寄生·净化食物中毒', bg:['#1a2a3a','#3a6a8a'] },
+    { id:4, name:'呼吸道烽火·流行性感冒', icon:'😷', cellType:3, winCondition:WIN_COLLECT_ALL,
+      desc:'呼吸道战场·击退流感病毒', bg:['#2a0a1a','#5a1a3a'] },
+    { id:5, name:'组织溃烂·真菌感染', icon:'🍄', cellType:1, winCondition:WIN_KILL_ALL,
+      desc:'组织感染·剿灭真菌群落', bg:['#1a1a2a','#3a3a5a'], locked:true },
+    { id:6, name:'细胞畸变·癌细胞侵袭', icon:'☣️', cellType:1, winCondition:WIN_KILL_ALL,
+      desc:'终极危机·对抗癌细胞', bg:['#2a0a0a','#6a0a0a'], locked:true },
   ];
   for(let i=0; i<_CUSTOM_LEVELS.length; i++){
     const lvl = _CUSTOM_LEVELS[i];
