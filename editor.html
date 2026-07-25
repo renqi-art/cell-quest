@@ -125,6 +125,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',monospace;background:#0a0a18;color
   </div>
 </div>
 
+<script src="js/config.js?v=86"></script>
 <script src="js/ai-levels.js?v=1"></script>
 <script>
 // ── 瓦片定义 ──
@@ -182,9 +183,20 @@ const textMap = Object.fromEntries(TILES.map(t=>[t.ch,t.text]));
 
 // ── Init ──
 function init(){
+  if(typeof migrateLegacyCustomLevels === 'function') migrateLegacyCustomLevels();
   renderPalette();
   newMap();
   loadPresetList();
+}
+let editorToastTimer = null;
+function showToast(message){
+  const info = document.getElementById('info');
+  if(!info) return;
+  const defaultText = info.dataset.defaultText || info.textContent;
+  info.dataset.defaultText = defaultText;
+  info.textContent = message;
+  clearTimeout(editorToastTimer);
+  editorToastTimer = setTimeout(()=>{ info.textContent = defaultText; }, 1800);
 }
 function renderPalette(){
   let html = '<h3>瓦片面板</h3>';
@@ -215,47 +227,23 @@ function selectTile(ch){
 }
 
 // ── 配置数据序列化 ──
+function escapeEditorHtml(value){
+  const entities = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
+  return String(value ?? '').replace(/[&<>"']/g, character => entities[character]);
+}
+
+function formatEditorArray(key, items){
+  const json = JSON.stringify(Array.isArray(items) ? items : [], null, 2)
+    .replace(/\n/g, '\n  ');
+  return '  ' + key + ': ' + json + ',';
+}
+
 function buildExtraStr(){
-  const lines = [];
-  if(editorPipeSpawners.length > 0){
-    const items = editorPipeSpawners.map(ps => {
-      let s = `{ col:${ps.col}, row:${ps.row}, dir:'${ps.dir||'up'}', trigger:'${ps.trigger||'timer'}'`;
-      if(ps.type && ps.type !== 'staph') s += `, type:'${ps.type}'`;
-      if(ps.vy != null) s += `, vy:${ps.vy}`;
-      if(ps.range) s += `, range:${ps.range}`;
-      if(ps.cooldown) s += `, cooldown:${ps.cooldown}`;
-      if(ps.interval) s += `, interval:${ps.interval}`;
-      s += ' }';
-      return s;
-    });
-    lines.push('  pipeSpawners: [\n    ' + items.join(',\n    ') + '\n  ],');
-  } else {
-    lines.push('  pipeSpawners: [],');
-  }
-  // tutorials 仍保留原始字符串（编辑器暂不提供 UI 编辑）
-  if(editorTutorials.length > 0){
-    const items = editorTutorials.map(t=>{
-      let s = `{ x:${t.x}`;
-      if(t.useCurrent) s += `, useCurrent:true`;
-      s += `, body:'${t.body.replace(/\n/g,'\\n').replace(/'/g,"\\'")}' }`;
-      return s;
-    });
-    lines.push('  tutorials: [\n    ' + items.join(',\n    ') + '\n  ],');
-  } else {
-    lines.push('  tutorials: [],');
-  }
-  if(editorKnowledgeCards.length > 0){
-    const items = editorKnowledgeCards.map(kc=>{
-      let s = `{ x:${kc.x}`;
-      if(kc.y !== undefined) s += `, y:${kc.y}`;
-      s += `, key:'${kc.key}', title:'${kc.title.replace(/'/g,"\\'")}', text:'${kc.text.replace(/\n/g,'\\n').replace(/'/g,"\\'")}' }`;
-      return s;
-    });
-    lines.push('  knowledgeCards: [\n    ' + items.join(',\n    ') + '\n  ],');
-  } else {
-    lines.push('  knowledgeCards: [],');
-  }
-  return lines.join('\n') + '\n';
+  return [
+    formatEditorArray('pipeSpawners', editorPipeSpawners),
+    formatEditorArray('tutorials', editorTutorials),
+    formatEditorArray('knowledgeCards', editorKnowledgeCards),
+  ].join('\n') + '\n';
 }
 
 // ── Grid ──
@@ -274,11 +262,8 @@ function newFromTemplate(templateId){
   }
   snapshot = grid.map(r=>[...r]);
   document.getElementById('mapWidth').value = mapWidth;
-  document.getElementById('mapHeight').value = mapHeight;
   document.getElementById('levelSelect').value = '';
   document.getElementById('levelName').value = t.name || '自定义关卡';
-  document.getElementById('cellTypeSelect').value = '3';
-  document.getElementById('winConditionSelect').value = 'collectAll';
   editorPipeSpawners = [];
   editorKnowledgeCards = [];
   editorTutorials = [];
@@ -468,8 +453,8 @@ function renderPipeSpawnerList(){
   if(editingPsIdx >= 0){
     const ps = editingPsIdx < editorPipeSpawners.length ? editorPipeSpawners[editingPsIdx] : {col:'',row:'',trigger:'timer',type:'staph',dir:'up',cooldown:'',range:'',interval:''};
     el.innerHTML = `<div class="inline-form">
-      <label>列 (col)</label><input type="number" id="psCol" value="${ps.col||''}" min="0" max="${mapWidth-1}">
-      <label>行 (row)</label><input type="number" id="psRow" value="${ps.row||''}" min="0" max="${mapHeight-1}">
+      <label>列 (col)</label><input type="number" id="psCol" value="${escapeEditorHtml(ps.col||'')}" min="0" max="${mapWidth-1}">
+      <label>行 (row)</label><input type="number" id="psRow" value="${escapeEditorHtml(ps.row||'')}" min="0" max="${mapHeight-1}">
       <label>触发方式</label>
       <select id="psTrigger">
         <option value="timer" ${ps.trigger==='timer'?'selected':''}>timer 定时</option>
@@ -483,10 +468,10 @@ function renderPipeSpawnerList(){
         <option value="staphLarge" ${ps.type==='staphLarge'?'selected':''}>大型葡萄球菌</option>
       </select>
       <label>方向</label><select id="psDir" onchange="onDirChange()"><option value="up" ${ps.dir==='up'?'selected':''}>上</option><option value="down" ${ps.dir==='down'?'selected':''}>下</option><option value="up_jump" ${ps.dir==='up_jump'?'selected':''}>向上跳</option></select>
-      <label>初速度 vy (负=向上, 正=向下, 上:-5 下:3 跳:-9)</label><input type="number" id="psVy" value="${ps.vy!=null?ps.vy:''}" step="0.5" placeholder="默认">
-      <label>冷却帧 (cooldown, timer用)</label><input type="number" id="psCooldown" value="${ps.cooldown||''}" min="0" placeholder="180">
-      <label>接近范围格子 (range, proximity用)</label><input type="number" id="psRange" value="${ps.range||''}" min="1" placeholder="4">
-      <label>间隔帧 (interval, timer用)</label><input type="number" id="psInterval" value="${ps.interval||''}" min="1" placeholder="300">
+      <label>初速度 vy (负=向上, 正=向下, 上:-5 下:3 跳:-9)</label><input type="number" id="psVy" value="${escapeEditorHtml(ps.vy!=null?ps.vy:'')}" step="0.5" placeholder="默认">
+      <label>冷却帧 (cooldown, timer用)</label><input type="number" id="psCooldown" value="${escapeEditorHtml(ps.cooldown||'')}" min="0" placeholder="180">
+      <label>接近范围格子 (range, proximity用)</label><input type="number" id="psRange" value="${escapeEditorHtml(ps.range||'')}" min="1" placeholder="4">
+      <label>间隔帧 (interval, timer用)</label><input type="number" id="psInterval" value="${escapeEditorHtml(ps.interval||'')}" min="1" placeholder="300">
       <div class="btn-row">
         <button class="ok" onclick="savePipeSpawner()">✅ 保存</button>
         <button onclick="cancelPipeSpawner()">取消</button>
@@ -499,9 +484,9 @@ function renderPipeSpawnerList(){
     return;
   }
   el.innerHTML = editorPipeSpawners.map((ps,i)=>`<div class="config-item">
-    <span class="tag">${ps.trigger}</span>
-    <span class="tag" style="background:#2a3a4a;color:#8ac">${ps.dir||'up'}</span>
-    <span>(${ps.col},${ps.row}) ${ps.type}${ps.vy!=null?' vy='+ps.vy:''}</span>
+    <span class="tag">${escapeEditorHtml(ps.trigger)}</span>
+    <span class="tag" style="background:#2a3a4a;color:#8ac">${escapeEditorHtml(ps.dir||'up')}</span>
+    <span>(${escapeEditorHtml(ps.col)},${escapeEditorHtml(ps.row)}) ${escapeEditorHtml(ps.type)}${ps.vy!=null?' vy='+escapeEditorHtml(ps.vy):''}</span>
     <button onclick="editPipeSpawner(${i})">✏️</button>
     <button class="del" onclick="deletePipeSpawner(${i})">✕</button>
   </div>`).join('');
@@ -568,16 +553,16 @@ function renderKnowledgeCardList(){
   if(editingKcIdx >= 0){
     const kc = editingKcIdx < editorKnowledgeCards.length ? editorKnowledgeCards[editingKcIdx] : {x:'',y:'',key:'wbc',title:'',text:''};
     el.innerHTML = `<div class="inline-form">
-      <label>触发位置 x (像素)</label><input type="number" id="kcX" value="${kc.x||''}" min="0" placeholder="200">
-      <label>触发高度 y (像素，可选)</label><input type="number" id="kcY" value="${kc.y||''}" min="0" placeholder="留空=不限制">
+      <label>触发位置 x (像素)</label><input type="number" id="kcX" value="${escapeEditorHtml(kc.x||'')}" min="0" placeholder="200">
+      <label>触发高度 y (像素，可选)</label><input type="number" id="kcY" value="${escapeEditorHtml(kc.y||'')}" min="0" placeholder="留空=不限制">
       <label>细胞类型</label>
       <select id="kcKey">
         <option value="wbc" ${kc.key==='wbc'?'selected':''}>白细胞 WBC</option>
         <option value="rbc" ${kc.key==='rbc'?'selected':''}>红细胞 RBC</option>
         <option value="plt" ${kc.key==='plt'?'selected':''}>血小板 PLT</option>
       </select>
-      <label>标题</label><input type="text" id="kcTitle" value="${kc.title||''}" placeholder="卡片标题">
-      <label>正文（\\n 换行）</label><textarea id="kcText" placeholder="卡片正文内容...">${kc.text||''}</textarea>
+      <label>标题</label><input type="text" id="kcTitle" value="${escapeEditorHtml(kc.title||'')}" placeholder="卡片标题">
+      <label>正文（\\n 换行）</label><textarea id="kcText" placeholder="卡片正文内容...">${escapeEditorHtml(kc.text||'')}</textarea>
       <div class="btn-row">
         <button class="ok" onclick="saveKnowledgeCard()">✅ 保存</button>
         <button onclick="cancelKnowledgeCard()">取消</button>
@@ -590,8 +575,8 @@ function renderKnowledgeCardList(){
     return;
   }
   el.innerHTML = editorKnowledgeCards.map((kc,i)=>`<div class="config-item">
-    <span class="tag">${kc.key||'?'}</span>
-    <span>x=${kc.x} ${kc.title||'(无标题)'}</span>
+    <span class="tag">${escapeEditorHtml(kc.key||'?')}</span>
+    <span>x=${escapeEditorHtml(kc.x)} ${escapeEditorHtml(kc.title||'(无标题)')}</span>
     <button onclick="editKnowledgeCard(${i})">✏️</button>
     <button class="del" onclick="deleteKnowledgeCard(${i})">✕</button>
   </div>`).join('');
@@ -644,9 +629,9 @@ function clearAllKnowledgeCards(){
 function exportMap(){
   const name = document.getElementById('levelName').value || '新关卡';
   const w = mapWidth;
-  const lines = grid.map(row => `      "${row.join('')}",`);
+  const lines = grid.map(row => '      ' + JSON.stringify(row.join('')) + ',');
   const extras = buildExtraStr();
-  const code = `/* ${name} */\nconst LEVEL_X = {\n  name: '${name}',\n  width: ${w},\n  cellType: 3,\n  winCondition: WIN_COLLECT_ALL,\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};`;
+  const code = `/* Custom level */\nconst LEVEL_X = {\n  name: ${JSON.stringify(name)},\n  width: ${w},\n  cellType: 3,\n  winCondition: WIN_COLLECT_ALL,\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};`;
   document.getElementById('exportText').value = code;
   document.getElementById('exportModal').classList.add('show');
 }
@@ -671,9 +656,9 @@ async function saveLevel(){
     levelNum = presets.length;
     fileName = 'level' + levelNum + '_custom';
   }
-  const lines = grid.map(row => `      "${row.join('')}",`);
+  const lines = grid.map(row => '      ' + JSON.stringify(row.join('')) + ',');
   const extras = buildExtraStr();
-  const code = `/* ${name} */\nconst LEVEL_${levelNum} = {\n  name: '${name}',\n  width: ${mapWidth},\n  cellType: 3,\n  winCondition: WIN_COLLECT_ALL,\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};\n`;
+  const code = `/* Custom level */\nconst LEVEL_${levelNum} = {\n  name: ${JSON.stringify(name)},\n  width: ${mapWidth},\n  cellType: 3,\n  winCondition: WIN_COLLECT_ALL,\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};\n`;
   try{
     const r = await fetch('/save', {
       method:'POST',
@@ -692,6 +677,11 @@ async function saveLevel(){
 }
 
 // ===== 保存为自定义关卡到 localStorage =====
+function editorCustomLevelKey(){
+  const rawSlot = Number.parseInt(localStorage.getItem('cellQuest_currentSlot') || '0', 10);
+  const slot = Number.isInteger(rawSlot) && rawSlot >= 0 && rawSlot < 5 ? rawSlot : 0;
+  return 'cellQuest_customLevels_' + slot;
+}
 let selectedIcon = '🗺️';
 const GAME_ICONS = [
   '🗺️','⚔️','🧪','🦠','🧬','💉','🩸','🫁','❤️',
@@ -733,10 +723,10 @@ function doSaveToGame(){
     icon: selectedIcon, desc: '由玩家在地图编辑器中创建',
   };
   try{
-    const raw = localStorage.getItem('cellQuest_customLevels');
+    const raw = localStorage.getItem(editorCustomLevelKey());
     const levels = raw ? JSON.parse(raw) : [];
     levels.push(levelData);
-    localStorage.setItem('cellQuest_customLevels', JSON.stringify(levels));
+    localStorage.setItem(editorCustomLevelKey(), JSON.stringify(levels));
     document.getElementById('iconPickerModal').classList.remove('show');
     alert(`✅ "${name}" 已保存为自定义关卡！\n刷新游戏主页即可在关卡选择中看到。`);
   }catch(e){
@@ -757,8 +747,8 @@ function doImport(){
   mapHeight = mapRows.length;
   grid = mapRows.map(r=>r.split(''));
   document.getElementById('mapWidth').value = mapWidth;
-  const nameMatch = text.match(/name:\s*'([^']+)'/);
-  if(nameMatch) document.getElementById('levelName').value = nameMatch[1];
+  const importedName = parseEditorStringProperty(text, 'name');
+  if(importedName !== null) document.getElementById('levelName').value = importedName;
   parseExtraConfig(text);
   draw();
   document.getElementById('importModal').classList.remove('show');
@@ -784,12 +774,12 @@ async function loadPresetList(){
   // 加载自定义关卡
   _customLevelCache = [];
   try{
-    const raw = localStorage.getItem('cellQuest_customLevels');
+    const raw = localStorage.getItem(editorCustomLevelKey());
     if(raw){
       _customLevelCache = JSON.parse(raw);
       _customLevelCache.forEach((lvl, i) => {
         const name = lvl.name || '自定义关卡';
-        sel.innerHTML += `<option value="custom_${i}">📝 ${name}</option>`;
+        sel.innerHTML += `<option value="custom_${i}">📝 ${escapeEditorHtml(name)}</option>`;
       });
     }
   }catch(e){}
@@ -845,7 +835,7 @@ function saveCustomPreset(ci){
   lvl.tutorials = editorTutorials;
   lvl.knowledgeCards = editorKnowledgeCards;
   try{
-    localStorage.setItem('cellQuest_customLevels', JSON.stringify(_customLevelCache));
+    localStorage.setItem(editorCustomLevelKey(), JSON.stringify(_customLevelCache));
     alert(`✅ 自定义关卡「${lvl.name}」已更新！`);
   }catch(e){
     alert('❌ 保存失败: ' + e.message);
@@ -858,7 +848,7 @@ function deleteCustomPreset(ci){
   if(!confirm(`确定删除「${name}」？\n此操作不可撤销。`)) return;
   _customLevelCache.splice(ci, 1);
   try{
-    localStorage.setItem('cellQuest_customLevels', JSON.stringify(_customLevelCache));
+    localStorage.setItem(editorCustomLevelKey(), JSON.stringify(_customLevelCache));
     currentCustomIdx = -1;
     document.getElementById('customActions').style.display = 'none';
     alert(`✅「${name}」已删除`);
@@ -890,13 +880,269 @@ function doImportRaw(text){
   grid = mapRows.map(r=>r.padEnd(mapWidth,' ').slice(0,mapWidth).split(''));
   snapshot = grid.map(r=>[...r]);
   document.getElementById('mapWidth').value = mapWidth;
-  const nameMatch = text.match(/name:\s*'([^']+)'/);
-  if(nameMatch) document.getElementById('levelName').value = nameMatch[1];
+  const importedName = parseEditorStringProperty(text, 'name');
+  if(importedName !== null) document.getElementById('levelName').value = importedName;
   parseExtraConfig(text);
   draw();
 }
 
 // 从关卡源码中解析 pipeSpawners / tutorials / knowledgeCards 为 JS 数组
+function parseEditorDataLiteral(source){
+  let index = 0;
+
+  function fail(message){
+    throw new Error(message + ' at position ' + index);
+  }
+
+  function skipSpace(){
+    while(index < source.length){
+      if(/\s/.test(source[index])){
+        index++;
+        continue;
+      }
+      if(source.startsWith('//', index)){
+        index = source.indexOf('\n', index + 2);
+        if(index === -1) index = source.length;
+        continue;
+      }
+      if(source.startsWith('/*', index)){
+        const end = source.indexOf('*/', index + 2);
+        if(end === -1) fail('Unterminated comment');
+        index = end + 2;
+        continue;
+      }
+      break;
+    }
+  }
+
+  function parseString(){
+    const quote = source[index++];
+    let value = '';
+    while(index < source.length){
+      const char = source[index++];
+      if(char === quote) return value;
+      if(char !== '\\'){
+        value += char;
+        continue;
+      }
+      if(index >= source.length) fail('Unterminated escape sequence');
+      const escaped = source[index++];
+      const escapes = { n:'\n', r:'\r', t:'\t', b:'\b', f:'\f', v:'\v', '0':'\0' };
+      if(Object.hasOwn(escapes, escaped)){
+        value += escapes[escaped];
+      } else if(escaped === 'u' || escaped === 'x'){
+        const length = escaped === 'u' ? 4 : 2;
+        const hex = source.slice(index, index + length);
+        if(!new RegExp('^[0-9a-fA-F]{' + length + '}$').test(hex)) fail('Invalid hex escape');
+        value += String.fromCharCode(Number.parseInt(hex, 16));
+        index += length;
+      } else if(escaped === '\n'){
+        // JavaScript line continuation.
+      } else {
+        value += escaped;
+      }
+    }
+    fail('Unterminated string');
+  }
+
+  function parseNumber(){
+    const match = source.slice(index).match(/^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/);
+    if(!match) fail('Invalid number');
+    index += match[0].length;
+    const value = Number(match[0]);
+    if(!Number.isFinite(value)) fail('Number must be finite');
+    return value;
+  }
+
+  function parseIdentifier(){
+    const match = source.slice(index).match(/^[A-Za-z_$][A-Za-z0-9_$]*/);
+    if(!match) fail('Invalid identifier');
+    index += match[0].length;
+    return match[0];
+  }
+
+  function parseArray(){
+    const result = [];
+    index++;
+    skipSpace();
+    if(source[index] === ']'){
+      index++;
+      return result;
+    }
+    while(index < source.length){
+      result.push(parseValue());
+      skipSpace();
+      if(source[index] === ']'){
+        index++;
+        return result;
+      }
+      if(source[index] !== ',') fail('Expected comma in array');
+      index++;
+      skipSpace();
+      if(source[index] === ']'){
+        index++;
+        return result;
+      }
+    }
+    fail('Unterminated array');
+  }
+
+  function parseObject(){
+    const result = Object.create(null);
+    index++;
+    skipSpace();
+    if(source[index] === '}'){
+      index++;
+      return result;
+    }
+    while(index < source.length){
+      skipSpace();
+      const key = source[index] === "'" || source[index] === '"' ? parseString() : parseIdentifier();
+      if(key === '__proto__' || key === 'prototype' || key === 'constructor') {
+        fail('Unsafe property name');
+      }
+      skipSpace();
+      if(source[index] !== ':') fail('Expected colon in object');
+      index++;
+      result[key] = parseValue();
+      skipSpace();
+      if(source[index] === '}'){
+        index++;
+        return result;
+      }
+      if(source[index] !== ',') fail('Expected comma in object');
+      index++;
+      skipSpace();
+      if(source[index] === '}'){
+        index++;
+        return result;
+      }
+    }
+    fail('Unterminated object');
+  }
+
+  function parseValue(){
+    skipSpace();
+    const char = source[index];
+    if(char === '[') return parseArray();
+    if(char === '{') return parseObject();
+    if(char === "'" || char === '"') return parseString();
+    if(char === '-' || char === '.' || /\d/.test(char || '')) return parseNumber();
+    const identifier = parseIdentifier();
+    if(identifier === 'true') return true;
+    if(identifier === 'false') return false;
+    if(identifier === 'null') return null;
+    fail('Executable expressions are not allowed');
+  }
+
+  const result = parseValue();
+  skipSpace();
+  if(index !== source.length) fail('Unexpected trailing input');
+  return result;
+}
+
+function parseEditorStringProperty(text, key){
+  const match = new RegExp('\\b' + key + '\\s*:').exec(text);
+  if(!match) return null;
+  let index = match.index + match[0].length;
+  while(/\s/.test(text[index] || '')) index++;
+  const quote = text[index];
+  if(quote !== "'" && quote !== '"') return null;
+  const start = index;
+  index++;
+  let escaped = false;
+  while(index < text.length){
+    const character = text[index++];
+    if(escaped){
+      escaped = false;
+    } else if(character === '\\'){
+      escaped = true;
+    } else if(character === quote){
+      try{
+        const value = parseEditorDataLiteral(text.slice(start, index));
+        return typeof value === 'string' ? value : null;
+      }catch(error){
+        console.warn('parseEditorStringProperty: rejected ' + key, error.message);
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+function extractEditorArrayLiteral(text, key){
+  const match = new RegExp('\\b' + key + '\\s*:').exec(text);
+  if(!match) return null;
+  const start = text.indexOf('[', match.index + match[0].length);
+  if(start === -1) return null;
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  for(let index = start; index < text.length; index++){
+    const char = text[index];
+    const next = text[index + 1];
+    if(lineComment){
+      if(char === '\n') lineComment = false;
+      continue;
+    }
+    if(blockComment){
+      if(char === '*' && next === '/'){
+        blockComment = false;
+        index++;
+      }
+      continue;
+    }
+    if(quote){
+      if(escaped){
+        escaped = false;
+      } else if(char === '\\'){
+        escaped = true;
+      } else if(char === quote){
+        quote = '';
+      }
+      continue;
+    }
+    if(char === '/' && next === '/'){
+      lineComment = true;
+      index++;
+      continue;
+    }
+    if(char === '/' && next === '*'){
+      blockComment = true;
+      index++;
+      continue;
+    }
+    if(char === "'" || char === '"'){
+      quote = char;
+      continue;
+    }
+    if(char === '[') depth++;
+    if(char === ']'){
+      depth--;
+      if(depth === 0) return text.slice(start, index + 1);
+    }
+  }
+  return null;
+}
+
+function sanitizeEditorObjects(items, schema){
+  if(!Array.isArray(items)) return [];
+  return items.slice(0, 200).map(item => {
+    if(!item || typeof item !== 'object' || Array.isArray(item)) return null;
+    const output = {};
+    for(const [key, type] of Object.entries(schema)){
+      if(!Object.hasOwn(item, key)) continue;
+      const value = item[key];
+      if(type === 'number' && Number.isFinite(value)) output[key] = value;
+      if(type === 'boolean' && typeof value === 'boolean') output[key] = value;
+      if(type === 'string' && typeof value === 'string') output[key] = value.slice(0, 4000);
+    }
+    return output;
+  }).filter(Boolean);
+}
+
 function parseExtraConfig(text){
   editorPipeSpawners = [];
   editorKnowledgeCards = [];
@@ -904,26 +1150,27 @@ function parseExtraConfig(text){
   editingPsIdx = -1;
   editingKcIdx = -1;
 
-  // 安全 eval：构造 JS 表达式并求值
-  function safeEvalArray(key){
-    const re = new RegExp(key + ':\\s*(\\[[\\s\\S]*?\\])\\s*[,}]');
-    const m = text.match(re);
-    if(!m || m[1].trim() === '[]') return null;
+  const schemas = {
+    pipeSpawners: {
+      col:'number', row:'number', dir:'string', trigger:'string', type:'string',
+      vy:'number', range:'number', cooldown:'number', interval:'number'
+    },
+    tutorials: { x:'number', useCurrent:'boolean', body:'string' },
+    knowledgeCards: { x:'number', y:'number', key:'string', title:'string', text:'string' },
+  };
+
+  for(const [key, schema] of Object.entries(schemas)){
+    const literal = extractEditorArrayLiteral(text, key);
+    if(!literal) continue;
     try{
-      // 用 eval 解析 JS 字面量数组
-      return eval('(' + m[1] + ')');
-    }catch(e){
-      console.warn('parseExtraConfig: failed to eval ' + key, e);
-      return null;
+      const items = sanitizeEditorObjects(parseEditorDataLiteral(literal), schema);
+      if(key === 'pipeSpawners') editorPipeSpawners = items;
+      if(key === 'tutorials') editorTutorials = items;
+      if(key === 'knowledgeCards') editorKnowledgeCards = items;
+    }catch(error){
+      console.warn('parseExtraConfig: rejected ' + key, error.message);
     }
   }
-
-  const ps = safeEvalArray('pipeSpawners');
-  if(ps) editorPipeSpawners = ps;
-  const tut = safeEvalArray('tutorials');
-  if(tut) editorTutorials = tut;
-  const kc = safeEvalArray('knowledgeCards');
-  if(kc) editorKnowledgeCards = kc;
 
   renderPalette();
 }
@@ -962,10 +1209,7 @@ async function editorAIGenerate(){
     editorMap = json.map;
     editorCellType = json.cellType||1;
     editorWinCondition = json.cellType===3 ? 'collectAll' : 'killAll';
-    document.getElementById('cellTypeSelect').value = editorCellType;
-    document.getElementById('winConditionSelect').value = editorWinCondition;
     document.getElementById('mapWidth').value = 80;
-    document.getElementById('mapHeight').value = 15;
     document.getElementById('levelName').value = json.name||prompt;
     renderGrid();
     showToast('AI关卡"'+json.name+'"已生成!');

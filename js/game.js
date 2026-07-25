@@ -3,6 +3,16 @@
  * ==================================================================== */
 
 const $ = id => document.getElementById(id);
+function bindClick(id, handler){
+  const element = $(id);
+  if(!element) return null;
+  element.addEventListener('click', handler);
+  return element;
+}
+function escapeHtml(value){
+  const entities = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
+  return String(value ?? '').replace(/[&<>"']/g, character => entities[character]);
+}
 
 // ===== Level 类 =====
 class Level {
@@ -1221,7 +1231,7 @@ const _AVATAR_SPRITES = {
 // 根据细胞类型返回左上角头像 HTML
 function getCellAvatarHTML(cellType){
   const cfg = _AVATAR_SPRITES[cellType];
-  return `<img src="${cfg.src}" alt="${cfg.name}" class="avatar-img avatar-${cfg.name}">`;
+  return `<img src="${cfg.src}" alt="${escapeHtml(cfg.name)}" class="avatar-img avatar-${escapeHtml(cfg.name)}">`;
 }
 
 function formatTime(ms){
@@ -1448,7 +1458,7 @@ function showLeaderboard(){
   // 昵称设置
   html += `<div style="display:flex;align-items:center;gap:6px;margin:4px 0 8px;">
     <span style="font-size:12px;color:#aaa;">👤 昵称:</span>
-    <b style="color:#ffd700;">${name}</b>
+    <b style="color:#ffd700;">${escapeHtml(name)}</b>
     <button class="btn-small" style="font-size:10px;padding:2px 8px;" onclick="changeNickname()">修改</button>
   </div>`;
 
@@ -1463,7 +1473,7 @@ function showLeaderboard(){
     const cfg = configs[i];
     const entries = getLevelRanking(i);
     html += `<div style="margin:6px 0;padding:6px;background:rgba(255,255,255,.03);border-radius:4px;">
-      <b title="${cfg.desc||''}">${cfg.icon||''} ${cfg.name}</b>`;
+      <b title="${escapeHtml(cfg.desc||'')}">${escapeHtml(cfg.icon||'')} ${escapeHtml(cfg.name)}</b>`;
     if(entries.length === 0){
       html += '<div style="font-size:11px;color:#666;padding:2px 8px;">暂无记录</div>';
     } else {
@@ -1475,7 +1485,7 @@ function showLeaderboard(){
         const date = new Date(e.date);
         const dateStr = (date.getMonth()+1)+'/'+date.getDate();
         html += `<div style="font-size:11px;padding:2px 8px;display:flex;justify-content:space-between;color:#ccc;">
-          <span>${medal} <b style="color:#ffd700;">${e.name||'???'}</b> <span style="color:${pctColor}">${pctStr}</span> | ${formatTime(e.time)} | Lv.${e.playerLevel}</span>
+          <span>${medal} <b style="color:#ffd700;">${escapeHtml(e.name||'???')}</b> <span style="color:${pctColor}">${pctStr}</span> | ${formatTime(e.time)} | Lv.${e.playerLevel}</span>
           <span style="color:#666;">${dateStr}</span>
         </div>`;
       }
@@ -1596,7 +1606,12 @@ function importLevelFromCode(){
 // ===== v3: 细胞选择(Level 3+自由选) =====
 function selectCellAndLoad(n){
   const idx = n - 1;
+  const configs = buildLevelConfigs();
   const cfg = configs[idx];
+  if(!cfg){
+    showToast('关卡不存在或尚未加载');
+    return;
+  }
   // 前两关(Level 1-2)锁定细胞类型，直接进入
   if(!cfg._isCustom && idx < 2){
     LoadLevel(n);
@@ -1867,8 +1882,8 @@ function renderLevelGrid(){
       innerHTML += `
         <div style="position:relative;padding:8px;text-align:center;">
           <div style="font-size:10px;color:#888;">自订#${levelNum}</div>
-          <div style="font-size:28px;margin:4px 0;">${cfg.icon}</div>
-          <div style="font-size:11px;color:#e8e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cfg.name}</div>
+          <div style="font-size:28px;margin:4px 0;">${escapeHtml(cfg.icon)}</div>
+          <div style="font-size:11px;color:#e8e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(cfg.name)}</div>
           ${Game.completed[i] ? `<div style="font-size:10px;color:#ffd700;">${'★'.repeat(Game.stars[i])}</div>` : ''}
           <div style="font-size:9px;color:#888;">${cellLabel}</div>
           <button style="position:absolute;top:2px;right:2px;background:rgba(220,50,50,.6);border:none;color:#fff;font-size:10px;width:18px;height:18px;border-radius:50%;cursor:pointer;line-height:1;" onclick="event.stopPropagation();deleteCustomLevelCard(${i})">✕</button>
@@ -1883,15 +1898,15 @@ function renderLevelGrid(){
       innerHTML += `
         <div class="lv-header">第${levelNum}关</div>
         <div class="lock-overlay">🔒</div>
-        <div class="lv-icon-wrap"><div class="lv-icon">${cfg.icon}</div></div>
+        <div class="lv-icon-wrap"><div class="lv-icon">${escapeHtml(cfg.icon)}</div></div>
         <div class="lv-name">???</div>
       `;
       card.className = 'level-card locked';
     } else {
       innerHTML += `
-        <div class="lv-header">第${levelNum}关: ${cfg.name} <small>${cellLabel}</small></div>
-        <div class="lv-icon-wrap"><div class="lv-icon">${cfg.icon}</div></div>
-        <div class="lv-name">${cfg.name}</div>
+        <div class="lv-header">第${levelNum}关: ${escapeHtml(cfg.name)} <small>${cellLabel}</small></div>
+        <div class="lv-icon-wrap"><div class="lv-icon">${escapeHtml(cfg.icon)}</div></div>
+        <div class="lv-name">${escapeHtml(cfg.name)}</div>
         ${Game.completed[i] ? `<div class="stars">${'★'.repeat(Game.stars[i])}${'☆'.repeat(3-Game.stars[i])}</div>` : ''}
       `;
       card.className = 'level-card';
@@ -2053,7 +2068,7 @@ function levelComplete(){
   const kc = KNOWLEDGE_CARDS[idx + 1]; // 1-based ID mapping
   const knowEl = document.getElementById('stat-knowledge');
   if(knowEl && kc){
-    knowEl.innerHTML = '<b style="color:#ffd700;">📖 ' + kc.title + '</b><br><small style="color:#aaa;">' + kc.text + '</small>';
+    knowEl.innerHTML = '<b style="color:#ffd700;">📖 ' + escapeHtml(kc.title) + '</b><br><small style="color:#aaa;">' + escapeHtml(kc.text) + '</small>';
     knowEl.style.display = 'block';
   } else if(knowEl){
     knowEl.style.display = 'none';
@@ -2421,7 +2436,7 @@ function init(){
   loadAdaptiveDifficulty();  // v3: AI自适应难度
   setupInput();
 
-  $('btn-start').onclick = ()=>{
+  bindClick('btn-start', ()=>{
     Sfx.init();
     // 自动找第一个空存档作为新游戏
     let emptySlot = -1;
@@ -2431,52 +2446,52 @@ function init(){
       showToast('已创建新存档: 存档 '+(emptySlot+1));
     }
     showHub(); $('game-container').focus();
-  };
+  });
   // 主菜单快捷按钮: 在当前页面弹出面板,不跳转
-  try{ $('btn-menu-slots').onclick = ()=>{ Sfx.init(); showSlotPanel(); }; }catch(e){}
-  try{ $('btn-menu-lb').onclick = ()=>{ Sfx.init(); showLeaderboard(); }; }catch(e){}
+  bindClick('btn-menu-slots', ()=>{ Sfx.init(); showSlotPanel(); });
+  bindClick('btn-menu-lb', ()=>{ Sfx.init(); showLeaderboard(); });
   // Hub 左上角返回
-  try{ $('btn-menu-back-top').onclick = ()=>{ showMenu(); }; }catch(e){}
-  $('btn-menu-back').onclick = ()=>{ showMenu(); };
-  $('btn-hub-pedia').onclick = ()=>{ showPedia(); };
-  $('btn-pedia-close').onclick = ()=>{ closePedia(); };
-  $('btn-pedia-wbc').onclick = ()=>{ showCharDetail('wbc'); };
-  $('btn-pedia-rbc').onclick = ()=>{ showCharDetail('rbc'); };
-  $('btn-pedia-plt').onclick = ()=>{ showCharDetail('plt'); };
-  $('btn-char-back').onclick = ()=>{ closeCharDetail(); };
-  $('btn-resume').onclick = ()=>{ togglePause(); };
-  $('btn-quit').onclick = ()=>{ backToHub(); };
-  $('btn-next-level').onclick = ()=>{ backToHub(); };
-  try{ $('btn-complete-menu').onclick = ()=>{ showMenu(); }; }catch(e){}
+  bindClick('btn-menu-back-top', ()=>{ showMenu(); });
+  bindClick('btn-menu-back', ()=>{ showMenu(); });
+  bindClick('btn-hub-pedia', ()=>{ showPedia(); });
+  bindClick('btn-pedia-close', ()=>{ closePedia(); });
+  bindClick('btn-pedia-wbc', ()=>{ showCharDetail('wbc'); });
+  bindClick('btn-pedia-rbc', ()=>{ showCharDetail('rbc'); });
+  bindClick('btn-pedia-plt', ()=>{ showCharDetail('plt'); });
+  bindClick('btn-char-back', ()=>{ closeCharDetail(); });
+  bindClick('btn-resume', ()=>{ togglePause(); });
+  bindClick('btn-quit', ()=>{ backToHub(); });
+  bindClick('btn-next-level', ()=>{ backToHub(); });
+  bindClick('btn-complete-menu', ()=>{ showMenu(); });
   // 死亡面板按钮
-  $('btn-retry').onclick = ()=>{ retryFromDeath(); };
-  $('btn-death-quit').onclick = ()=>{ quitFromDeath(); };
-  try{ $('btn-death-menu').onclick = ()=>{ $('death-panel').classList.add('hidden'); showMenu(); }; }catch(e){}
+  bindClick('btn-retry', ()=>{ retryFromDeath(); });
+  bindClick('btn-death-quit', ()=>{ quitFromDeath(); });
+  bindClick('btn-death-menu', ()=>{ $('death-panel').classList.add('hidden'); showMenu(); });
   // 对话气泡按钮
-  $('btn-bubble-next').onclick = ()=>{ dismissTutorial(); };
-  $('btn-bubble-skip').onclick = ()=>{ skipAllTutorials(); };
+  bindClick('btn-bubble-next', ()=>{ dismissTutorial(); });
+  bindClick('btn-bubble-skip', ()=>{ skipAllTutorials(); });
   // 记忆卡片关闭
-  $('btn-memory-close').onclick = ()=>{ closeMemoryCard(); };
+  bindClick('btn-memory-close', ()=>{ closeMemoryCard(); });
   // 确认框
   let confirmCallback=null;
   window.showConfirm=(msg,onYes)=>{Game.paused=true;$('confirm-msg').textContent=msg;$('confirm-dialog').classList.remove('hidden');confirmCallback=onYes;};
   window.hideConfirm=()=>{$('confirm-dialog').classList.add('hidden');confirmCallback=null;if(Game.state==='playing')Game.paused=false;};
-  $('btn-confirm-yes').onclick=e=>{e.stopPropagation();try{if(confirmCallback)confirmCallback();}catch(err){console.error(err);}hideConfirm();};
-  $('btn-confirm-no').onclick=e=>{e.stopPropagation();hideConfirm();};
+  bindClick('btn-confirm-yes', e=>{e.stopPropagation();try{if(confirmCallback)confirmCallback();}catch(err){console.error(err);}hideConfirm();});
+  bindClick('btn-confirm-no', e=>{e.stopPropagation();hideConfirm();});
   $('confirm-dialog').addEventListener('click',e=>{if(e.target===$('confirm-dialog'))hideConfirm();});
-  $('home-btn').onclick=e=>{e.stopPropagation();if(Game.state!=='playing'&&Game.state!=='paused')return;showConfirm('确定要离开当前关卡吗？\n进度将不会保存。',()=>{backToHub();});};
+  bindClick('home-btn', e=>{e.stopPropagation();if(Game.state!=='playing'&&Game.state!=='paused')return;showConfirm('确定要离开当前关卡吗？\n进度将不会保存。',()=>{backToHub();});});
 
   // v3: AI 生成关卡按钮
-  $('btn-hub-ai').onclick = ()=>{ showAIGeneratePanel(); };
+  bindClick('btn-hub-ai', ()=>{ showAIGeneratePanel(); });
 
   // v3: 存档管理
-  $('btn-hub-slots').onclick = ()=>{ showSlotPanel(); };
+  bindClick('btn-hub-slots', ()=>{ showSlotPanel(); });
 
   // v3: 排行榜
-  $('btn-hub-lb').onclick = ()=>{ showLeaderboard(); };
+  bindClick('btn-hub-lb', ()=>{ showLeaderboard(); });
 
   // v3: 成就
-  $('btn-hub-achs').onclick = ()=>{ showAchievements(); };
+  bindClick('btn-hub-achs', ()=>{ showAchievements(); });
 
   // v3: 双人模式切换
   const btn2p = $('btn-hub-2p');

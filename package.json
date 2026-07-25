@@ -1,0 +1,13 @@
+{
+  "name": "cell-quest",
+  "version": "3.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node server.js",
+    "test": "playwright test",
+    "test:server": "node --test tests/server.test.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}
