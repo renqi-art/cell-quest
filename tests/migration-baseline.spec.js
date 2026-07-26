@@ -21,7 +21,7 @@ test('legacy game, editor, and deck entry points remain available', async ({ pag
 
   await page.goto('/editor.html');
   await expect(page.locator('#vue-editor-root')).toHaveAttribute('data-vue-mounted', 'true');
-  await expect(page.locator('#gridWrap')).toBeVisible();
+  await expect(page.locator('[data-testid="case-designer"]')).toBeVisible();
 
   await page.goto('/deck.html');
   await expect(page.locator('#vue-deck-root')).toHaveAttribute('data-vue-mounted', 'true');

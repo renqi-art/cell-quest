@@ -15,7 +15,7 @@ const selectedNode = ref<CaseNode | null>(null)
 </script>
 
 <template>
-  <div class="case-designer-app">
+  <div class="case-designer-app" data-testid="case-designer">
     <template v-if="store.draft">
       <EditorToolbar />
       <div class="editor-workspace">
