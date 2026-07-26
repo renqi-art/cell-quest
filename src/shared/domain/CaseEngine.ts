@@ -1,14 +1,5 @@
 import type { CaseConfig, CaseSnapshot, CaseEvent, CaseResult } from '@/shared/types/case'
 
-interface ActiveSnapshot extends CaseSnapshot {
-  readonly status: 'active'
-}
-
-/** 任务完成后的 snapshot（非 active） */
-interface TerminalSnapshot extends CaseSnapshot {
-  readonly status: 'complete' | 'failed'
-}
-
 /** 内部可变状态 */
 interface InternalState {
   oxygen: number

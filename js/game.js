@@ -726,6 +726,7 @@ function loop(time){
   while(Game.accumulator >= FIXED_STEP){
     try{update();}catch(err){console.error('Update error:',err);Game.accumulator=0;break;}
     Game.accumulator-=FIXED_STEP;Game.frame++;
+    if(window.CellQuestLegacy.onTick) window.CellQuestLegacy.onTick(FIXED_STEP);
   }
   Game.renderAlpha=Math.min(1,Game.accumulator/FIXED_STEP);
   try{render();}catch(err){console.error('Render error:',err);}
