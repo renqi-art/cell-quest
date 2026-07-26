@@ -92,6 +92,7 @@ export function parseClassicLevel(input: unknown): ParseClassicLevelResult {
           checkpoints.push(position)
           break
         case 'F':
+        case '>':
           finishes.push(position)
           break
         case 'b':
@@ -118,7 +119,7 @@ export function parseClassicLevel(input: unknown): ParseClassicLevelResult {
 
   if (playerSpawns.length === 0) errors.push(issue('missing-player-spawn', 'Classic level requires exactly one player spawn'))
   if (playerSpawns.length > 1) errors.push(issue('duplicate-player-spawn', 'Classic level contains more than one player spawn'))
-  if (finishes.length === 0) errors.push(issue('missing-finish', 'Classic level requires exactly one finish'))
+  if (finishes.length === 0 && definition.winCondition === 'reach-finish') errors.push(issue('missing-finish', 'A reach-finish classic level requires exactly one finish'))
   if (finishes.length > 1) errors.push(issue('duplicate-finish', 'Classic level contains more than one finish'))
   if (errors.length > 0) return { ok: false, errors }
 
@@ -128,7 +129,7 @@ export function parseClassicLevel(input: unknown): ParseClassicLevelResult {
       definition,
       tiles,
       playerSpawn: playerSpawns[0]!,
-      finish: finishes[0]!,
+      finish: finishes[0] ?? null,
       enemies,
       items,
       checkpoints,

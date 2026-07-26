@@ -55,6 +55,7 @@ export const CLASSIC_ENTITY_CHARACTERS = Object.freeze(
     'P',
     'C',
     'F',
+    '>',
     'b',
     'N',
     '?',

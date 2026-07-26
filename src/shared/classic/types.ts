@@ -34,8 +34,10 @@ export interface ClassicPipeSpawnerDefinition {
 export interface ClassicTutorialDefinition {
   readonly x: number
   readonly key?: string
-  readonly title: string
-  readonly text: string
+  readonly title?: string
+  readonly text?: string
+  readonly body?: string
+  readonly useCurrent?: boolean
 }
 
 export interface ClassicKnowledgeCardDefinition {
@@ -80,7 +82,7 @@ export interface ParsedClassicLevel {
   readonly definition: ClassicLevelDefinition
   readonly tiles: readonly (readonly string[])[]
   readonly playerSpawn: ClassicGridPosition
-  readonly finish: ClassicGridPosition
+  readonly finish: ClassicGridPosition | null
   readonly enemies: readonly ClassicEnemySpawn[]
   readonly items: readonly ClassicItemSpawn[]
   readonly checkpoints: readonly ClassicGridPosition[]

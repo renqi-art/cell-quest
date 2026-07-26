@@ -42,4 +42,16 @@ describe('parseClassicLevel', () => {
       ]),
     })
   })
+
+  it('allows an objective-driven level to omit a physical finish', () => {
+    const result = parseClassicLevel({
+      ...MINIMAL_CLASSIC_LEVEL,
+      winCondition: 'kill-all',
+      map: ['P g  ', '#####'],
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.finish).toBeNull()
+  })
 })
