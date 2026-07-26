@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import type { GameEngineEvents } from '@/game/bridge/GameEngineEvents'
-import type { LoadLevelOptions, PlayerAction } from '@/shared/types/game'
+import type { CellType, LoadLevelOptions, PlayerAction } from '@/shared/types/game'
 import type { ParsedClassicLevel } from '@/shared/classic/types'
 import { FixedStepClock } from '@/shared/classic/simulation/FixedStepClock'
 import { PlayerActor } from '../actors/PlayerActor'
@@ -17,6 +17,8 @@ import { CombatSystem, type CombatResolution } from '../systems/CombatSystem'
 import { ClassicHudSystem } from '../systems/ClassicHudSystem'
 import { TideSystem } from '../systems/TideSystem'
 import { SpawnSystem } from '../systems/SpawnSystem'
+import { ClassicInputRouter, swapPlayerRoles } from '../systems/ClassicInputRouter'
+import { CameraSystem } from '../systems/CameraSystem'
 import { applyItem, createClassicItemState, tickClassicItemState, type ClassicItemState } from '@/shared/classic/simulation/ItemRules'
 import { ClassicRunStats } from '@/shared/classic/simulation/ClassicRunStats'
 import { canCompleteClassicLevel } from '@/shared/classic/simulation/CompletionRules'
@@ -59,7 +61,10 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
     private readonly npcByShape = new Map<Phaser.GameObjects.GameObject, NpcActor>()
     private readonly skillWasDown = new Map<1 | 2, boolean>()
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
-    private wasd!: Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
+    private wasd!: Record<'W' | 'A' | 'S' | 'D' | 'Q' | 'E', Phaser.Input.Keyboard.Key>
+    private p1Dash!: Phaser.Input.Keyboard.Key
+    private p1Skill!: Phaser.Input.Keyboard.Key
+    private inputRouter!: ClassicInputRouter
     private readonly hazardSystem = new HazardSystem()
     private readonly combatSystem = new CombatSystem()
     private readonly hudSystem = new ClassicHudSystem()
@@ -72,9 +77,14 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
     private npcGroup!: Phaser.Physics.Arcade.StaticGroup
     private tideSystem!: TideSystem
     private spawnSystem!: SpawnSystem
+    private cameraSystem!: CameraSystem
     private fixedTick = 0
     private randomState = 0x6d2b79f5
     private completed = false
+    private playerCells = new Map<1 | 2, CellType>([
+      [1, context.options.playerOneCell ?? context.level.definition.cellType],
+      [2, context.options.playerTwoCell ?? 1],
+    ])
     private itemState: ClassicItemState = createClassicItemState()
     private runStats = new ClassicRunStats({
       totalEnemies: context.level.enemies.length + context.level.bosses.length,
@@ -204,15 +214,23 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
       })
 
       this.cursors = this.input.keyboard!.createCursorKeys()
-      this.wasd = this.input.keyboard!.addKeys('W,A,D') as Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
+      this.wasd = this.input.keyboard!.addKeys('W,A,S,D,Q,E') as Record<'W' | 'A' | 'S' | 'D' | 'Q' | 'E', Phaser.Input.Keyboard.Key>
+      this.p1Dash = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT)
+      this.p1Skill = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
+      this.inputRouter = new ClassicInputRouter(context.pressed, {
+        isDown: (player, action) => this.keyboardActionDown(player, action),
+      })
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.inputRouter.shutdown())
       this.cameras.main.setBounds(0, 0, worldWidth, worldHeight)
-      this.cameras.main.startFollow(this.players[0]!.shape, true, 1, 1)
+      this.cameraSystem = new CameraSystem(this.cameras.main, { width: worldWidth, height: worldHeight })
+      this.cameraSystem.step(this.players.map(player => player.shape), { snap: true })
 
       const canvas = this.game.canvas
       canvas.setAttribute('role', 'application')
       canvas.setAttribute('aria-label', `${level.definition.name} Phaser 经典场景`)
       canvas.dataset.runtime = 'phaser-classic'
       canvas.dataset.playerCount = String(this.players.length)
+      canvas.dataset.playerRoles = this.players.map(player => this.cellTypeFor(player.playerIndex)).join(',')
       events.emit('state-changed', 'playing')
       this.emitHud()
     }
@@ -264,23 +282,12 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
         this.emitHud()
       }
       for (const player of this.players) {
-        const actions = context.pressed.get(player.playerIndex) ?? new Set<PlayerAction>()
-        const leftKey = player.playerIndex === 1 ? this.cursors.left : this.wasd.A
-        const rightKey = player.playerIndex === 1 ? this.cursors.right : this.wasd.D
-        const jumpKey = player.playerIndex === 1 ? this.cursors.up : this.wasd.W
-        player.step({
-          left: leftKey.isDown || actions.has('left'),
-          right: rightKey.isDown || actions.has('right'),
-          down: (player.playerIndex === 1 ? this.cursors.down.isDown : false) || actions.has('down'),
-          jumpPressed: Phaser.Input.Keyboard.JustDown(jumpKey) || actions.has('jump'),
-          jumpHeld: jumpKey.isDown || actions.has('jump'),
-          dashPressed: actions.has('dash'),
-        }, {
+        player.step(this.inputRouter.frame(player.playerIndex), {
           grounded: player.body.blocked.down,
           headClear: !player.body.blocked.up,
           horizontalBlocked: player.body.blocked.left || player.body.blocked.right,
         })
-        const skillDown = actions.has('skill')
+        const skillDown = this.inputRouter.isDown(player.playerIndex, 'skill')
         if (skillDown && !this.skillWasDown.get(player.playerIndex)) this.attack(player)
         this.skillWasDown.set(player.playerIndex, skillDown)
         if (player.shape.y > context.level.tiles.length * CLASSIC_TILE_SIZE + 60) {
@@ -291,15 +298,44 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
           }
         }
       }
+      this.cameraSystem.step(this.players.map(player => player.shape))
+    }
+
+    swapPlayerRoles(): void {
+      if (this.players.length < 2) return
+      this.playerCells = swapPlayerRoles(this.playerCells)
+      this.game.canvas.dataset.playerRoles = `${this.cellTypeFor(1)},${this.cellTypeFor(2)}`
+      this.emitHud()
+    }
+
+    private keyboardActionDown(player: 1 | 2, action: PlayerAction): boolean {
+      if (player === 1) {
+        if (action === 'left') return this.cursors.left.isDown
+        if (action === 'right') return this.cursors.right.isDown
+        if (action === 'down') return this.cursors.down.isDown
+        if (action === 'jump') return this.cursors.up.isDown
+        if (action === 'dash') return this.p1Dash.isDown
+        if (action === 'skill') return this.p1Skill.isDown
+        return false
+      }
+      if (action === 'left') return this.wasd.A.isDown
+      if (action === 'right') return this.wasd.D.isDown
+      if (action === 'down') return this.wasd.S.isDown
+      if (action === 'jump') return this.wasd.W.isDown
+      if (action === 'dash') return this.wasd.Q.isDown
+      if (action === 'skill') return this.wasd.E.isDown
+      return false
+    }
+
+    private cellTypeFor(player: 1 | 2): CellType {
+      return this.playerCells.get(player) ?? 1
     }
 
     private emitHud(): void {
       context.events.emit('hud-updated', this.hudSystem.snapshot(
         this.players.map(player => ({
           actor: player,
-          cellType: player.playerIndex === 1
-            ? context.options.playerOneCell ?? context.level.definition.cellType
-            : context.options.playerTwoCell ?? 1,
+          cellType: this.cellTypeFor(player.playerIndex),
           cellName: player.playerIndex === 1 ? '经典细胞' : '协作细胞',
         })),
         this.itemState,
@@ -327,9 +363,7 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
 
     private attack(player: PlayerActor): void {
       const state = player.snapshot()
-      const cellType = player.playerIndex === 1
-        ? context.options.playerOneCell ?? context.level.definition.cellType
-        : context.options.playerTwoCell ?? 1
+      const cellType = this.cellTypeFor(player.playerIndex)
       if (cellType === 2) {
         const target = this.enemies.find(enemy => enemy.isAlive()
           && Math.abs(enemy.shape.x - player.shape.x) <= 52
@@ -379,6 +413,8 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
 
     private consumeBossEffects(boss: BossActor, effects: readonly BossEffect[]): void {
       for (const effect of effects) {
+        if (effect.type === 'phase') this.cameraSystem.requestShake(240, 0.012)
+        if (effect.type === 'ring') this.cameraSystem.requestShake(140, 0.006)
         if (effect.type === 'leukocidin-hit' || effect.type === 'shock-hit') {
           for (const player of this.players) player.applyDamage(effect.damage)
         }

@@ -297,6 +297,14 @@ export class PhaserGameEngineAdapter implements GameEngine {
   setTwoPlayer(enabled: boolean): void { this.options = { ...this.options, twoPlayer: enabled } }
   swapPlayerRoles(): void {
     if (!this.options.twoPlayer) return
+    if (this.activeMode === 'classic') {
+      const first = this.options.playerOneCell ?? 1
+      const second = this.options.playerTwoCell ?? 1
+      this.options = { ...this.options, playerOneCell: second, playerTwoCell: first }
+      const scene = this.game?.scene.getScene(CLASSIC_SCENE_KEY) as unknown as { swapPlayerRoles?: () => void } | undefined
+      scene?.swapPlayerRoles?.()
+      return
+    }
     const first = this.playerCells.get(1) ?? 1
     const second = this.playerCells.get(2) ?? 2
     this.playerCells.set(1, second)
