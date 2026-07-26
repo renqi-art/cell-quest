@@ -22,4 +22,8 @@ output/
 .env
 .edgeone/*
 .tef_dist/*
-  
+.worktrees/
+
+# Playwright output
+test-results/
+playwright-report/

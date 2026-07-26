@@ -613,24 +613,81 @@ function exportLevelCode(idx){
   return 'CQ!' + btoa(unescape(encodeURIComponent(json))).replace(/=+$/,'');
 }
 
+const MAX_SHARED_LEVEL_CODE = 200_000;
+const MAX_SHARED_LEVEL_ROWS = 30;
+const MAX_SHARED_LEVEL_WIDTH = 200;
+const SHARED_LEVEL_TILES = /^[ #=po?FPCgGtbBS^VJHDOnfda*MXN_]*$/;
+const SHARED_LEVEL_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
 function importLevelCode(code){
-  if(!code || !code.startsWith('CQ!')) return { error: '无效的关卡代码' };
+  if(typeof code !== 'string' || !code.startsWith('CQ!')){
+    return { error: '无效的关卡代码' };
+  }
+  if(code.length > MAX_SHARED_LEVEL_CODE){
+    return { error: '关卡代码过大' };
+  }
+
   try{
-    const json = decodeURIComponent(escape(atob(code.substring(3))));
+    let encoded = code.substring(3);
+    if(!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) || encoded.length % 4 === 1){
+      return { error: '关卡代码编码无效' };
+    }
+    encoded += '='.repeat((4 - encoded.length % 4) % 4);
+    const json = decodeURIComponent(escape(atob(encoded)));
     const pack = JSON.parse(json);
-    if(!pack.n || !pack.m || !Array.isArray(pack.m)) return { error: '关卡代码格式错误' };
+    if(!pack || typeof pack !== 'object' || Array.isArray(pack)){
+      return { error: '关卡代码格式错误' };
+    }
+    if(typeof pack.n !== 'string' || !pack.n.trim() || pack.n.length > 100){
+      return { error: '关卡名称无效' };
+    }
+    if(!Array.isArray(pack.m) || pack.m.length < 3 || pack.m.length > MAX_SHARED_LEVEL_ROWS){
+      return { error: '关卡地图行数无效' };
+    }
+    if(pack.m.some(row =>
+      typeof row !== 'string' ||
+      row.length > MAX_SHARED_LEVEL_WIDTH ||
+      !SHARED_LEVEL_TILES.test(row)
+    )){
+      return { error: '关卡地图包含无效瓦片或宽度' };
+    }
+
+    const cellType = pack.c == null ? 3 : pack.c;
+    if(cellType !== 1 && cellType !== 3){
+      return { error: '细胞类型无效' };
+    }
+    const winCondition = pack.w == null ? WIN_COLLECT_ALL : pack.w;
+    if(winCondition !== WIN_KILL_ALL && winCondition !== WIN_COLLECT_ALL){
+      return { error: '胜利条件无效' };
+    }
+
+    const sky = pack.s == null ? ['#2a1020', '#5a1a3a'] : pack.s;
+    if(
+      !Array.isArray(sky) ||
+      sky.length !== 2 ||
+      sky.some(color => typeof color !== 'string' || !SHARED_LEVEL_COLOR.test(color))
+    ){
+      return { error: '天空颜色无效' };
+    }
+
+    const width = Math.max(80, ...pack.m.map(row => row.length));
     const levelData = {
-      name: pack.n.substring(0,20),
-      cellType: pack.c||3,
-      winCondition: pack.w||WIN_COLLECT_ALL,
-      sky: pack.s||['#2a1020','#5a1a3a'],
-      map: pack.m.map(r=>String(r).substring(0,200).padEnd(80,' ')),
-      width: 80,
-      floatPlatforms:[], miniSpawnArea:null, pipeSpawners:[],
-      knowledgeCards:[], tutorials:[],
+      name: pack.n.trim().substring(0, 20),
+      cellType,
+      winCondition,
+      sky: [...sky],
+      map: pack.m.map(row => row.padEnd(width, ' ')),
+      width,
+      floatPlatforms: [],
+      miniSpawnArea: null,
+      pipeSpawners: [],
+      knowledgeCards: [],
+      tutorials: [],
     };
     return levelData;
-  }catch(e){ return { error: '解析失败: '+e.message }; }
+  }catch(error){
+    return { error: '解析失败: ' + error.message };
+  }
 }
 
 // ===== v3: AI 自适应难度系统 =====
@@ -929,20 +986,54 @@ function resetSlot(slot){
 }
 
 // 迁移旧版单存档 → 多栏位（首次启动时自动执行）
+function customLevelMigrationIdentity(level){
+  if(!level || typeof level !== 'object') return JSON.stringify(level);
+  return JSON.stringify([
+    level.name || '',
+    level.cellType || 3,
+    level.winCondition || '',
+    Array.isArray(level.map) ? level.map : [],
+  ]);
+}
+
+function migrateLegacyCustomLevels(){
+  const legacyRaw = localStorage.getItem('cellQuest_customLevels');
+  if(!legacyRaw) return;
+  const legacy = JSON.parse(legacyRaw);
+  if(!Array.isArray(legacy)) return;
+  const targetKey = customLevelKey(0);
+  const currentRaw = localStorage.getItem(targetKey);
+  const current = currentRaw ? JSON.parse(currentRaw) : [];
+  if(!Array.isArray(current)) return;
+  const merged = [...current];
+  const identities = new Set(current.map(customLevelMigrationIdentity));
+  for(const level of legacy){
+    const identity = customLevelMigrationIdentity(level);
+    if(identities.has(identity)) continue;
+    identities.add(identity);
+    merged.push(level);
+  }
+  localStorage.setItem(targetKey, JSON.stringify(merged));
+  localStorage.removeItem('cellQuest_customLevels');
+}
+
+// 迁移旧版单存档 → 多栏位（首次启动时自动执行）
 function migrateOldSave(){
   try{
     const old = localStorage.getItem('cellQuest_save');
     if(old && !localStorage.getItem(saveKey(0))){
       localStorage.setItem(saveKey(0), old);
       localStorage.removeItem('cellQuest_save');
-      // 迁移自定义关卡
-      const oldCL = localStorage.getItem('cellQuest_customLevels');
-      if(oldCL) localStorage.setItem(customLevelKey(0), oldCL);
-      // 迁移自适应难度
-      const oldA = localStorage.getItem('cellQuest_adaptive');
-      if(oldA) localStorage.setItem(adaptiveKey(0), oldA);
     }
-  }catch(e){}
+    migrateLegacyCustomLevels();
+    const oldAdaptive = localStorage.getItem('cellQuest_adaptive');
+    if(oldAdaptive && !localStorage.getItem(adaptiveKey(0))){
+      localStorage.setItem(adaptiveKey(0), oldAdaptive);
+      localStorage.removeItem('cellQuest_adaptive');
+    }
+  }catch(error){
+    console.warn('Legacy save migration failed', error);
+  }
 }
 
 // ===== WebAudio 音效 =====

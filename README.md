@@ -1,6 +1,3 @@
-
-
-```markdown
 # Cell Quest (细胞远征)
 
 **Cell Quest** 是一款基于 HTML5 Canvas 和 JavaScript 开发的横版过关动作游戏（Metroidvania 类），背景设定在奇幻的人体微观世界中。玩家将扮演不同的血细胞，抵御病原体侵袭，完成细胞远征。
@@ -40,26 +37,49 @@
 
 1.  克隆本仓库到本地：
     ```bash
-    git clone https://gitee.com/renqi-su/cell-quest.git
+    git clone https://github.com/renqi-art/cell-quest.git
     cd cell-quest
     ```
 
-2.  启动服务器：
+2.  安装开发依赖并启动服务器：
     ```bash
-    node server.js
+    npm install
+    npx playwright install chromium  # 首次运行测试时安装浏览器
+    npm run dev
     ```
+
+3.  浏览器访问 `http://127.0.0.1:8080`。本地服务器默认只监听回环地址；关卡保存接口仅接受合法的 `level数字_名称.js` 文件名和 JSON 请求。
+
+### 测试
+
+```bash
+npm install
+npm run dev
+npm run typecheck
+npm run test:unit
+npm test
+npm run build
+npm run preview
+```
+
+> 此阶段仍通过 `LegacyGameEngineAdapter` 在 Vue 下加载传统游戏引擎。
+
+```bash
+npm test             # 浏览器核心流程、编辑器与安全回归
+npm run test:server  # 本地服务器安全边界
+```
 
 ### 操作说明
 
 *   **移动**：方向键 `←` `→` 或 `A` `D`
 *   **跳跃**：`空格` (Space) 或 `↑` `W`
 *   **下蹲**：`↓` `S`
-*   **普通攻击/技能 1**：`Z` / `J`
-*   **特殊技能 2**：`X` / `K`
-*   **辅助技能 3**：`C` / `L`
-*   **终极技能 4**：`V` / `;`
-*   **交互**：靠近机关或NPC时按 `E` 或 `Enter`
-*   **暂停**：`Esc`
+*   **普通攻击**：`E`
+*   **突进**：`Shift`
+*   **切换细胞**：`Q`
+*   **技能 1–4**：数字键 `1`–`4`
+*   **暂停/继续**：`P` 或 `Esc`
+*   **双人模式 P2**：`J`/`L` 移动、`I` 跳跃、`K` 下蹲、`U` 攻击、`O` 突进、`Y` 切换、`7`–`0` 技能
 
 *(注：具体按键映射可在 `js/game.js` 中查看或自定义)*
 
@@ -103,4 +123,3 @@
 ---
 
 *细胞远征 (Cell Quest) - 探索微观世界，守护人体健康。*
-```
