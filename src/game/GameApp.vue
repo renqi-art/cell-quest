@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import { LegacyGameEngineAdapter } from './bridge/LegacyGameEngineAdapter'
 import { useGameUiStore } from './stores/game-ui'
+import CaseHud from './components/CaseHud.vue'
 
 const store = useGameUiStore()
 const engine = new LegacyGameEngineAdapter(window.CellQuestLegacy)
@@ -14,6 +15,7 @@ onMounted(async () => {
     engine.subscribe('state-changed', store.setScreen),
     engine.subscribe('hud-updated', store.updateHud),
     engine.subscribe('fatal-error', store.fail),
+    engine.subscribe('case-updated', store.updateCaseHud),
   )
 })
 
@@ -24,5 +26,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="vue-migration-root" aria-hidden="true" />
+  <CaseHud
+    v-if="store.caseSnapshot"
+    :snapshot="store.caseSnapshot"
+  />
+  <div
+    v-else
+    class="vue-migration-root"
+    aria-hidden="true"
+  />
 </template>

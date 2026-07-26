@@ -3,6 +3,7 @@ import type { GameEngineEventMap } from '@/shared/types/events'
 import { GameEngineEvents } from './GameEngineEvents'
 import type { GameEngine } from './GameEngine'
 import { CaseEngine } from '@/shared/domain/CaseEngine'
+import { ScriptedAllySystem, ALLY_DEFAULTS, type AllyConfig } from '@/shared/domain/ScriptedAllySystem'
 import type { CaseConfig } from '@/shared/types/case'
 
 export interface LegacyGameBridge {
@@ -19,6 +20,7 @@ export interface LegacyGameBridge {
 export class LegacyGameEngineAdapter implements GameEngine {
   private readonly events = new GameEngineEvents()
   private caseEngine: CaseEngine | null = null
+  private allySystem: ScriptedAllySystem | null = null
   private tickDisposer: (() => void) | null = null
 
   constructor(private readonly legacy: LegacyGameBridge) {}
@@ -27,6 +29,7 @@ export class LegacyGameEngineAdapter implements GameEngine {
 
   destroy(): void {
     this.caseEngine = null
+    this.allySystem = null
     if (this.tickDisposer) {
       this.tickDisposer()
       this.tickDisposer = null
@@ -58,6 +61,9 @@ export class LegacyGameEngineAdapter implements GameEngine {
 
   setTwoPlayer(enabled: boolean): void {
     this.legacy.setTwoPlayer(enabled)
+    if (this.allySystem) {
+      this.allySystem.enabled = !enabled
+    }
   }
 
   dispatch(command: GameCommand): void {
@@ -88,10 +94,30 @@ export class LegacyGameEngineAdapter implements GameEngine {
 
     this.caseEngine = new CaseEngine(config)
 
+    // Create scripted ally for single-player mode
+    if (config.allyMode === 'scripted') {
+      const allyConfig: AllyConfig = config.primaryCell === 'coop'
+        ? ALLY_DEFAULTS.rbc
+        : ALLY_DEFAULTS[config.primaryCell === 'wbc' ? 'rbc' : 'wbc']
+      // Note: when primaryCell is 'wbc', the ally is RBC, and vice versa.
+      this.allySystem = new ScriptedAllySystem(
+        allyConfig,
+        (event) => this.caseEngine?.dispatch(event) ?? false,
+      )
+    } else {
+      this.allySystem = null
+    }
+
     // Register tick callback on the legacy bridge
     this.legacy.onTick = (dtMs: number) => {
       if (!this.caseEngine || !this.caseEngine.isActive()) return
 
+      // Tick the ally system first (may dispatch oxygen/infection events)
+      if (this.allySystem) {
+        this.allySystem.update(dtMs, this.caseEngine.getSnapshot())
+      }
+
+      // Tick the case engine (decay, evaluate)
       this.caseEngine.update(dtMs / 1000)
       const snap = this.caseEngine.getSnapshot()
 
