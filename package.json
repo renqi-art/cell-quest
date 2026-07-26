@@ -11,7 +11,8 @@
     "test": "playwright test",
     "test:unit": "vitest run",
     "test:component": "vitest run tests/component",
-    "test:server": "node --test tests/server.test.cjs"
+    "test:server": "node --test tests/server.test.cjs",
+    "test:director": "node --test tests/director.test.cjs"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.8",

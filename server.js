@@ -2,6 +2,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { handleDirectorRequest } = require('./server/director');
 
 const ROOT = __dirname;
 const LEVEL_DIR = path.join(ROOT, 'js', 'levels');
@@ -192,6 +193,11 @@ const server = http.createServer(async (req, res) => {
       console.error('LEVEL LIST FAILED:', error);
       sendJson(res, 500, { error: 'Unable to list levels' });
     }
+    return;
+  }
+
+  if (req.method === 'POST' && requestPath === '/api/director') {
+    await handleDirectorRequest(req, res, sendJson);
     return;
   }
 
