@@ -53,6 +53,18 @@
 ### 测试
 
 ```bash
+npm install
+npm run dev
+npm run typecheck
+npm run test:unit
+npm test
+npm run build
+npm run preview
+```
+
+> 此阶段仍通过 `LegacyGameEngineAdapter` 在 Vue 下加载传统游戏引擎。
+
+```bash
 npm test             # 浏览器核心流程、编辑器与安全回归
 npm run test:server  # 本地服务器安全边界
 ```
