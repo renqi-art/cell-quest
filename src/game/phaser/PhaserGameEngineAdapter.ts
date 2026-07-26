@@ -8,6 +8,9 @@ import { CaseEngine } from '@/shared/domain/CaseEngine'
 import { CaseDirectorClient } from '@/game/services/CaseDirectorClient'
 import type { DirectorContext } from '@/shared/types/director'
 import { buildPhaserSceneModel, type PhaserSceneModel } from './buildPhaserSceneModel'
+import { ClassicLevelRepository } from '@/shared/classic/ClassicLevelRepository'
+import { OFFICIAL_CLASSIC_LEVELS } from '@/shared/classic/levels/officialLevels'
+import { CLASSIC_SCENE_KEY, createClassicScene } from './scenes/ClassicScene'
 
 const NODE_COLORS: Record<PhaserSceneModel['nodes'][number]['kind'], number> = {
   'oxygen-source': 0x4fc3f7,
@@ -15,6 +18,11 @@ const NODE_COLORS: Record<PhaserSceneModel['nodes'][number]['kind'], number> = {
   'infection-site': 0xef5350,
   checkpoint: 0xffeb3b,
   knowledge: 0xab47bc,
+}
+
+export interface PhaserGameEngineAdapterOptions {
+  readonly gameFactory?: (config: Phaser.Types.Core.GameConfig) => Phaser.Game
+  readonly classicLevels?: ClassicLevelRepository
 }
 
 export class PhaserGameEngineAdapter implements GameEngine {
@@ -31,7 +39,19 @@ export class PhaserGameEngineAdapter implements GameEngine {
   private directorPending = false
   private directorRunId = ''
 
-  constructor(private readonly directorClient: Pick<CaseDirectorClient, 'nextPlan'> = new CaseDirectorClient()) {}
+  private readonly gameFactory: (config: Phaser.Types.Core.GameConfig) => Phaser.Game
+  private readonly classicLevels: ClassicLevelRepository
+  private activeMode: 'classic' | 'case' | null = null
+  private activeSceneKey = 'case-runtime'
+  private classicLevelId: string | null = null
+
+  constructor(
+    private readonly directorClient: Pick<CaseDirectorClient, 'nextPlan'> = new CaseDirectorClient(),
+    options: PhaserGameEngineAdapterOptions = {},
+  ) {
+    this.gameFactory = options.gameFactory ?? (config => new Phaser.Game(config))
+    this.classicLevels = options.classicLevels ?? new ClassicLevelRepository(OFFICIAL_CLASSIC_LEVELS)
+  }
 
   async mount(host: HTMLElement): Promise<void> {
     this.host = host
@@ -48,9 +68,28 @@ export class PhaserGameEngineAdapter implements GameEngine {
     this.events.clear()
   }
 
-  async loadLevel(_levelId: string, options: LoadLevelOptions): Promise<void> {
-    if (!this.draft) throw new Error('Phaser adapter requires loadCaseDraft for case levels')
-    await this.loadCaseDraft(this.draft, options)
+  async loadLevel(levelId: string, options: LoadLevelOptions): Promise<void> {
+    if (!this.host) throw new Error('Phaser adapter must be mounted before loading a classic level')
+    const level = this.classicLevels.get(levelId)
+    this.game?.destroy(true)
+    this.pressed.forEach(actions => actions.clear())
+    this.draft = null
+    this.caseEngine = null
+    this.options = options
+    this.activeMode = 'classic'
+    this.activeSceneKey = CLASSIC_SCENE_KEY
+    this.classicLevelId = levelId
+    const Scene = createClassicScene({ level, options, pressed: this.pressed, events: this.events })
+    this.game = this.gameFactory({
+      type: Phaser.CANVAS,
+      parent: this.host,
+      width: 800,
+      height: 480,
+      backgroundColor: level.definition.sky[0],
+      physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 }, debug: false } },
+      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+      scene: [Scene],
+    })
   }
 
   async loadCaseDraft(draft: CaseDraft, options: LoadLevelOptions): Promise<void> {
@@ -60,6 +99,9 @@ export class PhaserGameEngineAdapter implements GameEngine {
     this.pressed.forEach(actions => actions.clear())
     this.draft = draft
     this.options = options
+    this.activeMode = 'case'
+    this.activeSceneKey = 'case-runtime'
+    this.classicLevelId = null
     this.playerCells.set(1, options.playerOneCell === 2 ? 2 : 1)
     if (options.twoPlayer) this.playerCells.set(2, options.playerTwoCell === 1 ? 1 : 2)
     else this.playerCells.delete(2)
@@ -176,7 +218,7 @@ export class PhaserGameEngineAdapter implements GameEngine {
         }
       }
 
-      this.game = new Phaser.Game({
+      this.game = this.gameFactory({
         type: Phaser.CANVAS,
         parent: this.host!,
         width: 960,
@@ -245,9 +287,12 @@ export class PhaserGameEngineAdapter implements GameEngine {
     }
   }
 
-  pause(): void { this.game?.scene.pause('case-runtime'); this.events.emit('state-changed', 'paused') }
-  resume(): void { this.game?.scene.resume('case-runtime'); this.events.emit('state-changed', 'playing') }
-  retry(): void { if (this.draft) void this.loadCaseDraft(this.draft, this.options) }
+  pause(): void { this.game?.scene.pause(this.activeSceneKey); this.events.emit('state-changed', 'paused') }
+  resume(): void { this.game?.scene.resume(this.activeSceneKey); this.events.emit('state-changed', 'playing') }
+  retry(): void {
+    if (this.activeMode === 'classic' && this.classicLevelId) void this.loadLevel(this.classicLevelId, this.options)
+    else if (this.draft) void this.loadCaseDraft(this.draft, this.options)
+  }
   quitLevel(): void { this.game?.destroy(true); this.game = null; this.events.emit('state-changed', 'hub') }
   setTwoPlayer(enabled: boolean): void { this.options = { ...this.options, twoPlayer: enabled } }
   swapPlayerRoles(): void {
