@@ -31,6 +31,7 @@
     "vue-tsc": "3.3.8"
   },
   "dependencies": {
+    "motion": "12.42.2",
     "pinia": "4.0.2",
     "vue": "3.5.40"
   }
