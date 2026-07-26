@@ -79,6 +79,7 @@ export class PlayerMotor {
     let jumpsLeft = contacts.grounded ? 1 : state.jumpsLeft
     const dashCooldownTicks = Math.max(0, state.dashCooldownTicks - 1)
     const invincibleTicks = Math.max(0, state.invincibleTicks - 1)
+    const shieldTicks = Math.max(0, state.shieldTicks - 1)
 
     if (state.mode === 'dashing' && state.dashTicksRemaining > 0) {
       const dashTicksRemaining = state.dashTicksRemaining - 1
@@ -93,6 +94,7 @@ export class PlayerMotor {
           dashTicksRemaining,
           dashCooldownTicks,
           invincibleTicks,
+          shieldTicks,
         },
         requestedBody: body,
         events,
@@ -113,6 +115,7 @@ export class PlayerMotor {
           dashTicksRemaining: this.tuning.dashTicks - 1,
           dashCooldownTicks: this.tuning.dashCooldownTicks,
           invincibleTicks,
+          shieldTicks,
         },
         requestedBody: body,
         events,
@@ -175,6 +178,7 @@ export class PlayerMotor {
         dashTicksRemaining: 0,
         dashCooldownTicks,
         invincibleTicks,
+        shieldTicks,
       },
       requestedBody: body,
       events,

@@ -6,10 +6,15 @@ import { FixedStepClock } from '@/shared/classic/simulation/FixedStepClock'
 import { PlayerActor } from '../actors/PlayerActor'
 import { EnemyActor } from '../actors/EnemyActor'
 import { ProjectileActor } from '../actors/ProjectileActor'
+import { ItemActor } from '../actors/ItemActor'
+import { QuestionBlockActor } from '../actors/QuestionBlockActor'
 import { TerrainSystem } from '../systems/TerrainSystem'
 import { HazardSystem } from '../systems/HazardSystem'
 import { PlatformSystem } from '../systems/PlatformSystem'
 import { CombatSystem, type CombatResolution } from '../systems/CombatSystem'
+import { ClassicHudSystem } from '../systems/ClassicHudSystem'
+import { applyItem, createClassicItemState, tickClassicItemState, type ClassicItemState } from '@/shared/classic/simulation/ItemRules'
+import { ClassicRunStats } from '@/shared/classic/simulation/ClassicRunStats'
 import { CLASSIC_TILE_REGISTRY, isClassicTileCharacter } from '@/shared/classic/tiles'
 import {
   CLASSIC_MAX_CATCH_UP_STEPS,
@@ -35,19 +40,32 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
     private readonly players: PlayerActor[] = []
     private readonly enemies: EnemyActor[] = []
     private readonly projectiles: ProjectileActor[] = []
+    private readonly items: ItemActor[] = []
+    private readonly questionBlocks: QuestionBlockActor[] = []
     private readonly playerByShape = new Map<Phaser.GameObjects.GameObject, PlayerActor>()
     private readonly enemyByShape = new Map<Phaser.GameObjects.GameObject, EnemyActor>()
     private readonly projectileByShape = new Map<Phaser.GameObjects.GameObject, ProjectileActor>()
+    private readonly itemByShape = new Map<Phaser.GameObjects.GameObject, ItemActor>()
+    private readonly questionByShape = new Map<Phaser.GameObjects.GameObject, QuestionBlockActor>()
     private readonly skillWasDown = new Map<1 | 2, boolean>()
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
     private wasd!: Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
     private readonly hazardSystem = new HazardSystem()
     private readonly combatSystem = new CombatSystem()
+    private readonly hudSystem = new ClassicHudSystem()
     private platformSystem!: PlatformSystem
     private enemyGroup!: Phaser.Physics.Arcade.Group
     private projectileGroup!: Phaser.Physics.Arcade.Group
+    private itemGroup!: Phaser.Physics.Arcade.StaticGroup
+    private questionGroup!: Phaser.Physics.Arcade.StaticGroup
     private fixedTick = 0
-    private kills = 0
+    private randomState = 0x6d2b79f5
+    private completed = false
+    private itemState: ClassicItemState = createClassicItemState()
+    private runStats = new ClassicRunStats({
+      totalEnemies: context.level.enemies.length + context.level.bosses.length,
+      totalItems: context.level.items.length,
+    })
 
     constructor() {
       super(CLASSIC_SCENE_KEY)
@@ -72,7 +90,11 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
       }
       this.enemyGroup = this.physics.add.group({ allowGravity: false })
       this.projectileGroup = this.physics.add.group({ allowGravity: false })
+      this.itemGroup = this.physics.add.staticGroup()
+      this.questionGroup = this.physics.add.staticGroup()
       level.enemies.forEach(spawn => this.createEnemy(spawn.kind, spawn.col, spawn.row))
+      level.items.forEach(spawn => this.createItem({ kind: spawn.kind }, spawn.col, spawn.row))
+      level.questionBlocks.forEach(spawn => this.createQuestionBlock(spawn.col, spawn.row, spawn.hidden))
       for (const player of this.players) {
         this.playerByShape.set(player.shape, player)
         this.physics.add.collider(player.shape, terrain.solids)
@@ -94,7 +116,7 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
             row: Math.floor(object.y / CLASSIC_TILE_SIZE),
           }
           if (this.hazardSystem.activateCheckpoint(player, position)) {
-            context.events.emit('toast-requested', { message: '??????', durationMs: 1600 })
+            context.events.emit('toast-requested', { message: '检查点已激活', durationMs: 1600 })
           }
         })
         this.physics.add.overlap(player.shape, this.enemyGroup, (playerShape, enemyShape) => {
@@ -103,9 +125,32 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
             this.enemyByShape.get(enemyShape as Phaser.GameObjects.GameObject),
           )
         })
+        this.physics.add.overlap(player.shape, this.itemGroup, (_playerShape, itemShape) => {
+          const item = this.itemByShape.get(itemShape as Phaser.GameObjects.GameObject)
+          if (item) this.collectItem(player, item)
+        })
+        this.physics.add.collider(player.shape, this.questionGroup, (_playerShape, questionShape) => {
+          const question = this.questionByShape.get(questionShape as Phaser.GameObjects.GameObject)
+          if (question) this.hitQuestionBlockActor(player, question)
+        })
       }
       this.physics.add.collider(this.enemyGroup, terrain.solids)
       this.physics.add.collider(this.enemyGroup, terrain.crumble)
+      if (level.finish) {
+        const finish = this.add.rectangle(
+          level.finish.col * CLASSIC_TILE_SIZE + CLASSIC_TILE_SIZE / 2,
+          level.finish.row * CLASSIC_TILE_SIZE + CLASSIC_TILE_SIZE / 2,
+          CLASSIC_TILE_SIZE,
+          CLASSIC_TILE_SIZE * 2,
+          0x5adf91,
+          0.45,
+        )
+        finish.setName('classic-finish')
+        this.physics.add.existing(finish, true)
+        for (const player of this.players) {
+          this.physics.add.overlap(player.shape, finish, () => this.tryComplete(true))
+        }
+      }
       this.physics.add.collider(this.projectileGroup, terrain.solids, (projectileShape) => {
         this.projectileByShape.get(projectileShape as Phaser.GameObjects.GameObject)?.hitTerrain()
       })
@@ -137,6 +182,10 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
     private fixedUpdate(): void {
       this.fixedTick += 1
       this.platformSystem.fixedUpdate(this.fixedTick)
+      this.itemState = tickClassicItemState(this.itemState)
+      if (this.itemState.oxygenTicks > 0 && this.fixedTick % 60 === 0) {
+        for (const player of this.players) player.heal(1)
+      }
       for (const enemy of this.enemies) {
         if (!enemy.isAlive()) continue
         const target = this.nearestPlayer(enemy.shape.x, enemy.shape.y)
@@ -148,6 +197,10 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
         })
       }
       for (const projectile of this.projectiles) projectile.step()
+      if (this.fixedTick % 6 === 0) {
+        this.runStats = this.runStats.record({ type: 'tick', elapsedMs: 100 })
+        this.emitHud()
+      }
       for (const player of this.players) {
         const actions = context.pressed.get(player.playerIndex) ?? new Set<PlayerAction>()
         const leftKey = player.playerIndex === 1 ? this.cursors.left : this.wasd.A
@@ -170,7 +223,8 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
         this.skillWasDown.set(player.playerIndex, skillDown)
         if (player.shape.y > context.level.tiles.length * CLASSIC_TILE_SIZE + 60) {
           if (player.applyDamage(player.snapshot().maxHealth)) {
-            context.events.emit('player-died', { remainingCells: 0, cellName: '????' })
+            this.runStats = this.runStats.record({ type: 'death' })
+            context.events.emit('player-died', { remainingCells: 0, cellName: '经典细胞' })
             context.events.emit('state-changed', 'dead')
           }
         }
@@ -178,25 +232,17 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
     }
 
     private emitHud(): void {
-      context.events.emit('hud-updated', {
-        players: this.players.map(player => {
-          const state = player.snapshot()
-          return {
-            player: player.playerIndex,
-            health: state.health,
-            maxHealth: state.maxHealth,
-            cellType: player.playerIndex === 1
-              ? context.options.playerOneCell ?? context.level.definition.cellType
-              : context.options.playerTwoCell ?? 1,
-            cellName: player.playerIndex === 1 ? '经典细胞' : '协作细胞',
-          }
-        }),
-        energy: 100,
-        maxEnergy: 100,
-        elapsedMs: 0,
-        kills: this.kills,
-        items: 0,
-      })
+      context.events.emit('hud-updated', this.hudSystem.snapshot(
+        this.players.map(player => ({
+          actor: player,
+          cellType: player.playerIndex === 1
+            ? context.options.playerOneCell ?? context.level.definition.cellType
+            : context.options.playerTwoCell ?? 1,
+          cellName: player.playerIndex === 1 ? '经典细胞' : '协作细胞',
+        })),
+        this.itemState,
+        this.runStats,
+      ))
     }
 
     private createEnemy(kind: ParsedClassicLevel['enemies'][number]['kind'], col: number, row: number): EnemyActor {
@@ -251,13 +297,82 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
 
     private consumeCombatResult(result: CombatResolution, enemy: EnemyActor): void {
       if (!result.reward) return
-      this.kills += 1
+      this.runStats = this.runStats.record({ type: 'kill' })
       for (let index = 0; index < result.reward.split; index += 1) {
         const child = this.createEnemy('staph', enemy.shape.x / CLASSIC_TILE_SIZE, enemy.shape.y / CLASSIC_TILE_SIZE)
         child.shape.setPosition(enemy.shape.x + (index === 0 ? -12 : 12), enemy.shape.y)
         child.body.updateFromGameObject()
       }
       this.emitHud()
+      this.tryComplete(false)
+    }
+
+    private createItem(item: ItemActor['item'], col: number, row: number): ItemActor {
+      const actor = new ItemActor(this, item, col, row)
+      this.items.push(actor)
+      this.itemGroup.add(actor.shape)
+      this.itemByShape.set(actor.shape, actor)
+      return actor
+    }
+
+    private createQuestionBlock(col: number, row: number, hidden: boolean): QuestionBlockActor {
+      const actor = new QuestionBlockActor(this, col, row, hidden)
+      this.questionBlocks.push(actor)
+      this.questionGroup.add(actor.shape)
+      this.questionByShape.set(actor.shape, actor)
+      return actor
+    }
+
+    private collectItem(player: PlayerActor, actor: ItemActor): void {
+      const application = applyItem(this.itemState, actor.item)
+      if (!application.collected) {
+        context.events.emit('toast-requested', { message: '背包已满', durationMs: 1200 })
+        return
+      }
+      if (!actor.collect()) return
+      this.itemState = application.state
+      this.runStats = this.runStats.record({ type: 'item' })
+      if (actor.item.kind === 'shield') player.grantShield(application.state.shieldTicks)
+      if (actor.item.kind === 'memory') {
+        context.events.emit('knowledge-opened', { title: '记忆细胞', body: '记忆细胞会保留免疫应答信息。' })
+      }
+      this.emitHud()
+      this.tryComplete(false)
+    }
+
+    private hitQuestionBlockActor(player: PlayerActor, actor: QuestionBlockActor): void {
+      if (player.body.velocity.y >= 0 || player.shape.y <= actor.shape.y) return
+      const output = actor.hit(this.nextRandom())
+      if (!output) return
+      const col = actor.shape.x / CLASSIC_TILE_SIZE - 0.5
+      const row = actor.shape.y / CLASSIC_TILE_SIZE - 1.5
+      if (output.kind === 'atp') this.createItem({ kind: 'atp' }, col, row)
+      else this.createEnemy('strep', col, row)
+    }
+
+    private tryComplete(touchedFinish: boolean): void {
+      if (this.completed) return
+      const condition = context.level.definition.winCondition
+      const complete = condition === 'reach-finish'
+        ? touchedFinish
+        : condition === 'kill-all'
+          ? this.enemies.every(enemy => !enemy.isAlive())
+          : this.runStats.snapshot().items >= context.level.items.length
+      if (!complete) return
+      this.completed = true
+      const result = this.runStats.result()
+      context.events.emit('level-completed', {
+        levelId: context.level.definition.id,
+        stars: result.stars,
+        elapsedMs: result.elapsedMs,
+        completionPercent: result.completionPercent,
+      })
+      context.events.emit('state-changed', 'complete')
+    }
+
+    private nextRandom(): number {
+      this.randomState = (Math.imul(this.randomState, 1664525) + 1013904223) >>> 0
+      return this.randomState / 0x100000000
     }
 
     private nearestPlayer(x: number, y: number): PlayerActor | undefined {

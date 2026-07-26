@@ -81,6 +81,17 @@ export class PlayerActor {
     this.body.setVelocityY(velocityY * CLASSIC_SIMULATION_HZ)
   }
 
+  grantShield(ticks: number): void {
+    this.motorState = { ...this.motorState, shieldTicks: Math.max(this.motorState.shieldTicks, ticks) }
+  }
+
+  heal(amount: number): void {
+    this.motorState = {
+      ...this.motorState,
+      health: Math.min(this.motorState.maxHealth, this.motorState.health + Math.max(0, amount)),
+    }
+  }
+
   activateCheckpoint(position: ClassicGridPosition): boolean {
     if (this.checkpoint.col === position.col && this.checkpoint.row === position.row) return false
     this.checkpoint = position

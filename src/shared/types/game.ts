@@ -42,6 +42,7 @@ export interface PlayerHudSnapshot {
   readonly maxHealth: number
   readonly cellType: CellType
   readonly cellName: string
+  readonly shieldTicks?: number
 }
 
 export interface HudSnapshot {
@@ -51,4 +52,10 @@ export interface HudSnapshot {
   readonly elapsedMs: number
   readonly kills: number
   readonly items: number
+  readonly deaths?: number
+  readonly oxygenTicks?: number
+  readonly complementAmmo?: number
+  readonly xp?: number
+  readonly inventoryCount?: number
+  readonly completionPercent?: number
 }
