@@ -25,30 +25,51 @@ const selectedNode = computed(() =>
 </script>
 
 <template>
-  <div class="case-designer-app" data-testid="case-designer">
+  <div
+    class="case-designer-app"
+    data-testid="case-designer"
+  >
     <template v-if="store.draft">
-      <EditorToolbar @open-ai="showAiDialog = true" @open-share="showShareDialog = true" />
+      <EditorToolbar
+        @open-ai="showAiDialog = true"
+        @open-share="showShareDialog = true"
+      />
       <div class="editor-workspace">
         <CaseToolPalette
           :selected-node="selectedNode"
           :active-tool="activeTool"
           @select-tool="activeTool = $event"
         />
-        <main class="editor-canvas" aria-label="病例画布">
+        <main
+          class="editor-canvas"
+          aria-label="病例画布"
+        >
           <CaseMapCanvas :active-tool="activeTool" />
         </main>
-        <aside class="editor-sidebar" aria-label="属性与校验">
+        <aside
+          class="editor-sidebar"
+          aria-label="属性与校验"
+        >
           <CaseSettingsPanel />
           <CaseInspector :selected-node="selectedNode" />
           <CaseValidationPanel />
         </aside>
       </div>
-      <footer class="editor-status" aria-live="polite">
+      <footer
+        class="editor-status"
+        aria-live="polite"
+      >
         {{ store.dirty ? '未保存' : '已保存' }}
         <CasePlaytestPanel />
       </footer>
-      <CaseShareDialog v-if="showShareDialog" @close="showShareDialog = false" />
-      <AiCaseGeneratorDialog v-if="showAiDialog" @close="showAiDialog = false" />
+      <CaseShareDialog
+        v-if="showShareDialog"
+        @close="showShareDialog = false"
+      />
+      <AiCaseGeneratorDialog
+        v-if="showAiDialog"
+        @close="showAiDialog = false"
+      />
     </template>
     <template v-else>
       <NewCaseWizard />

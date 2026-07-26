@@ -81,3 +81,22 @@ test('requires JSON for write endpoints', async () => {
   assert.equal(response.status, 415);
   assert.equal(fs.existsSync(TRAVERSAL_PROBE), false);
 });
+
+
+test('exposes a bounded health check without secret configuration', async () => {
+  const response = await fetch(`${BASE_URL}/healthz`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ok: true,
+    service: 'cell-quest',
+    version: '4.0.0',
+    aiConfigured: false,
+  });
+});
+
+test('serves browser security headers', async () => {
+  const response = await fetch(`${BASE_URL}/`);
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.match(response.headers.get('permissions-policy') || '', /camera=\(\)/);
+  assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
+});

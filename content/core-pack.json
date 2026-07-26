@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "id": "core-pack",
+  "name": "基础免疫病例",
+  "gameVersion": ">=4.0.0",
+  "reviewedAt": "2026-07-26",
+  "disclaimer": "仅用于科普，不构成医疗建议。",
+  "cases": [
+    {
+      "id": "case-chapter-1-wound",
+      "chapter": 1,
+      "learningObjective": "理解红细胞运输氧气如何支持创伤修复。",
+      "sourceIds": ["medline-blood"]
+    },
+    {
+      "id": "case-chapter-2-invasion",
+      "chapter": 2,
+      "learningObjective": "理解先天免疫如何识别并清除感染灶。",
+      "sourceIds": ["niaid-immunity"]
+    },
+    {
+      "id": "case-chapter-3-hypoxia",
+      "chapter": 3,
+      "learningObjective": "理解炎症期氧需求上升与红细胞职责。",
+      "sourceIds": ["medline-blood", "niehs-inflammation"]
+    },
+    {
+      "id": "case-chapter-4-rebound",
+      "chapter": 4,
+      "learningObjective": "理解感染控制以患者指标稳定为结果。",
+      "sourceIds": ["niaid-immunity", "niehs-inflammation"]
+    },
+    {
+      "id": "case-chapter-5-cooperation",
+      "chapter": 5,
+      "learningObjective": "理解红白细胞协作维持内环境稳定。",
+      "sourceIds": ["medline-blood", "niaid-immunity"]
+    },
+    {
+      "id": "case-chapter-6-recovery",
+      "chapter": 6,
+      "learningObjective": "综合解释氧运输、免疫防御和免疫记忆。",
+      "sourceIds": ["medline-blood", "niaid-immunity", "niehs-inflammation"]
+    }
+  ],
+  "sources": [
+    {
+      "id": "medline-blood",
+      "title": "Blood",
+      "organization": "MedlinePlus, U.S. National Library of Medicine",
+      "url": "https://medlineplus.gov/blood.html",
+      "accessed": "2026-07-26",
+      "reviewStatus": "reviewed"
+    },
+    {
+      "id": "niaid-immunity",
+      "title": "Overview of the Immune System",
+      "organization": "National Institute of Allergy and Infectious Diseases",
+      "url": "https://www.niaid.nih.gov/research/immune-system-overview",
+      "accessed": "2026-07-26",
+      "reviewStatus": "reviewed"
+    },
+    {
+      "id": "niehs-inflammation",
+      "title": "Inflammation",
+      "organization": "National Institute of Environmental Health Sciences",
+      "url": "https://www.niehs.nih.gov/health/topics/conditions/inflammation",
+      "accessed": "2026-07-26",
+      "reviewStatus": "reviewed"
+    }
+  ]
+}

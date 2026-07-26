@@ -12,47 +12,103 @@ const dailyCase = createDailyCase(localDateString())
 
 <template>
   <div class="campaign-shell">
-    <button type="button" class="campaign-trigger" data-testid="open-campaign" @click="open = true">
+    <button
+      type="button"
+      class="campaign-trigger"
+      data-testid="open-campaign"
+      @click="open = true"
+    >
       病例战役 · 六章患者康复
     </button>
-    <div v-if="open" class="campaign-overlay" @click.self="open = false">
-      <section class="campaign-panel" role="dialog" aria-modal="true" aria-label="六章病例战役">
+    <div
+      v-if="open"
+      class="campaign-overlay"
+      @click.self="open = false"
+    >
+      <section
+        class="campaign-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="六章病例战役"
+      >
         <header>
           <div>
-            <p class="eyebrow">CELL QUEST PATIENT JOURNEY</p>
+            <p class="eyebrow">
+              CELL QUEST PATIENT JOURNEY
+            </p>
             <h2>从擦伤感染到康复</h2>
             <p>运输、防御与免疫记忆共同稳定同一名患者。</p>
           </div>
-          <button type="button" aria-label="关闭病例战役" @click="open = false">×</button>
+          <button
+            type="button"
+            aria-label="关闭病例战役"
+            @click="open = false"
+          >
+            ×
+          </button>
         </header>
-        <aside class="daily-banner" data-testid="daily-case-banner">
+        <aside
+          class="daily-banner"
+          data-testid="daily-case-banner"
+        >
           <div>
-            <p class="eyebrow">DAILY STANDARD CASE · {{ dailyCase.date }}</p>
+            <p class="eyebrow">
+              DAILY STANDARD CASE · {{ dailyCase.date }}
+            </p>
             <strong>{{ dailyCase.chapter.draft.metadata.icon }} {{ dailyCase.chapter.draft.metadata.title }}</strong>
             <p>固定种子 {{ dailyCase.seed }} · {{ dailyCase.plannedEvents.join(' / ') }}</p>
           </div>
-          <button type="button" data-testid="start-daily-case" @click="emit('daily', dailyCase)">开始每日病例</button>
+          <button
+            type="button"
+            data-testid="start-daily-case"
+            @click="emit('daily', dailyCase)"
+          >
+            开始每日病例
+          </button>
         </aside>
         <ol class="chapter-list">
-          <li v-for="officialCase in OFFICIAL_CASES" :key="officialCase.id" :data-case-chapter="officialCase.chapter">
+          <li
+            v-for="officialCase in OFFICIAL_CASES"
+            :key="officialCase.id"
+            :data-case-chapter="officialCase.chapter"
+          >
             <span class="chapter-index">{{ officialCase.chapter }}</span>
             <div>
               <h3>{{ officialCase.draft.metadata.icon }} {{ officialCase.draft.metadata.title }}</h3>
               <p>{{ officialCase.patientBeat }}</p>
-              <p class="learning">学习目标：{{ officialCase.learningObjective }}</p>
-              <p v-if="progress[officialCase.id]" class="progress">
+              <p class="learning">
+                学习目标：{{ officialCase.learningObjective }}
+              </p>
+              <p
+                v-if="progress[officialCase.id]"
+                class="progress"
+              >
                 {{ progress[officialCase.id]!.completed ? '已完成' : '已尝试' }}
                 · 最佳 {{ progress[officialCase.id]!.bestScore }} 分
                 · {{ progress[officialCase.id]!.attempts }} 次
               </p>
               <div class="sources">
-                <a v-for="source in officialCase.sources" :key="source.id" :href="source.url" target="_blank" rel="noreferrer">{{ source.title }}</a>
+                <a
+                  v-for="source in officialCase.sources"
+                  :key="source.id"
+                  :href="source.url"
+                  target="_blank"
+                  rel="noreferrer"
+                >{{ source.title }}</a>
               </div>
             </div>
-            <button type="button" data-testid="start-official-case" @click="emit('start', officialCase)">开始病例</button>
+            <button
+              type="button"
+              data-testid="start-official-case"
+              @click="emit('start', officialCase)"
+            >
+              开始病例
+            </button>
           </li>
         </ol>
-        <p class="medical-note">所有指标均为游戏化抽象。仅用于科普，不构成医疗建议。</p>
+        <p class="medical-note">
+          所有指标均为游戏化抽象。仅用于科普，不构成医疗建议。
+        </p>
       </section>
     </div>
   </div>

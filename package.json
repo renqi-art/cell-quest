@@ -1,6 +1,6 @@
 {
   "name": "cell-quest",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": true,
   "scripts": {
     "dev": "concurrently -k -s first \"cross-env CELL_QUEST_PORT=8081 node server.js\" \"vite --host 127.0.0.1 --port 8080\"",
@@ -12,7 +12,16 @@
     "test:unit": "vitest run",
     "test:component": "vitest run tests/component",
     "test:server": "node --test tests/server.test.cjs",
-    "test:director": "node --test tests/director.test.cjs"
+    "test:director": "node --test tests/director.test.cjs",
+    "test:content": "node --test tests/content-validation.test.cjs",
+    "validate:content": "node scripts/validate-content.cjs",
+    "test:all": "npm run typecheck && npm run lint && npm run test:unit && npm run test:component && npm run test:director && npm run test:server && npm run test:content && npm run test:evidence && npm run test:offline && npm test && npm run validate:content && npm run build",
+    "test:offline": "node --test tests/offline-demo.test.cjs",
+    "package:offline": "npm run build && node scripts/package-offline.cjs",
+    "test:evidence": "node --test tests/evidence-validation.test.cjs",
+    "validate:evidence": "node scripts/validate-evidence.cjs",
+    "report:tests": "node scripts/report-tests.cjs",
+    "capture:evidence": "playwright test --config playwright.capture.config.cjs"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.8",

@@ -28,7 +28,10 @@ const nodeTools: readonly { id: EditorTool; label: string; icon: string }[] = [
 </script>
 
 <template>
-  <aside class="case-tool-palette" aria-label="病例工具">
+  <aside
+    class="case-tool-palette"
+    aria-label="病例工具"
+  >
     <h3>工具</h3>
     <div class="palette-tools">
       <button
@@ -59,7 +62,10 @@ const nodeTools: readonly { id: EditorTool; label: string; icon: string }[] = [
         <span>{{ tool.label }}</span>
       </button>
     </div>
-    <div v-if="selectedNode" class="palette-node-info">
+    <div
+      v-if="selectedNode"
+      class="palette-node-info"
+    >
       <p><strong>{{ selectedNode.kind }}</strong></p>
       <p>ID: {{ selectedNode.id }}</p>
     </div>

@@ -28,7 +28,10 @@ function remove(): void {
 </script>
 
 <template>
-  <aside class="case-inspector" aria-label="属性检查器">
+  <aside
+    class="case-inspector"
+    aria-label="属性检查器"
+  >
     <h3>属性</h3>
     <div v-if="selectedNode">
       <div class="inspector-field">
@@ -70,6 +73,11 @@ function remove(): void {
         删除节点
       </button>
     </div>
-    <p v-else class="inspector-empty">选择一个节点查看属性</p>
+    <p
+      v-else
+      class="inspector-empty"
+    >
+      选择一个节点查看属性
+    </p>
   </aside>
 </template>

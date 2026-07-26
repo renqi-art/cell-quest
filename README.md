@@ -1,6 +1,6 @@
 # Cell Quest (细胞远征)
 
-**Cell Quest** 是一款基于 HTML5 Canvas 和 JavaScript 开发的横版过关动作游戏（Metroidvania 类），背景设定在奇幻的人体微观世界中。玩家将扮演不同的血细胞，抵御病原体侵袭，完成细胞远征。
+**Cell Quest** 是一款采用 Vue 3、Vite、TypeScript 与 Phaser 3 构建的横版病例动作游戏（保留经典模式兼容层），背景设定在奇幻的人体微观世界中。玩家将扮演不同的血细胞，抵御病原体侵袭，完成细胞远征。
 
 ## 核心特性
 
@@ -62,7 +62,7 @@ npm run build
 npm run preview
 ```
 
-> 此阶段仍通过 `LegacyGameEngineAdapter` 在 Vue 下加载传统游戏引擎。
+> 六章病例、每日病例和 Vue 设计器试玩默认使用 Phaser；经典关卡继续由 `LegacyGameEngineAdapter` 兼容，浏览器 AI 统一走同源服务端代理。
 
 ```bash
 npm test             # 浏览器核心流程、编辑器与安全回归

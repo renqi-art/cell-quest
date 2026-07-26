@@ -66,30 +66,70 @@ function launchPreview(): void {
     >
       ▶ 试玩
     </button>
-    <div v-if="showDialog" class="playtest-dialog-overlay" @click.self="close">
-      <section class="playtest-dialog" role="dialog" aria-modal="true" aria-label="病例试玩">
+    <div
+      v-if="showDialog"
+      class="playtest-dialog-overlay"
+      @click.self="close"
+    >
+      <section
+        class="playtest-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="病例试玩"
+      >
         <h3>病例试玩</h3>
         <p>试玩使用当前未保存草稿，并通过类型化引擎适配器启动。</p>
         <fieldset>
           <legend>选择角色</legend>
-          <label v-for="role in availableRoles" :key="role" class="role-option">
-            <input v-model="selectedRole" type="radio" :value="role" :disabled="previewStatus !== 'idle'">
+          <label
+            v-for="role in availableRoles"
+            :key="role"
+            class="role-option"
+          >
+            <input
+              v-model="selectedRole"
+              type="radio"
+              :value="role"
+              :disabled="previewStatus !== 'idle'"
+            >
             {{ roleLabel(role) }}
           </label>
         </fieldset>
         <fieldset>
           <legend>运行时</legend>
-          <label><input v-model="selectedRuntime" type="radio" value="legacy"> 兼容运行时</label>
-          <label><input v-model="selectedRuntime" data-testid="runtime-phaser" type="radio" value="phaser"> Phaser 垂直切片</label>
+          <label><input
+            v-model="selectedRuntime"
+            type="radio"
+            value="legacy"
+          > 兼容运行时</label>
+          <label><input
+            v-model="selectedRuntime"
+            data-testid="runtime-phaser"
+            type="radio"
+            value="phaser"
+          > Phaser 垂直切片</label>
         </fieldset>
-        <div v-if="store.draft?.caseConfig" class="playtest-vitals">
+        <div
+          v-if="store.draft?.caseConfig"
+          class="playtest-vitals"
+        >
           <span>氧供 {{ store.draft.caseConfig.vitals.oxygen }}%</span>
           <span>感染 {{ store.draft.caseConfig.vitals.infection }}%</span>
           <span>组织 {{ store.draft.caseConfig.vitals.tissue }}%</span>
         </div>
-        <p v-if="previewError" role="alert">{{ previewError }}</p>
+        <p
+          v-if="previewError"
+          role="alert"
+        >
+          {{ previewError }}
+        </p>
         <div class="playtest-actions">
-          <button type="button" @click="close">关闭</button>
+          <button
+            type="button"
+            @click="close"
+          >
+            关闭
+          </button>
           <button
             type="button"
             data-testid="launch-playtest"

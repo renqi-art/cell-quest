@@ -56,7 +56,7 @@ async function startPreviewIfRequested(): Promise<void> {
       const phaserEngine = engine as PhaserGameEngineAdapter
       await phaserEngine.loadCaseDraft(parsed.value.draft, {
         twoPlayer: parsed.value.options.role === 'coop',
-        playerOneCell: parsed.value.options.role === 'rbc' ? 1 : parsed.value.options.role === 'wbc' ? 2 : 3,
+        playerOneCell: parsed.value.options.role === 'wbc' ? 2 : 1,
         playerTwoCell: parsed.value.options.role === 'coop' ? 2 : undefined,
       })
     } else {
@@ -150,18 +150,42 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <CaseCampaignPanel v-if="!isPreviewMode" @start="startOfficialCase" @daily="startDailyCase" />
-  <OnboardingPanel v-if="showOnboarding" @complete="completeOnboarding" />
-  <div v-if="usePhaserRuntime" id="phaser-case-runtime" data-testid="phaser-case-runtime" />
-  <div v-if="previewTitle" class="case-preview-banner" data-testid="case-preview-banner">
+  <CaseCampaignPanel
+    v-if="!isPreviewMode"
+    @start="startOfficialCase"
+    @daily="startDailyCase"
+  />
+  <OnboardingPanel
+    v-if="showOnboarding"
+    @complete="completeOnboarding"
+  />
+  <div
+    v-if="usePhaserRuntime"
+    id="phaser-case-runtime"
+    data-testid="phaser-case-runtime"
+  />
+  <div
+    v-if="previewTitle"
+    class="case-preview-banner"
+    data-testid="case-preview-banner"
+  >
     正在试玩：{{ previewTitle }}
   </div>
-  <div v-if="previewError" class="case-preview-error" role="alert">{{ previewError }}</div>
+  <div
+    v-if="previewError"
+    class="case-preview-error"
+    role="alert"
+  >
+    {{ previewError }}
+  </div>
   <DirectorCrisisCard
     v-if="store.directorHistory.length"
     :entry="store.directorHistory[store.directorHistory.length - 1]!"
   />
-  <CaseHud v-if="store.caseSnapshot" :snapshot="store.caseSnapshot" />
+  <CaseHud
+    v-if="store.caseSnapshot"
+    :snapshot="store.caseSnapshot"
+  />
   <CaseResultPanel
     v-if="caseResult && currentDraft"
     :title="currentDraft.metadata.title"
@@ -171,7 +195,11 @@ onBeforeUnmount(() => {
     @replay="replayCase"
     @home="returnToCampaign"
   />
-  <div v-else-if="!store.caseSnapshot" class="vue-migration-root" aria-hidden="true" />
+  <div
+    v-else-if="!store.caseSnapshot"
+    class="vue-migration-root"
+    aria-hidden="true"
+  />
 </template>
 
 <style scoped>

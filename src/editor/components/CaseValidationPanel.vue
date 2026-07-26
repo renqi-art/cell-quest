@@ -8,13 +8,27 @@ const warningCount = computed(() => store.diagnostics.filter(item => item.severi
 </script>
 
 <template>
-  <section class="case-validation-panel" aria-label="病例校验">
+  <section
+    class="case-validation-panel"
+    aria-label="病例校验"
+  >
     <h3>病例校验</h3>
-    <p data-testid="validation-summary" :class="{ invalid: errorCount > 0 }">
+    <p
+      data-testid="validation-summary"
+      :class="{ invalid: errorCount > 0 }"
+    >
       {{ errorCount }} 个错误 · {{ warningCount }} 个警告
     </p>
-    <p v-if="store.diagnostics.length === 0" class="validation-ok">校验通过，可以发布。</p>
-    <ul v-else class="diagnostic-list">
+    <p
+      v-if="store.diagnostics.length === 0"
+      class="validation-ok"
+    >
+      校验通过，可以发布。
+    </p>
+    <ul
+      v-else
+      class="diagnostic-list"
+    >
       <li
         v-for="diagnostic in store.diagnostics"
         :key="diagnostic.code + diagnostic.nodeIds?.join('-')"

@@ -17,10 +17,22 @@ const statusText = computed(() => props.result.status === 'complete' ? '患者�
 </script>
 
 <template>
-  <section class="result-panel" data-testid="case-result-panel" role="dialog" aria-modal="true" aria-labelledby="case-result-title">
-    <p class="eyebrow">PATIENT CASE REPORT</p>
-    <h2 id="case-result-title">{{ title }}</h2>
-    <p class="status">{{ statusText }}</p>
+  <section
+    class="result-panel"
+    data-testid="case-result-panel"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="case-result-title"
+  >
+    <p class="eyebrow">
+      PATIENT CASE REPORT
+    </p>
+    <h2 id="case-result-title">
+      {{ title }}
+    </h2>
+    <p class="status">
+      {{ statusText }}
+    </p>
     <dl>
       <div><dt>氧供</dt><dd>{{ Math.round(result.vitals.oxygen) }}</dd></div>
       <div><dt>感染</dt><dd>{{ Math.round(result.vitals.infection) }}</dd></div>
@@ -37,10 +49,24 @@ const statusText = computed(() => props.result.status === 'complete' ? '患者�
       <strong>知识回顾</strong>
       <span>{{ learningTakeaway }}</span>
     </div>
-    <p class="disclaimer">仅用于科普，不构成医疗建议。</p>
+    <p class="disclaimer">
+      仅用于科普，不构成医疗建议。
+    </p>
     <div class="actions">
-      <button type="button" data-testid="replay-case" @click="$emit('replay')">重新挑战</button>
-      <button type="button" data-testid="return-to-campaign" @click="$emit('home')">返回病例中心</button>
+      <button
+        type="button"
+        data-testid="replay-case"
+        @click="$emit('replay')"
+      >
+        重新挑战
+      </button>
+      <button
+        type="button"
+        data-testid="return-to-campaign"
+        @click="$emit('home')"
+      >
+        返回病例中心
+      </button>
     </div>
   </section>
 </template>

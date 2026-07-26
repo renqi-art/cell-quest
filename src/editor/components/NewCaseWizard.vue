@@ -23,9 +23,17 @@ function create(): void {
 </script>
 
 <template>
-  <section class="new-case-wizard" aria-labelledby="wizard-title">
-    <h1 id="wizard-title">创建病例</h1>
-    <div class="wizard-steps" aria-label="创建步骤">
+  <section
+    class="new-case-wizard"
+    aria-labelledby="wizard-title"
+  >
+    <h1 id="wizard-title">
+      创建病例
+    </h1>
+    <div
+      class="wizard-steps"
+      aria-label="创建步骤"
+    >
       <span
         v-for="(label, index) in steps"
         :key="label"
@@ -38,14 +46,46 @@ function create(): void {
     <div class="wizard-body">
       <div v-if="step === 1">
         <h3>选择主控细胞</h3>
-        <label><input v-model="selectedCell" type="radio" value="rbc"> 红细胞 — 供氧</label>
-        <label><input v-model="selectedCell" type="radio" value="wbc"> 白细胞 — 清除感染</label>
+        <label><input
+          v-model="selectedCell"
+          type="radio"
+          value="rbc"
+        > 红细胞 — 供氧</label>
+        <label><input
+          v-model="selectedCell"
+          type="radio"
+          value="wbc"
+        > 白细胞 — 清除感染</label>
       </div>
-      <div v-else-if="step === 2" class="template-grid">
+      <div
+        v-else-if="step === 2"
+        class="template-grid"
+      >
         <h3>选择起点</h3>
-        <button type="button" data-template="manual" :class="{ active: selectedTemplate === 'manual' }" @click="chooseTemplate('manual')">空白病例</button>
-        <button type="button" data-template="rbc-transport" :class="{ active: selectedTemplate === 'rbc-transport' }" @click="chooseTemplate('rbc-transport')">氧气运输模板</button>
-        <button type="button" data-template="wbc-infection" :class="{ active: selectedTemplate === 'wbc-infection' }" @click="chooseTemplate('wbc-infection')">感染清除模板</button>
+        <button
+          type="button"
+          data-template="manual"
+          :class="{ active: selectedTemplate === 'manual' }"
+          @click="chooseTemplate('manual')"
+        >
+          空白病例
+        </button>
+        <button
+          type="button"
+          data-template="rbc-transport"
+          :class="{ active: selectedTemplate === 'rbc-transport' }"
+          @click="chooseTemplate('rbc-transport')"
+        >
+          氧气运输模板
+        </button>
+        <button
+          type="button"
+          data-template="wbc-infection"
+          :class="{ active: selectedTemplate === 'wbc-infection' }"
+          @click="chooseTemplate('wbc-infection')"
+        >
+          感染清除模板
+        </button>
       </div>
       <div v-else-if="step === 3">
         <h3>创建后可继续配置</h3>
@@ -58,9 +98,30 @@ function create(): void {
       </div>
     </div>
     <div class="wizard-actions">
-      <button v-if="step > 1" type="button" @click="prev">上一步</button>
-      <button v-if="step < 4" type="button" data-testid="wizard-next" @click="next">下一步</button>
-      <button v-else type="button" class="primary" data-testid="create-case" @click="create">创建病例</button>
+      <button
+        v-if="step > 1"
+        type="button"
+        @click="prev"
+      >
+        上一步
+      </button>
+      <button
+        v-if="step < 4"
+        type="button"
+        data-testid="wizard-next"
+        @click="next"
+      >
+        下一步
+      </button>
+      <button
+        v-else
+        type="button"
+        class="primary"
+        data-testid="create-case"
+        @click="create"
+      >
+        创建病例
+      </button>
     </div>
   </section>
 </template>

@@ -13,7 +13,11 @@ function updateDifficulty(event: Event): void {
 </script>
 
 <template>
-  <section v-if="store.draft" class="case-settings-panel" aria-label="病例基本信息">
+  <section
+    v-if="store.draft"
+    class="case-settings-panel"
+    aria-label="病例基本信息"
+  >
     <h3>病例信息</h3>
     <label for="case-title">标题</label>
     <input
@@ -38,9 +42,15 @@ function updateDifficulty(event: Event): void {
       :value="store.draft.metadata.difficulty"
       @change="updateDifficulty"
     >
-      <option value="assist">辅助</option>
-      <option value="standard">标准</option>
-      <option value="challenge">挑战</option>
+      <option value="assist">
+        辅助
+      </option>
+      <option value="standard">
+        标准
+      </option>
+      <option value="challenge">
+        挑战
+      </option>
     </select>
   </section>
 </template>

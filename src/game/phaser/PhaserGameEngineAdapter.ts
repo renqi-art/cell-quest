@@ -105,6 +105,7 @@ export class PhaserGameEngineAdapter implements GameEngine {
             const canvas = this.game.canvas
             canvas.setAttribute('role', 'application')
             canvas.setAttribute('aria-label', `${draft.metadata.title} Phaser 病例场景`)
+            canvas.dataset.playerCount = String(this.players.length)
             events.emit('state-changed', 'playing')
             events.emit('case-updated', caseEngine!.getSnapshot())
             resolve()
@@ -164,7 +165,7 @@ export class PhaserGameEngineAdapter implements GameEngine {
       }
 
       this.game = new Phaser.Game({
-        type: Phaser.AUTO,
+        type: Phaser.CANVAS,
         parent: this.host!,
         width: 960,
         height: 540,

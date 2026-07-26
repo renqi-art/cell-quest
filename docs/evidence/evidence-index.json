@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "project": "cell-quest",
+  "version": "4.0.0",
+  "entries": [
+    {
+      "id": "EV-SECURITY-001",
+      "claim": "浏览器不再持有 AI 密钥或直连模型上游。",
+      "artifact": "tests/security.spec.js",
+      "verification": "npm test -- tests/security.spec.js",
+      "commit": "171c5a6",
+      "status": "automated"
+    },
+    {
+      "id": "EV-EDITOR-001",
+      "claim": "Vue 病例设计器支持创建、校验、CQ2 和受限 AI 蓝图。",
+      "artifact": "src/editor/EditorApp.vue",
+      "verification": "npm run test:component && npm run test:unit",
+      "commit": "318bb6e",
+      "status": "automated"
+    },
+    {
+      "id": "EV-PLAYTEST-001",
+      "claim": "有效草稿可进入真实 Legacy 或 Phaser 试玩适配器。",
+      "artifact": "tests/case-preview.spec.js",
+      "verification": "npx playwright test tests/case-preview.spec.js",
+      "commit": "158df0e",
+      "status": "automated"
+    },
+    {
+      "id": "EV-PHASER-001",
+      "claim": "六章官方病例由 Phaser 运行并接收白名单 AI 导演事件。",
+      "artifact": "src/game/phaser/PhaserGameEngineAdapter.ts",
+      "verification": "npx playwright test tests/campaign.spec.js",
+      "commit": "17f2d20",
+      "status": "automated"
+    },
+    {
+      "id": "EV-PRODUCT-001",
+      "claim": "首次引导、每日病例、进度和病例结算形成产品闭环。",
+      "artifact": "src/game/components/CaseResultPanel.vue",
+      "verification": "npx playwright test tests/onboarding.spec.js tests/campaign.spec.js",
+      "commit": "303df1f",
+      "status": "automated"
+    },
+    {
+      "id": "EV-MANUAL-001",
+      "claim": "六章真实手工通关与双人角色交换必须由独立验收执行。",
+      "artifact": "docs/qa/manual-case-results.md",
+      "verification": "按照最终 Gate A 模板逐章填写并由独立验收智能体签字",
+      "commit": "303df1f",
+      "status": "pending"
+    }
+  ]
+}

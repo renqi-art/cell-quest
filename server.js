@@ -11,6 +11,14 @@ const BACKUP_DIR = path.join(LEVEL_DIR, 'backup');
 const HOST = process.env.CELL_QUEST_HOST || '127.0.0.1';
 const PORT = Number.parseInt(process.env.CELL_QUEST_PORT || '8080', 10);
 const MAX_BODY_BYTES = 1024 * 1024;
+const VERSION = require('./package.json').version;
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+};
 
 const mime = {
   '.html': 'text/html; charset=utf-8',
@@ -35,7 +43,7 @@ function sendJson(res, status, payload) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff',
+    ...SECURITY_HEADERS,
   });
   res.end(JSON.stringify(payload));
 }
@@ -184,6 +192,16 @@ async function handleReset(req, res) {
 const server = http.createServer(async (req, res) => {
   const requestPath = getRequestPath(req);
 
+  if (req.method === 'GET' && requestPath === '/healthz') {
+    sendJson(res, 200, {
+      ok: true,
+      service: 'cell-quest',
+      version: VERSION,
+      aiConfigured: Boolean(process.env.CELL_QUEST_AI_API_KEY),
+    });
+    return;
+  }
+
   if (req.method === 'GET' && requestPath === '/levels') {
     try {
       const files = fs.readdirSync(LEVEL_DIR)
@@ -237,8 +255,7 @@ const server = http.createServer(async (req, res) => {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0',
-      'X-Content-Type-Options': 'nosniff',
-      'Referrer-Policy': 'no-referrer',
+      ...SECURITY_HEADERS,
     };
     res.writeHead(200, headers);
     res.end(req.method === 'HEAD' ? undefined : data);

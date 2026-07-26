@@ -10,6 +10,7 @@ const legacyApiProxy = {
   '/save': 'http://127.0.0.1:8081',
   '/reset': 'http://127.0.0.1:8081',
   '/api': 'http://127.0.0.1:8081',
+  '/healthz': 'http://127.0.0.1:8081',
 }
 
 export default defineConfig({

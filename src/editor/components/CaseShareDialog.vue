@@ -37,8 +37,16 @@ function importCode(): void {
 </script>
 
 <template>
-  <div class="dialog-overlay" @click.self="emit('close')">
-    <section class="share-dialog" role="dialog" aria-modal="true" aria-label="导入或分享病例">
+  <div
+    class="dialog-overlay"
+    @click.self="emit('close')"
+  >
+    <section
+      class="share-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-label="导入或分享病例"
+    >
       <h2>导入 / 分享病例</h2>
       <p>只接受经过结构校验的 CQ2 分享码，不执行代码。</p>
       <textarea
@@ -48,12 +56,42 @@ function importCode(): void {
         spellcheck="false"
         placeholder="在这里粘贴 CQ2! 分享码"
       />
-      <p v-if="error" role="alert" class="dialog-error">{{ error }}</p>
-      <p v-if="message" role="status" class="dialog-success">{{ message }}</p>
+      <p
+        v-if="error"
+        role="alert"
+        class="dialog-error"
+      >
+        {{ error }}
+      </p>
+      <p
+        v-if="message"
+        role="status"
+        class="dialog-success"
+      >
+        {{ message }}
+      </p>
       <div class="dialog-actions">
-        <button type="button" @click="emit('close')">关闭</button>
-        <button type="button" data-testid="import-case" @click="importCode">导入 CQ2</button>
-        <button type="button" data-testid="export-case" :disabled="hasErrors" @click="exportCode">生成分享码</button>
+        <button
+          type="button"
+          @click="emit('close')"
+        >
+          关闭
+        </button>
+        <button
+          type="button"
+          data-testid="import-case"
+          @click="importCode"
+        >
+          导入 CQ2
+        </button>
+        <button
+          type="button"
+          data-testid="export-case"
+          :disabled="hasErrors"
+          @click="exportCode"
+        >
+          生成分享码
+        </button>
       </div>
     </section>
   </div>

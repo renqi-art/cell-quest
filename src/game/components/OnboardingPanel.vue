@@ -15,9 +15,18 @@ const panel = computed(() => panels[step.value]!)
 </script>
 
 <template>
-  <section class="onboarding" data-testid="onboarding-panel" aria-live="polite" aria-labelledby="onboarding-title">
-    <p class="step">首次引导 {{ step + 1 }} / {{ panels.length }}</p>
-    <h2 id="onboarding-title">{{ panel.label }}</h2>
+  <section
+    class="onboarding"
+    data-testid="onboarding-panel"
+    aria-live="polite"
+    aria-labelledby="onboarding-title"
+  >
+    <p class="step">
+      首次引导 {{ step + 1 }} / {{ panels.length }}
+    </p>
+    <h2 id="onboarding-title">
+      {{ panel.label }}
+    </h2>
     <p>{{ panel.body }}</p>
     <button
       v-if="step < panels.length - 1"

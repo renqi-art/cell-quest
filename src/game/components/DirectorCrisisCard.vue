@@ -21,15 +21,23 @@ const goals = computed(() => {
 </script>
 
 <template>
-  <aside class="director-card" data-testid="director-crisis-card" aria-live="polite">
+  <aside
+    class="director-card"
+    data-testid="director-crisis-card"
+    aria-live="polite"
+  >
     <header>
       <span class="source">{{ sourceLabel }}</span>
       <span>阶段 {{ entry.phase }}</span>
       <strong>{{ eventLabel }}</strong>
     </header>
     <p>{{ entry.plan.doctorLine }}</p>
-    <p class="reason">原因：{{ entry.plan.reason }}</p>
-    <p class="goal">目标：{{ goals }}</p>
+    <p class="reason">
+      原因：{{ entry.plan.reason }}
+    </p>
+    <p class="goal">
+      目标：{{ goals }}
+    </p>
   </aside>
 </template>
 

@@ -50,8 +50,15 @@ function close() {
 </script>
 
 <template>
-  <div class="ai-generator-dialog-overlay" @click.self="close">
-    <div class="ai-generator-dialog" role="dialog" aria-label="AI病例生成">
+  <div
+    class="ai-generator-dialog-overlay"
+    @click.self="close"
+  >
+    <div
+      class="ai-generator-dialog"
+      role="dialog"
+      aria-label="AI病例生成"
+    >
       <h3>🤖 AI 生成病例</h3>
 
       <template v-if="!blueprint">
@@ -63,17 +70,28 @@ function close() {
             placeholder="例如：一个关于过敏性哮喘的病例，涉及肥大细胞和嗜酸性粒细胞..."
             :disabled="loading"
             rows="4"
-          ></textarea>
+          />
         </div>
 
-        <div v-if="error" class="ai-error">{{ error }}</div>
+        <div
+          v-if="error"
+          class="ai-error"
+        >
+          {{ error }}
+        </div>
 
         <div class="ai-actions">
-          <button class="btn-secondary" @click="close" :disabled="loading">取消</button>
+          <button
+            class="btn-secondary"
+            :disabled="loading"
+            @click="close"
+          >
+            取消
+          </button>
           <button
             class="btn-primary"
-            @click="generate"
             :disabled="loading || !prompt.trim()"
+            @click="generate"
           >
             {{ loading ? '生成中...' : '生成病例' }}
           </button>
@@ -85,15 +103,24 @@ function close() {
           <div class="bp-header">
             <span class="bp-icon">{{ blueprint.icon }}</span>
             <span class="bp-title">{{ blueprint.title }}</span>
-            <span class="bp-source" :class="source">
+            <span
+              class="bp-source"
+              :class="source"
+            >
               {{ source === 'ai' ? 'AI生成' : '本地模板' }}
             </span>
           </div>
 
-          <p class="bp-desc">{{ blueprint.description }}</p>
+          <p class="bp-desc">
+            {{ blueprint.description }}
+          </p>
 
           <div class="bp-tags">
-            <span v-for="tag in blueprint.tags" :key="tag" class="bp-tag">{{ tag }}</span>
+            <span
+              v-for="tag in blueprint.tags"
+              :key="tag"
+              class="bp-tag"
+            >{{ tag }}</span>
           </div>
 
           <div class="bp-stats">
@@ -123,19 +150,36 @@ function close() {
             </div>
           </div>
 
-          <div v-if="blueprint.allowedEvents.length > 0" class="bp-events">
+          <div
+            v-if="blueprint.allowedEvents.length > 0"
+            class="bp-events"
+          >
             <span class="bp-events-label">允许事件：</span>
-            <span v-for="ev in blueprint.allowedEvents" :key="ev" class="bp-event-tag">{{ ev }}</span>
+            <span
+              v-for="ev in blueprint.allowedEvents"
+              :key="ev"
+              class="bp-event-tag"
+            >{{ ev }}</span>
           </div>
         </div>
 
         <div class="ai-actions">
-          <button class="btn-secondary" @click="close">取消</button>
-          <button class="btn-secondary" @click="blueprint = null; error = ''">重新生成</button>
+          <button
+            class="btn-secondary"
+            @click="close"
+          >
+            取消
+          </button>
+          <button
+            class="btn-secondary"
+            @click="blueprint = null; error = ''"
+          >
+            重新生成
+          </button>
           <button
             class="btn-primary"
-            @click="applyBlueprint"
             :disabled="applied"
+            @click="applyBlueprint"
           >
             {{ applied ? '已应用' : '应用此病例' }}
           </button>

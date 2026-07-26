@@ -1,3 +1,6 @@
 <template>
-  <div class="vue-migration-root" aria-hidden="true" />
+  <div
+    class="vue-migration-root"
+    aria-hidden="true"
+  />
 </template>
