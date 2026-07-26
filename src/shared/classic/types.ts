@@ -54,6 +54,7 @@ export interface ClassicLevelDefinition {
   readonly cellType: ClassicCellType
   readonly winCondition: ClassicWinCondition
   readonly sky: readonly [string, string]
+  readonly tide?: boolean
   readonly map: readonly string[]
   readonly floatPlatforms?: readonly ClassicFloatingPlatformDefinition[]
   readonly pipeSpawners?: readonly ClassicPipeSpawnerDefinition[]

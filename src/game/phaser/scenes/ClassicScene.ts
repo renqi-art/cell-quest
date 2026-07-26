@@ -8,13 +8,19 @@ import { EnemyActor } from '../actors/EnemyActor'
 import { ProjectileActor } from '../actors/ProjectileActor'
 import { ItemActor } from '../actors/ItemActor'
 import { QuestionBlockActor } from '../actors/QuestionBlockActor'
+import { BossActor } from '../actors/BossActor'
+import { NpcActor } from '../actors/NpcActor'
 import { TerrainSystem } from '../systems/TerrainSystem'
 import { HazardSystem } from '../systems/HazardSystem'
 import { PlatformSystem } from '../systems/PlatformSystem'
 import { CombatSystem, type CombatResolution } from '../systems/CombatSystem'
 import { ClassicHudSystem } from '../systems/ClassicHudSystem'
+import { TideSystem } from '../systems/TideSystem'
+import { SpawnSystem } from '../systems/SpawnSystem'
 import { applyItem, createClassicItemState, tickClassicItemState, type ClassicItemState } from '@/shared/classic/simulation/ItemRules'
 import { ClassicRunStats } from '@/shared/classic/simulation/ClassicRunStats'
+import { canCompleteClassicLevel } from '@/shared/classic/simulation/CompletionRules'
+import type { BossEffect } from '@/shared/classic/simulation/BossBrain'
 import { CLASSIC_TILE_REGISTRY, isClassicTileCharacter } from '@/shared/classic/tiles'
 import {
   CLASSIC_MAX_CATCH_UP_STEPS,
@@ -42,11 +48,15 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
     private readonly projectiles: ProjectileActor[] = []
     private readonly items: ItemActor[] = []
     private readonly questionBlocks: QuestionBlockActor[] = []
+    private readonly bosses: BossActor[] = []
+    private readonly npcs: NpcActor[] = []
     private readonly playerByShape = new Map<Phaser.GameObjects.GameObject, PlayerActor>()
     private readonly enemyByShape = new Map<Phaser.GameObjects.GameObject, EnemyActor>()
     private readonly projectileByShape = new Map<Phaser.GameObjects.GameObject, ProjectileActor>()
     private readonly itemByShape = new Map<Phaser.GameObjects.GameObject, ItemActor>()
     private readonly questionByShape = new Map<Phaser.GameObjects.GameObject, QuestionBlockActor>()
+    private readonly bossByShape = new Map<Phaser.GameObjects.GameObject, BossActor>()
+    private readonly npcByShape = new Map<Phaser.GameObjects.GameObject, NpcActor>()
     private readonly skillWasDown = new Map<1 | 2, boolean>()
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
     private wasd!: Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
@@ -58,6 +68,10 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
     private projectileGroup!: Phaser.Physics.Arcade.Group
     private itemGroup!: Phaser.Physics.Arcade.StaticGroup
     private questionGroup!: Phaser.Physics.Arcade.StaticGroup
+    private bossGroup!: Phaser.Physics.Arcade.Group
+    private npcGroup!: Phaser.Physics.Arcade.StaticGroup
+    private tideSystem!: TideSystem
+    private spawnSystem!: SpawnSystem
     private fixedTick = 0
     private randomState = 0x6d2b79f5
     private completed = false
@@ -92,9 +106,15 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
       this.projectileGroup = this.physics.add.group({ allowGravity: false })
       this.itemGroup = this.physics.add.staticGroup()
       this.questionGroup = this.physics.add.staticGroup()
+      this.bossGroup = this.physics.add.group({ allowGravity: false })
+      this.npcGroup = this.physics.add.staticGroup()
+      this.tideSystem = new TideSystem(this, Boolean(level.definition.tide))
+      this.spawnSystem = new SpawnSystem(level.definition.pipeSpawners ?? [])
       level.enemies.forEach(spawn => this.createEnemy(spawn.kind, spawn.col, spawn.row))
       level.items.forEach(spawn => this.createItem({ kind: spawn.kind }, spawn.col, spawn.row))
       level.questionBlocks.forEach(spawn => this.createQuestionBlock(spawn.col, spawn.row, spawn.hidden))
+      level.bosses.forEach(spawn => this.createBoss(spawn.col, spawn.row))
+      level.npcs.forEach(spawn => this.createNpc(spawn.col, spawn.row))
       for (const player of this.players) {
         this.playerByShape.set(player.shape, player)
         this.physics.add.collider(player.shape, terrain.solids)
@@ -133,9 +153,25 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
           const question = this.questionByShape.get(questionShape as Phaser.GameObjects.GameObject)
           if (question) this.hitQuestionBlockActor(player, question)
         })
+        this.physics.add.overlap(player.shape, this.bossGroup, (_playerShape, bossShape) => {
+          const boss = this.bossByShape.get(bossShape as Phaser.GameObjects.GameObject)
+          if (boss) this.resolvePlayerBoss(player, boss)
+        })
+        this.physics.add.overlap(player.shape, this.npcGroup, (_playerShape, npcShape) => {
+          const npc = this.npcByShape.get(npcShape as Phaser.GameObjects.GameObject)
+          if (npc?.interact()) {
+            context.events.emit('tutorial-opened', {
+              speaker: '????',
+              color: '#79d7c5',
+              body: '??????????????????? Boss ???',
+            })
+          }
+        })
       }
       this.physics.add.collider(this.enemyGroup, terrain.solids)
       this.physics.add.collider(this.enemyGroup, terrain.crumble)
+      this.physics.add.collider(this.bossGroup, terrain.solids)
+      this.physics.add.collider(this.bossGroup, terrain.crumble)
       if (level.finish) {
         const finish = this.add.rectangle(
           level.finish.col * CLASSIC_TILE_SIZE + CLASSIC_TILE_SIZE / 2,
@@ -160,6 +196,12 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
         if (!projectile?.hitEnemy() || !enemy) return
         this.consumeCombatResult(this.combatSystem.hitEnemy(enemy, 'projectile'), enemy)
       })
+      this.physics.add.overlap(this.projectileGroup, this.bossGroup, (projectileShape, bossShape) => {
+        const projectile = this.projectileByShape.get(projectileShape as Phaser.GameObjects.GameObject)
+        const boss = this.bossByShape.get(bossShape as Phaser.GameObjects.GameObject)
+        if (!projectile?.hitEnemy() || !boss) return
+        this.consumeBossEffects(boss, boss.hit(1))
+      })
 
       this.cursors = this.input.keyboard!.createCursorKeys()
       this.wasd = this.input.keyboard!.addKeys('W,A,D') as Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
@@ -183,6 +225,13 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
       this.fixedTick += 1
       this.platformSystem.fixedUpdate(this.fixedTick)
       this.itemState = tickClassicItemState(this.itemState)
+      const tide = this.tideSystem.step(false, this.runStats.result().completionPercent / 100)
+      if (tide?.phase === 'surge') {
+        this.itemState = {
+          ...this.itemState,
+          energy: Math.max(0, this.itemState.energy - 0.01 * tide.drainMultiplier),
+        }
+      }
       if (this.itemState.oxygenTicks > 0 && this.fixedTick % 60 === 0) {
         for (const player of this.players) player.heal(1)
       }
@@ -195,6 +244,19 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
           wallAhead: enemy.body.blocked.left || enemy.body.blocked.right,
           groundAhead: this.hasGroundAhead(enemy),
         })
+      }
+      const spawnRequests = this.spawnSystem.step(
+        this.players.map(player => ({ x: player.shape.x, y: player.shape.y })),
+        this.enemies.filter(enemy => enemy.isAlive()).length,
+      )
+      for (const request of spawnRequests) this.createEnemy(request.kind, request.col, request.row)
+      for (const boss of this.bosses) {
+        if (!boss.snapshot().alive) continue
+        const target = this.nearestPlayer(boss.shape.x, boss.shape.y)
+        const distance = target
+          ? Math.abs(target.shape.x - boss.shape.x) + Math.abs(target.shape.y - boss.shape.y)
+          : 9999
+        this.consumeBossEffects(boss, boss.step(distance, () => this.nextRandom()))
       }
       for (const projectile of this.projectiles) projectile.step()
       if (this.fixedTick % 6 === 0) {
@@ -273,7 +335,14 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
           && Math.abs(enemy.shape.x - player.shape.x) <= 52
           && Math.abs(enemy.shape.y - player.shape.y) <= 42
           && Math.sign(enemy.shape.x - player.shape.x) === state.facing)
-        if (target) this.consumeCombatResult(this.combatSystem.hitEnemy(target, 'melee'), target)
+        if (target) {
+          this.consumeCombatResult(this.combatSystem.hitEnemy(target, 'melee'), target)
+          return
+        }
+        const boss = this.bosses.find(candidate => candidate.snapshot().alive
+          && Math.abs(candidate.shape.x - player.shape.x) <= 84
+          && Math.abs(candidate.shape.y - player.shape.y) <= 58)
+        if (boss) this.consumeBossEffects(boss, boss.hit(2))
         return
       }
       this.getProjectile().fire(
@@ -295,6 +364,48 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
       if (result.kind === 'player-hit') this.emitHud()
     }
 
+    private resolvePlayerBoss(player: PlayerActor, boss: BossActor): void {
+      if (!boss.snapshot().alive) return
+      const state = player.snapshot()
+      const attacking = state.mode === 'dashing'
+        || (state.velocity.y > 0 && player.body.bottom <= boss.body.top + 8)
+      if (attacking) {
+        this.consumeBossEffects(boss, boss.hit(state.mode === 'dashing' ? 2 : 1))
+        if (state.velocity.y > 0) player.launch(-8)
+      } else if (player.applyDamage(10)) {
+        this.emitHud()
+      }
+    }
+
+    private consumeBossEffects(boss: BossActor, effects: readonly BossEffect[]): void {
+      for (const effect of effects) {
+        if (effect.type === 'leukocidin-hit' || effect.type === 'shock-hit') {
+          for (const player of this.players) player.applyDamage(effect.damage)
+        }
+        if (effect.type === 'summon') {
+          for (let index = 0; index < effect.count; index += 1) {
+            const enemy = this.createEnemy('staph', boss.shape.x / CLASSIC_TILE_SIZE, boss.shape.y / CLASSIC_TILE_SIZE)
+            enemy.shape.setPosition(boss.shape.x + (index === 0 ? -42 : 42), boss.shape.y)
+            enemy.body.updateFromGameObject()
+          }
+        }
+        if (effect.type === 'ring') {
+          this.add.circle(boss.shape.x, boss.shape.y, 12)
+            .setStrokeStyle(3, 0xff7070, 0.8)
+            .setDepth(4)
+            .setScale(4)
+            .setAlpha(0.35)
+            .setActive(false)
+        }
+        if (effect.type === 'died') {
+          this.runStats = this.runStats.record({ type: 'kill' })
+          context.events.emit('toast-requested', { message: 'Boss ???', durationMs: 1800 })
+          this.emitHud()
+          this.tryComplete(false)
+        }
+      }
+    }
+
     private consumeCombatResult(result: CombatResolution, enemy: EnemyActor): void {
       if (!result.reward) return
       this.runStats = this.runStats.record({ type: 'kill' })
@@ -305,6 +416,22 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
       }
       this.emitHud()
       this.tryComplete(false)
+    }
+
+    private createBoss(col: number, row: number): BossActor {
+      const actor = new BossActor(this, col, row)
+      this.bosses.push(actor)
+      this.bossGroup.add(actor.shape)
+      this.bossByShape.set(actor.shape, actor)
+      return actor
+    }
+
+    private createNpc(col: number, row: number): NpcActor {
+      const actor = new NpcActor(this, col, row)
+      this.npcs.push(actor)
+      this.npcGroup.add(actor.shape)
+      this.npcByShape.set(actor.shape, actor)
+      return actor
     }
 
     private createItem(item: ItemActor['item'], col: number, row: number): ItemActor {
@@ -352,12 +479,12 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
 
     private tryComplete(touchedFinish: boolean): void {
       if (this.completed) return
-      const condition = context.level.definition.winCondition
-      const complete = condition === 'reach-finish'
-        ? touchedFinish
-        : condition === 'kill-all'
-          ? this.enemies.every(enemy => !enemy.isAlive())
-          : this.runStats.snapshot().items >= context.level.items.length
+      const complete = canCompleteClassicLevel(context.level.definition.winCondition, {
+        touchedFinish,
+        allEnemiesDefeated: this.enemies.every(enemy => !enemy.isAlive()),
+        allItemsCollected: this.runStats.snapshot().items >= context.level.items.length,
+        bossAlive: this.bosses.some(boss => boss.snapshot().alive),
+      })
       if (!complete) return
       this.completed = true
       const result = this.runStats.result()

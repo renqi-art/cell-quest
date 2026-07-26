@@ -6,6 +6,7 @@ export const LEVEL_3_VESSEL = {
   "width": 100,
   "cellType": 3,
   "winCondition": "collect-all",
+  "tide": true,
   "sky": [
     "#2a0a1a",
     "#5a1a3a"
