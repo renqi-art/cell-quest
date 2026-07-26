@@ -43,7 +43,7 @@ onBeforeUnmount(() => {
 
 watch(() => store.draft, () => {
   if (store.draft) render()
-})
+}, { flush: 'post' })
 </script>
 
 <template>

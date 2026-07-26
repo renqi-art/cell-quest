@@ -1,4 +1,4 @@
-import { readonly, ref, watch } from 'vue'
+import { readonly, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { CaseDraft } from '@/shared/models/case-draft'
 import { CaseHistory } from '@/editor/domain/case-history'
