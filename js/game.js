@@ -2522,4 +2522,32 @@ function closeEquipment(){$('equipment-screen').classList.add('hidden');}
 function renderEquipment(){['weapon','armor','accessory'].forEach(slot=>{const el=$('es-'+slot);const eid=Game.equipment[slot];if(eid){const eq=findEquip(eid);el.innerHTML=(eq?eq.name:eid)+'<br><small style="color:'+(eq?RARITY_COLORS[eq.rarity]:'#aaa')+'">'+(eq?RARITY_NAMES[eq.rarity]:'')+'</small>';el.className='es-item equipped';el.onclick=()=>{if(confirm('卸下'+(eq?eq.name:eid)+'？')){unequipItem(slot);renderEquipment();}};}else{el.innerHTML='空';el.className='es-item';el.onclick=null;}});$('inv-count').textContent=Game.inventory.length+'/20';const grid=$('inventory-grid');grid.innerHTML='';Game.inventory.forEach(eid=>{const eq=findEquip(eid);if(!eq)return;const card=document.createElement('div');card.className='inv-card';card.innerHTML='<div class="ic-name">'+eq.name+'</div><div class="ic-rarity" style="color:'+RARITY_COLORS[eq.rarity]+'">'+RARITY_NAMES[eq.rarity]+'</div><div class="ic-stats">'+statsText(eq.stats)+'</div>';card.onclick=()=>{equipItem(eid);renderEquipment();};grid.appendChild(card);});}
 function statsText(stats){const n={atk:'攻',def:'防',spd:'速',maxHp:'命',maxEnergy:'能'};return Object.keys(stats).map(k=>n[k]+'+'+stats[k]).join(' ');}
 
+window.CellQuestLegacy = {
+  loadLevel(levelId, options) {
+    Game.twoPlayer = Boolean(options.twoPlayer);
+    if (options.playerTwoCell) Game._p2CellType = options.playerTwoCell;
+    return LoadLevel(Number(levelId), options.playerOneCell);
+  },
+  pause() {
+    if (Game.state === 'playing') togglePause();
+  },
+  resume() {
+    if (Game.state === 'paused') togglePause();
+  },
+  retry() {
+    retryFromDeath();
+  },
+  quitLevel() {
+    backToHub();
+  },
+  setTwoPlayer(enabled) {
+    Game.twoPlayer = Boolean(enabled);
+  },
+  dispatch(command) {
+    if (command.type !== 'input') return;
+    const target = command.player === 2 ? Game.keysP2 : Game.keys;
+    target[command.action] = command.pressed;
+  },
+};
+
 window.addEventListener('load', init);
