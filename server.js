@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { handleDirectorRequest } = require('./server/director');
+const { handleGenerateCaseRequest } = require('./server/case-generator');
 
 const ROOT = __dirname;
 const LEVEL_DIR = path.join(ROOT, 'js', 'levels');
@@ -193,6 +194,11 @@ const server = http.createServer(async (req, res) => {
       console.error('LEVEL LIST FAILED:', error);
       sendJson(res, 500, { error: 'Unable to list levels' });
     }
+    return;
+  }
+
+  if (req.method === 'POST' && requestPath === '/api/generate-case') {
+    await handleGenerateCaseRequest(req, res, sendJson);
     return;
   }
 
