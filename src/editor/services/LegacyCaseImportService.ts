@@ -1,6 +1,6 @@
 import type { CaseDraft } from '@/shared/models/case-draft'
 import { createCaseDraft } from '@/shared/services/CaseSchema'
-import type { PrimaryCell, CaseNode } from '@/shared/types/case'
+import type { CaseNode } from '@/shared/types/case'
 
 /** Legacy custom level shape (from localStorage custom levels) */
 export interface LegacyLevelData {

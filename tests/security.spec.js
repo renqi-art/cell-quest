@@ -1,5 +1,32 @@
 const { test, expect } = require('playwright/test');
 
+test('browser removes legacy AI secrets and never calls the model upstream directly', async ({ page }) => {
+  const upstreamRequests = [];
+  await page.addInitScript(() => {
+    localStorage.setItem('cellQuest_ds_key', 'legacy-browser-secret');
+  });
+  await page.route('https://api.deepseek.com/**', async route => {
+    upstreamRequests.push(route.request().url());
+    await route.abort();
+  });
+
+  await page.goto('/');
+  await page.evaluate(async () => {
+    if (typeof generateAIMap === 'function') {
+      await generateAIMap('security-test');
+    }
+    if (typeof showAIGeneratePanel === 'function') {
+      showAIGeneratePanel();
+    }
+  });
+
+  expect(await page.evaluate(() => localStorage.getItem('cellQuest_ds_key'))).toBeNull();
+  expect(await page.evaluate(() => typeof window.getDeepSeekKey)).toBe('undefined');
+  expect(await page.evaluate(() => typeof window.setDeepSeekKey)).toBe('undefined');
+  await expect(page.locator('#ai-panel')).not.toContainText(/API Key|DeepSeek Key/);
+  expect(upstreamRequests).toEqual([]);
+});
+
 test('custom level names render as text instead of executable HTML', async ({ page }) => {
   const maliciousName = '<svg onload=window.__customLevelXss=1>';
   await page.addInitScript(name => {

@@ -17,3 +17,9 @@ test('frontend toolchain exposes the required commands and config files', () => 
   assert.ok(fs.existsSync(path.join(root, 'eslint.config.mjs')));
   assert.ok(fs.existsSync(path.join(root, 'tsconfig.json')));
 });
+
+test('Vite proxies all server-side AI routes in dev and preview', () => {
+  const viteConfig = fs.readFileSync(path.join(root, 'vite.config.ts'), 'utf8');
+  assert.match(viteConfig, /['"]\/api['"]\s*:/);
+  assert.match(viteConfig, /legacyApiProxy/);
+});

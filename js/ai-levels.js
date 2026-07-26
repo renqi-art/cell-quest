@@ -347,55 +347,11 @@ const EDITOR_TEMPLATES = {
 };
 
 
-// ===== v3: DeepSeek AI 真·AI关卡生成 =====
-const DEEPSEEK_API = 'https://api.deepseek.com/v1/chat/completions';
-const DEEPSEEK_MODEL = 'deepseek-chat';
+// Browser model credentials were removed in v3.1. Clear any legacy secret once.
+try{ localStorage.removeItem('cellQuest_ds_key'); }catch(e){ /* storage unavailable */ }
 
-function getDeepSeekKey(){
-  try{ return localStorage.getItem('cellQuest_ds_key') || ''; }catch(e){ return ''; }
-}
-function setDeepSeekKey(key){
-  try{ localStorage.setItem('cellQuest_ds_key', key.trim()); return true; }catch(e){ return false; }
-}
-
-const DEEPSEEK_SYSTEM_PROMPT = [
-  '你是一个关卡地图生成器。根据用户输入的主题词,生成2D平台跳跃关卡地图。',
-  '输出格式:只输出一个JSON对象,不要任何其他文字。',
-  '字段:name(≤10字中文),desc(≤20字),cellType(1=战斗WBC/3=收集RBC),map(15行×80列字符串数组)',
-  '瓦片:#=地面 = =平台 P=出生点 F=终点 g=葡萄球菌 t=链球菌 G=大型菌 ^=尖刺 ?=隐藏方块 V=弹簧 _=碎裂 H=隐藏墙 a=ATP o=金币',
-  '规则:第0行和14行全#,P在第13行列2-5,F在第13行列75-79,平台间距≤5格,敌人6-12个,道具3-6个,ATP4-8个',
-  '示例主题"火山":{"name":"熔岩之地","desc":"火山战斗关卡","cellType":1,"theme":"火山","map":["                                                                                ","                                                                                ","      ======      ======      ======      ======      ======      ======        ","              ??                 g                   t                          ","            ======      ======      ======      ======      ======               ","                                                                                ","        ======            ======          ======            ======               ","                          G                                                      ","  ======      ======      ======      ======      ======      ======             ","                                                                                ","                          ^^                                                    ","                                                                                ","P                                                                          F     ","################################################################################","################################################################################"]}',
-].join('\n');
-
-async function generateAIMap(prompt){
-  const key = getDeepSeekKey();
-  if(!key) return { error: '请先设置 DeepSeek API Key' };
-
-  try{
-    const resp = await fetch(DEEPSEEK_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-      body: JSON.stringify({
-        model: DEEPSEEK_MODEL,
-        messages: [
-          { role: 'system', content: DEEPSEEK_SYSTEM_PROMPT },
-          { role: 'user', content: '生成关卡地图,主题: ' + prompt }
-        ],
-        temperature: 0.8, max_tokens: 4096,
-      }),
-    });
-
-    if(!resp.ok){
-      const err = await resp.json().catch(()=>({}));
-      return { error: 'API错误: ' + (err.error?.message || resp.status) };
-    }
-
-    const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    return parseAIMapResponse(content, prompt);
-  }catch(e){
-    return { error: '网络错误: ' + e.message };
-  }
+async function generateAIMap(_prompt){
+  return { error: '经典AI地图生成已停用，请使用病例设计器中的安全AI病例生成器。' };
 }
 
 function parseAIMapResponse(content, prompt){

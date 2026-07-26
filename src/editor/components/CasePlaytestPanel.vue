@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useCaseEditorStore } from '@/editor/stores/case-editor'
-import type { PreviewOptions } from '@/editor/services/EditorPreviewGateway'
 
 const store = useCaseEditorStore()
 
