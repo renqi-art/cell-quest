@@ -1,182 +1,48 @@
-import { describe, it, expect } from 'vitest'
-import { importLegacyLevel } from '@/editor/services/LegacyCaseImportService'
-import { parseCaseDraft } from '@/shared/services/CaseSchema'
-import { encodeCaseCode, decodeCaseCode } from '@/shared/services/CaseCodec'
-import type { LegacyLevelData } from '@/editor/services/LegacyCaseImportService'
+import { describe, expect, it } from 'vitest'
+import { OFFICIAL_CASES } from '@/shared/content/official-cases'
+import { validateCaseDraft } from '@/shared/services/CaseValidationService'
+import { CaseEngine } from '@/shared/domain/CaseEngine'
 
-/**
- * Test fixture: the 6 official built-in levels from js/levels/
- * These are loaded as ASCII maps and validated through the full pipeline.
- * Each test verifies: parse → import → encode → decode round-trip.
- */
+const envelope = { version: 1 as const, maxGapTiles: 5, maxStepUpTiles: 4, maxDropTiles: 8, playerHeightTiles: 2 }
 
-const OFFICIAL_LEVELS: Record<string, LegacyLevelData> = {
-  'Level 0 — 血液循环': {
-    name: '血液循环',
-    icon: '🫀',
-    map: [
-      '                                                                                                  ',
-      '            p    p                                                                                ',
-      '            #    #    p    p                                                           p    p     ',
-      '                          #    #        #######                                             #    # ',
-      ' #    #        P  o F                                                                    p    p  ',
-      ' #    #               #####################################################################    #',
-      '                    #                                                                      #    #',
-      '            p    p                                                                                ',
-      '        #####    #####    p    p                                                  p    p          ',
-      '           #    #    #####    #####        #######                           #####    #####       ',
-      '                          #    #                                                              p    ',
-      '########    ######################################################################################',
-      '                                                                                                  ',
-      '                                                                                                  ',
-      '                                                                                                  ',
-    ],
-  },
-  'Level 1 — 擦伤': {
-    name: '擦伤',
-    icon: '🤕',
-    map: [
-      '                                                ######                                         ',
-      ' P                                                                                              ',
-      '#=#        o               o    #==#==#               o              o                         ',
-      '   #==#==#   o        o              o                                ###              F        ',
-      '                              ###                ###     o            ####                     ',
-      '       ##        o     o              o     o                                                ##  ',
-      '                                                                                             #   ',
-      '                                                                                               # ',
-      '                b                                                                          g    #',
-      '    t                                                                           ##   ##   #    #',
-      '      #####                                                                         ###   #    #',
-      '#=#            #===#   #########                  #######                                 ######',
-      '     ##########                  ########=======#          ##===========######======###         ',
-      '                                                                                               #',
-      '#################################################################################################',
-    ],
-  },
-  'Level 2 — 肺泡迷宫': {
-    name: '肺泡迷宫',
-    icon: '🫁',
-    map: [
-      '                                                                                               #',
-      '                                 p                                                                     ',
-      '                              #######    p                                                        P    ',
-      '                     o                       p                                                   #   ',
-      '                                       #######                                                #    ',
-      '                    o     p                                                                          ',
-      '                        #######                                           #                          ',
-      '                                                           p              #                          ',
-      '                                                         =====           #                          ',
-      '                   G         o                 o                ###                                ',
-      '   t        o                       g                    o                  o               F        ',
-      '      #######       #####==######         #####====###                ######==#==#####               ',
-      '###=##              #                      #                          #                               ',
-      '                                                                                               #     ',
-      '#################################################################################################    ',
-    ],
-  },
-  'Level 3 — 血管奔流': {
-    name: '血管奔流',
-    icon: '🩸',
-    map: [
-      '                                                                                                  ',
-      '                                                                                       p    p    ',
-      '                                                                                       #    #    ',
-      '                 p    p                                                               p    p        ',
-      '          p    p #    #    p    p                                              p    p  #    #  p   ',
-      '    p    p#    #                 #    #                                      p  #    #              ',
-      'P  ##    ##    ##    p    p    p #    #  p  p    p                     p   p    #    #    p    p    ',
-      '#####    ##    ##    #    #    #       ##  ##    #   o  p    p        ##   ##    #    #    #    #   ',
-      '#####    ##    ##    #    #    #  ######===###    #  ##  #    #    p  ##   ##    #    #    #    #   ',
-      '#####    ##    ##    #    #    #            ##    #  ##  #    #    #  ##   ##    #    #    #    #   ',
-      '=======#===#===#=====#====#====#==###########=====#==#===#====#=====#==#===#==#==#==#==#====#===#=F',
-      '                                                                                                  ',
-      '                                                                                                  ',
-      '                                                                                                  ',
-      '                                                                                                  ',
-    ],
-  },
-  'Level 4 — 淋巴结': {
-    name: '淋巴结',
-    icon: '🦴',
-    map: [
-      '                                                                                                 ',
-      '                                                                     #=#                         ',
-      '                                                                     #=#   P                     ',
-      '                                                                     #=#  #=#                    ',
-      '                                                                   o         o                  ',
-      '                                                                     ###  ###                    ',
-      '                                                                                                 ',
-      '                                                                       o                         ',
-      '                                                                     #####                       ',
-      '                                        o                         G                              ',
-      '              G                     #######                        #            t                 ',
-      '        t    #####     ########==###                                                       ###        ',
-      'F     ######           #                                                                             ',
-      '####=##      t                                                          o                            ',
-      '#################################################################################################  ',
-    ],
-  },
-  'Level 5 — Boss感染': {
-    name: 'Boss感染',
-    icon: '👾',
-    map: [
-      '                                                                                              ',
-      '                                                                                              ',
-      '                                                                                              ',
-      '                                                                                              ',
-      '                                                                                              ',
-      '                                                                               b              ',
-      '                                                                               #              ',
-      '                                                                               #              ',
-      '                                                     o                         #             ',
-      '                                                                                             ',
-      '                                     o                              o          F             ',
-      'P                                    #==#==#          o         ###=====######==#===##        ',
-      '################=#####===##==###====##      ###==#===###==#===#===######                  ###',
-      '                                                                                             ',
-      '#############################################################################################',
-    ],
-  },
-}
+describe('six official patient cases', () => {
+  it('forms a six-chapter patient recovery story with unique IDs', () => {
+    expect(OFFICIAL_CASES).toHaveLength(6)
+    expect(new Set(OFFICIAL_CASES.map(item => item.id)).size).toBe(6)
+    expect(OFFICIAL_CASES.map(item => item.chapter)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(OFFICIAL_CASES[0]?.patientBeat).toContain('擦伤')
+    expect(OFFICIAL_CASES[5]?.patientBeat).toContain('康复')
+  })
 
-describe('Official Case Validation', () => {
-  const entries = Object.entries(OFFICIAL_LEVELS)
+  it('covers RBC, WBC, and cooperative responsibilities without platelet gameplay', () => {
+    const roles = OFFICIAL_CASES.map(item => item.draft.caseConfig?.primaryCell)
+    expect(roles).toContain('rbc')
+    expect(roles).toContain('wbc')
+    expect(roles).toContain('coop')
+    expect(JSON.stringify(OFFICIAL_CASES)).not.toMatch(/platelet|血小板/i)
+  })
 
-  for (const [name, data] of entries) {
-    it(`"${name}" parses through LegacyCaseImportService`, () => {
-      const result = importLegacyLevel(data)
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.draft.metadata.title).toBe(data.name!)
-        expect(result.draft.nodes.length).toBeGreaterThan(0)
-        // Should have at least one spawn point
-        const hasSpawn = result.draft.nodes.some((n) => n.kind === 'spawn')
-        expect(hasSpawn).toBe(true)
+  it.each([0, 1, 2, 3, 4, 5])('case %i passes shared validation and has education sources', index => {
+    const official = OFFICIAL_CASES[index]!
+    const errors = validateCaseDraft(official.draft, envelope).filter(item => item.severity === 'error')
+    expect(errors).toEqual([])
+    expect(official.draft.caseConfig?.education.sourceIds.length).toBeGreaterThan(0)
+    expect(official.sources.length).toBeGreaterThan(0)
+    expect(official.draft.map.some(row => row.includes('F'))).toBe(false)
+  })
+
+  it.each([0, 1, 2, 3, 4, 5])('case %i can complete through its configured physiological goals', index => {
+    const config = OFFICIAL_CASES[index]!.draft.caseConfig!
+    const engine = new CaseEngine(config)
+    for (const route of config.goals.oxygenRoutes) {
+      for (let delivery = 0; delivery < route.requiredDeliveries; delivery += 1) {
+        engine.dispatch({ type: 'oxygenDelivered', amount: 12, nodeId: route.targetIds[0] ?? route.sourceId })
       }
-    })
-
-    it(`"${name}" draft passes parseCaseDraft`, () => {
-      const importResult = importLegacyLevel(data)
-      expect(importResult.ok).toBe(true)
-      if (!importResult.ok) return
-
-      const parseResult = parseCaseDraft(importResult.draft)
-      expect(parseResult.ok).toBe(true)
-    })
-
-    it(`"${name}" reports retired items appropriately`, () => {
-      const result = importLegacyLevel(data)
-      expect(result.ok).toBe(true)
-      if (!result.ok) return
-
-      const allRetired = result.retiredItems.join(' ')
-      // Non-case tiles should be retired
-      if (allRetired.includes('金币')) {
-        // OK — some levels may have coins
-      }
-      if (allRetired.includes('终点门')) {
-        // OK — levels have finish gates
-      }
-    })
-  }
+    }
+    for (const nodeId of config.goals.infection.nodeIds.slice(0, config.goals.infection.requiredClears)) {
+      engine.dispatch({ type: 'infectionCleared', amount: 20, nodeId })
+    }
+    engine.update(config.goals.stabilitySeconds)
+    expect(engine.isComplete()).toBe(true)
+  })
 })

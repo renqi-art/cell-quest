@@ -1,5 +1,6 @@
 import type { GameScreenState, HudSnapshot } from './game'
 import type { CaseSnapshot, CaseResult } from './case'
+import type { DirectorHistoryEntry } from './director'
 
 export interface TutorialViewModel {
   readonly speaker: string
@@ -47,4 +48,6 @@ export interface GameEngineEventMap {
   'case-updated': (snapshot: CaseSnapshot) => void
   'case-completed': (result: CaseResult) => void
   'case-failed': (result: CaseResult) => void
+  'director-pending': (pending: boolean) => void
+  'director-decision': (entry: DirectorHistoryEntry) => void
 }

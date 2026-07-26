@@ -28,4 +28,14 @@ describe('official starter templates', () => {
     const draft = createCaseTemplate('wbc-infection')
     expect(draft.caseConfig?.goals.infection).toEqual({ nodeIds: ['i1'], requiredClears: 1 })
   })
+
+  it('declares role-appropriate crisis allowlists', () => {
+    expect(createCaseTemplate('rbc-transport').caseConfig?.allowedEvents).toEqual([
+      'ACUTE_HYPOXIA', 'TRANSPORT_BLOCKAGE', 'ATP_CRISIS',
+    ])
+    expect(createCaseTemplate('wbc-infection').caseConfig?.allowedEvents).toEqual([
+      'INFECTION_REBOUND', 'ATP_CRISIS',
+    ])
+  })
+
 })

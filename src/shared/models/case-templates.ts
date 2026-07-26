@@ -25,6 +25,7 @@ export function createCaseTemplate(id: TemplateId): CaseDraft {
             ],
             infection: { nodeIds: [], requiredClears: 0 },
           },
+          allowedEvents: ['ACUTE_HYPOXIA', 'TRANSPORT_BLOCKAGE', 'ATP_CRISIS'],
           education: { topic: '红细胞如何向组织运输氧气', sourceIds: ['who-oxygen-transport'] },
         },
       }
@@ -46,6 +47,7 @@ export function createCaseTemplate(id: TemplateId): CaseDraft {
             oxygenRoutes: [],
             infection: { nodeIds: ['i1'], requiredClears: 1 },
           },
+          allowedEvents: ['INFECTION_REBOUND', 'ATP_CRISIS'],
           education: { topic: '白细胞如何识别并清除感染', sourceIds: ['who-immune-response'] },
         },
       }

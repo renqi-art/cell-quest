@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "motion": "12.42.2",
+    "phaser": "^3.90.0",
     "pinia": "4.0.2",
     "vue": "3.5.40"
   }

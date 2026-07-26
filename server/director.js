@@ -9,7 +9,7 @@ const EVENT_IDS = new Set([
 
 const PLAN_KEYS = ['eventId', 'targetNode', 'severity', 'goal', 'doctorLine', 'reason'];
 const GOAL_KEYS = ['oxygenDeliveries', 'infectionSites', 'timeLimitSeconds'];
-const VALID_NODE_RE = /^[a-z]+_\d+$/;
+const VALID_NODE_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 
 function isBoundedInt(value, min, max) {
   return Number.isInteger(value) && value >= min && value <= max;

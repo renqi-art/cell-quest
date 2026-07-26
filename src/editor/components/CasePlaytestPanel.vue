@@ -6,6 +6,7 @@ const store = useCaseEditorStore()
 const showDialog = ref(false)
 const selectedRole = ref<'rbc' | 'wbc' | 'coop'>('rbc')
 const previewStatus = ref<'idle' | 'starting' | 'running' | 'error'>('idle')
+const selectedRuntime = ref<'legacy' | 'phaser'>('legacy')
 const previewError = ref('')
 
 const availableRoles = computed<readonly ('rbc' | 'wbc' | 'coop')[]>(() => {
@@ -43,7 +44,7 @@ function launchPreview(): void {
       options: { role: selectedRole.value, start: { type: 'full' }, timestamp: Date.now() },
     }))
     sessionStorage.setItem('cellQuest_previewReturn', window.location.href)
-    const popup = window.open('/?preview=1', '_blank')
+    const popup = window.open('/?preview=1&engine=' + selectedRuntime.value, '_blank')
     if (!popup) throw new Error('浏览器阻止了试玩窗口，请允许本站打开新窗口。')
     previewStatus.value = 'running'
   } catch (cause) {
@@ -75,6 +76,11 @@ function launchPreview(): void {
             <input v-model="selectedRole" type="radio" :value="role" :disabled="previewStatus !== 'idle'">
             {{ roleLabel(role) }}
           </label>
+        </fieldset>
+        <fieldset>
+          <legend>运行时</legend>
+          <label><input v-model="selectedRuntime" type="radio" value="legacy"> 兼容运行时</label>
+          <label><input v-model="selectedRuntime" data-testid="runtime-phaser" type="radio" value="phaser"> Phaser 垂直切片</label>
         </fieldset>
         <div v-if="store.draft?.caseConfig" class="playtest-vitals">
           <span>氧供 {{ store.draft.caseConfig.vitals.oxygen }}%</span>
