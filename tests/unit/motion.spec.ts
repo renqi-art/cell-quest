@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { observeReducedMotion } from '@/game/motion/reduced-motion'
 import { motionDuration, motionEase, motionSpring } from '@/game/motion/motion-tokens'
+import { bindLegacyMotion } from '@/game/motion/legacy-motion'
 
 describe('reduced-motion', () => {
   let listeners: Array<(e: MediaQueryListEvent) => void> = []
@@ -136,7 +137,6 @@ describe('bindLegacyMotion', () => {
   }
 
   it('skips non-existent overlay IDs without error', async () => {
-    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
     const binding = bindLegacyMotion(() => false)
     expect(binding.destroy).toBeDefined()
     binding.destroy()
@@ -145,7 +145,6 @@ describe('bindLegacyMotion', () => {
   it('plays entrance animation when hidden class is removed', async () => {
     const overlay = createOverlay('main-menu', true)
     // Simulate adapter behavior: observe mutation on class change
-    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
 
     const binding = bindLegacyMotion(() => false)
 
@@ -164,7 +163,6 @@ describe('bindLegacyMotion', () => {
 
   it('destroy disconnects observers and cancels animations', async () => {
     const overlay = createOverlay('pause-menu', true)
-    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
 
     const binding = bindLegacyMotion(() => false)
 
@@ -183,7 +181,6 @@ describe('bindLegacyMotion', () => {
 
   it('reduced-motion uses instant duration only', async () => {
     const overlay = createOverlay('complete-screen', true)
-    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
 
     const binding = bindLegacyMotion(() => true) // reduced motion
 
@@ -199,7 +196,6 @@ describe('bindLegacyMotion', () => {
   it('multiple overlays can animate independently', async () => {
     const menu = createOverlay('main-menu', true)
     const pause = createOverlay('pause-menu', true)
-    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
 
     const binding = bindLegacyMotion(() => false)
 
@@ -217,7 +213,6 @@ describe('bindLegacyMotion', () => {
 
   it('rapid show/hide/show cancels old animations', async () => {
     const overlay = createOverlay('confirm-dialog', true)
-    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
 
     const binding = bindLegacyMotion(() => false)
 
