@@ -2,9 +2,11 @@ import Phaser from 'phaser'
 import type { GameEngineEvents } from '@/game/bridge/GameEngineEvents'
 import type { LoadLevelOptions, PlayerAction } from '@/shared/types/game'
 import type { ParsedClassicLevel } from '@/shared/classic/types'
-import { CLASSIC_TILE_REGISTRY, isClassicTileCharacter } from '@/shared/classic/tiles'
 import { FixedStepClock } from '@/shared/classic/simulation/FixedStepClock'
 import { PlayerActor } from '../actors/PlayerActor'
+import { TerrainSystem } from '../systems/TerrainSystem'
+import { HazardSystem } from '../systems/HazardSystem'
+import { PlatformSystem } from '../systems/PlatformSystem'
 import {
   CLASSIC_MAX_CATCH_UP_STEPS,
   CLASSIC_SIMULATION_HZ,
@@ -29,6 +31,9 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
     private readonly players: PlayerActor[] = []
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
     private wasd!: Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
+    private readonly hazardSystem = new HazardSystem()
+    private platformSystem!: PlatformSystem
+    private fixedTick = 0
 
     constructor() {
       super(CLASSIC_SCENE_KEY)
@@ -40,25 +45,41 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
       const worldHeight = level.tiles.length * CLASSIC_TILE_SIZE
       this.cameras.main.setBackgroundColor(level.definition.sky[0])
       this.physics.world.setBounds(0, 0, worldWidth, worldHeight)
-      const solids = this.physics.add.staticGroup()
-
-      level.tiles.forEach((row, rowIndex) => row.forEach((character, colIndex) => {
-        if (!isClassicTileCharacter(character) || !CLASSIC_TILE_REGISTRY[character].solid) return
-        const tile = this.add.rectangle(
-          colIndex * CLASSIC_TILE_SIZE + CLASSIC_TILE_SIZE / 2,
-          rowIndex * CLASSIC_TILE_SIZE + CLASSIC_TILE_SIZE / 2,
-          CLASSIC_TILE_SIZE,
-          CLASSIC_TILE_SIZE,
-          character === 'B' ? 0x7a2438 : 0x334b69,
-        )
-        solids.add(tile)
-      }))
+      const terrain = new TerrainSystem(this).create(level)
+      this.platformSystem = new PlatformSystem(
+        this,
+        terrain.crumble,
+        level.definition.floatPlatforms ?? [],
+      )
 
       this.players.push(new PlayerActor(this, 1, level.playerSpawn.col, level.playerSpawn.row, 0xe84b5f))
       if (options.twoPlayer) {
         this.players.push(new PlayerActor(this, 2, level.playerSpawn.col + 1, level.playerSpawn.row, 0x7bc7ff))
       }
-      for (const player of this.players) this.physics.add.collider(player.shape, solids)
+      for (const player of this.players) {
+        this.physics.add.collider(player.shape, terrain.solids)
+        this.physics.add.collider(player.shape, terrain.crumble, (_player, platform) => {
+          this.platformSystem.contactCrumble(platform as Phaser.GameObjects.GameObject)
+        })
+        this.physics.add.collider(player.shape, this.platformSystem.floatingGroup)
+        this.physics.add.overlap(player.shape, terrain.spikes, () => {
+          if (this.hazardSystem.applyTile(player, '^')) this.emitHud()
+        })
+        this.physics.add.overlap(player.shape, terrain.springs, (_player, spring) => {
+          const tile = (spring as Phaser.GameObjects.GameObject).name.endsWith('J') ? 'J' : 'V'
+          this.hazardSystem.applyTile(player, tile)
+        })
+        this.physics.add.overlap(player.shape, terrain.checkpoints, (_player, checkpoint) => {
+          const object = checkpoint as unknown as { readonly x: number; readonly y: number }
+          const position = {
+            col: Math.floor(object.x / CLASSIC_TILE_SIZE),
+            row: Math.floor(object.y / CLASSIC_TILE_SIZE),
+          }
+          if (this.hazardSystem.activateCheckpoint(player, position)) {
+            context.events.emit('toast-requested', { message: '??????', durationMs: 1600 })
+          }
+        })
+      }
 
       this.cursors = this.input.keyboard!.createCursorKeys()
       this.wasd = this.input.keyboard!.addKeys('W,A,D') as Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
@@ -79,6 +100,8 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
     }
 
     private fixedUpdate(): void {
+      this.fixedTick += 1
+      this.platformSystem.fixedUpdate(this.fixedTick)
       for (const player of this.players) {
         const actions = context.pressed.get(player.playerIndex) ?? new Set<PlayerAction>()
         const leftKey = player.playerIndex === 1 ? this.cursors.left : this.wasd.A
@@ -96,6 +119,12 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
           headClear: !player.body.blocked.up,
           horizontalBlocked: player.body.blocked.left || player.body.blocked.right,
         })
+        if (player.shape.y > context.level.tiles.length * CLASSIC_TILE_SIZE + 60) {
+          if (player.applyDamage(player.snapshot().maxHealth)) {
+            context.events.emit('player-died', { remainingCells: 0, cellName: '????' })
+            context.events.emit('state-changed', 'dead')
+          }
+        }
       }
     }
 

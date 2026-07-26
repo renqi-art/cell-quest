@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import type { ClassicGridPosition } from '@/shared/classic/types'
 import {
   CLASSIC_PLAYER_TUNING,
   PlayerMotor,
@@ -21,6 +22,7 @@ export class PlayerActor {
   readonly body: Phaser.Physics.Arcade.Body
   private readonly motor = new PlayerMotor(CLASSIC_PLAYER_TUNING)
   private motorState = createClassicPlayerMotorState()
+  private checkpoint: ClassicGridPosition
 
   constructor(
     scene: Phaser.Scene,
@@ -29,6 +31,7 @@ export class PlayerActor {
     row: number,
     color: number,
   ) {
+    this.checkpoint = { col, row }
     this.shape = scene.add.rectangle(
       col * CLASSIC_TILE_SIZE + CLASSIC_PLAYER_WIDTH / 2,
       row * CLASSIC_TILE_SIZE + CLASSIC_PLAYER_STANDING_HEIGHT / 2,
@@ -60,5 +63,36 @@ export class PlayerActor {
 
   snapshot(): PlayerMotorState {
     return this.motorState
+  }
+
+  applyDamage(amount: number): boolean {
+    const result = this.motor.applyDamage(this.motorState, amount)
+    if (result.state === this.motorState) return false
+    this.motorState = result.state
+    return true
+  }
+
+  launch(velocityY: number): void {
+    this.motorState = {
+      ...this.motorState,
+      grounded: false,
+      velocity: { ...this.motorState.velocity, y: velocityY },
+    }
+    this.body.setVelocityY(velocityY * CLASSIC_SIMULATION_HZ)
+  }
+
+  activateCheckpoint(position: ClassicGridPosition): boolean {
+    if (this.checkpoint.col === position.col && this.checkpoint.row === position.row) return false
+    this.checkpoint = position
+    return true
+  }
+
+  respawn(): void {
+    this.shape.setPosition(
+      this.checkpoint.col * CLASSIC_TILE_SIZE + CLASSIC_PLAYER_WIDTH / 2,
+      this.checkpoint.row * CLASSIC_TILE_SIZE + CLASSIC_PLAYER_STANDING_HEIGHT / 2,
+    )
+    this.body.setVelocity(0, 0)
+    this.motorState = createClassicPlayerMotorState()
   }
 }
