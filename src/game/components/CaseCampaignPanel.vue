@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { OFFICIAL_CASES, type OfficialCaseChapter } from '@/shared/content/official-cases'
+import { CaseProgressRepository } from '@/game/services/CaseProgressRepository'
+import { createDailyCase, localDateString, type DailyCase } from '@/game/services/DailyCaseService'
 
-const emit = defineEmits<{ start: [officialCase: OfficialCaseChapter] }>()
+const emit = defineEmits<{ start: [officialCase: OfficialCaseChapter]; daily: [dailyCase: DailyCase] }>()
 const open = ref(false)
+const progress = new CaseProgressRepository(localStorage).list()
+const dailyCase = createDailyCase(localDateString())
 </script>
 
 <template>
@@ -21,26 +25,34 @@ const open = ref(false)
           </div>
           <button type="button" aria-label="关闭病例战役" @click="open = false">×</button>
         </header>
+        <aside class="daily-banner" data-testid="daily-case-banner">
+          <div>
+            <p class="eyebrow">DAILY STANDARD CASE · {{ dailyCase.date }}</p>
+            <strong>{{ dailyCase.chapter.draft.metadata.icon }} {{ dailyCase.chapter.draft.metadata.title }}</strong>
+            <p>固定种子 {{ dailyCase.seed }} · {{ dailyCase.plannedEvents.join(' / ') }}</p>
+          </div>
+          <button type="button" data-testid="start-daily-case" @click="emit('daily', dailyCase)">开始每日病例</button>
+        </aside>
         <ol class="chapter-list">
-          <li
-            v-for="officialCase in OFFICIAL_CASES"
-            :key="officialCase.id"
-            :data-case-chapter="officialCase.chapter"
-          >
+          <li v-for="officialCase in OFFICIAL_CASES" :key="officialCase.id" :data-case-chapter="officialCase.chapter">
             <span class="chapter-index">{{ officialCase.chapter }}</span>
             <div>
               <h3>{{ officialCase.draft.metadata.icon }} {{ officialCase.draft.metadata.title }}</h3>
               <p>{{ officialCase.patientBeat }}</p>
               <p class="learning">学习目标：{{ officialCase.learningObjective }}</p>
+              <p v-if="progress[officialCase.id]" class="progress">
+                {{ progress[officialCase.id]!.completed ? '已完成' : '已尝试' }}
+                · 最佳 {{ progress[officialCase.id]!.bestScore }} 分
+                · {{ progress[officialCase.id]!.attempts }} 次
+              </p>
               <div class="sources">
                 <a v-for="source in officialCase.sources" :key="source.id" :href="source.url" target="_blank" rel="noreferrer">{{ source.title }}</a>
               </div>
             </div>
-            <button type="button" data-testid="start-official-case" @click="emit('start', officialCase)">
-              开始病例
-            </button>
+            <button type="button" data-testid="start-official-case" @click="emit('start', officialCase)">开始病例</button>
           </li>
         </ol>
+        <p class="medical-note">所有指标均为游戏化抽象。仅用于科普，不构成医疗建议。</p>
       </section>
     </div>
   </div>
@@ -51,6 +63,8 @@ const open = ref(false)
 .campaign-overlay { position: fixed; inset: 0; z-index: 140; display: grid; place-items: center; padding: 20px; background: rgb(2 5 14 / 82%); }
 .campaign-panel { width: min(920px, 96vw); max-height: 88vh; overflow: auto; border: 1px solid #405a96; border-radius: 18px; background: linear-gradient(145deg, #10182d, #090d19); color: #f3f6ff; }
 .campaign-panel > header { display: flex; justify-content: space-between; gap: 20px; padding: 22px; border-bottom: 1px solid #28385f; }
+.daily-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 18px 18px 0; padding: 14px; border: 1px solid #4767a9; border-radius: 12px; background: linear-gradient(110deg, #192a52, #172140); }
+.daily-banner p { margin: 2px 0; }
 .eyebrow { color: #78a6ff; font-size: 10px; letter-spacing: .16em; }
 h2 { margin: 4px 0; }
 .chapter-list { display: grid; gap: 10px; margin: 0; padding: 18px; list-style: none; }
@@ -59,8 +73,10 @@ h2 { margin: 4px 0; }
 h3, p { margin: 0 0 5px; }
 .chapter-list p { color: #b8c4de; font-size: 12px; }
 .learning { color: #8eddb0 !important; }
+.progress { color: #ffd780 !important; }
 .sources { display: flex; flex-wrap: wrap; gap: 8px; }
 .sources a { color: #8fb7ff; font-size: 10px; }
+.medical-note { padding: 0 18px 18px; color: #98a7c4; font-size: 10px; }
 button { cursor: pointer; }
-@media (max-width: 700px) { .chapter-list li { grid-template-columns: 30px 1fr; } .chapter-list li > button { grid-column: 2; justify-self: start; } }
+@media (max-width: 700px) { .daily-banner { align-items: flex-start; flex-direction: column; } .chapter-list li { grid-template-columns: 30px 1fr; } .chapter-list li > button { grid-column: 2; justify-self: start; } }
 </style>

@@ -5,6 +5,8 @@ import type { GameEngineEventMap } from '@/shared/types/events'
 import type { GameCommand, LoadLevelOptions, PlayerAction } from '@/shared/types/game'
 import type { CaseDraft } from '@/shared/models/case-draft'
 import { CaseEngine } from '@/shared/domain/CaseEngine'
+import { CaseDirectorClient } from '@/game/services/CaseDirectorClient'
+import type { DirectorContext } from '@/shared/types/director'
 import { buildPhaserSceneModel, type PhaserSceneModel } from './buildPhaserSceneModel'
 
 const NODE_COLORS: Record<PhaserSceneModel['nodes'][number]['kind'], number> = {
@@ -22,8 +24,13 @@ export class PhaserGameEngineAdapter implements GameEngine {
   private draft: CaseDraft | null = null
   private options: LoadLevelOptions = { twoPlayer: false, playerOneCell: 1 }
   private caseEngine: CaseEngine | null = null
-  private readonly pressed = new Set<PlayerAction>()
+  private readonly pressed = new Map<1 | 2, Set<PlayerAction>>([[1, new Set()], [2, new Set()]])
   private terminalEmitted = false
+  private directorPhase: 0 | 1 | 2 = 0
+  private directorPending = false
+  private directorRunId = ''
+
+  constructor(private readonly directorClient: Pick<CaseDirectorClient, 'nextPlan'> = new CaseDirectorClient()) {}
 
   async mount(host: HTMLElement): Promise<void> {
     this.host = host
@@ -34,7 +41,9 @@ export class PhaserGameEngineAdapter implements GameEngine {
     this.game = null
     this.caseEngine = null
     this.draft = null
-    this.pressed.clear()
+    this.pressed.forEach(actions => actions.clear())
+    this.directorPhase = 0
+    this.directorPending = false
     this.events.clear()
   }
 
@@ -47,10 +56,14 @@ export class PhaserGameEngineAdapter implements GameEngine {
     if (!this.host) throw new Error('Phaser adapter must be mounted before loading a case')
     if (!draft.caseConfig) throw new Error('Phaser case runtime requires caseConfig')
     this.game?.destroy(true)
+    this.pressed.forEach(actions => actions.clear())
     this.draft = draft
     this.options = options
     this.caseEngine = new CaseEngine(draft.caseConfig)
     this.terminalEmitted = false
+    this.directorPhase = 0
+    this.directorPending = false
+    this.directorRunId = `phaser-${draft.id}-${Date.now().toString(36)}`
     const model = buildPhaserSceneModel(draft)
     const events = this.events
     const caseEngine = this.caseEngine
@@ -59,10 +72,9 @@ export class PhaserGameEngineAdapter implements GameEngine {
 
     await new Promise<void>((resolve, reject) => {
       class CaseScene extends Phaser.Scene {
-        private player!: Phaser.GameObjects.Arc
-        private body!: Phaser.Physics.Arcade.Body
+        private players: Array<{ index: 1 | 2; shape: Phaser.GameObjects.Arc; body: Phaser.Physics.Arcade.Body; carryingOxygen: boolean }> = []
         private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
-        private carryingOxygen = false
+        private wasd!: Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
 
         constructor() { super('case-runtime') }
 
@@ -81,28 +93,38 @@ export class PhaserGameEngineAdapter implements GameEngine {
               )
               platforms.add(rectangle)
             }
-            this.player = this.add.circle(
-              model.spawn.x * model.tileSize + model.tileSize / 2,
-              model.spawn.y * model.tileSize + model.tileSize / 2,
-              Math.max(4, model.tileSize * 0.38),
-              0xe84b5f,
-            )
-            this.physics.add.existing(this.player)
-            this.body = this.player.body as Phaser.Physics.Arcade.Body
-            this.body.setCollideWorldBounds(true).setBounce(0.05)
-            this.physics.add.collider(this.player, platforms)
+            this.players.push(this.createPlayer(1, model.spawn.x, model.spawn.y, 0xe84b5f, platforms))
+            if (options.twoPlayer) this.players.push(this.createPlayer(2, model.spawn.x + 1, model.spawn.y, 0x7bc7ff, platforms))
             this.cursors = this.input.keyboard!.createCursorKeys()
+            this.wasd = this.input.keyboard!.addKeys('W,A,D') as Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
 
             for (const node of model.nodes) this.createNode(node, model.tileSize)
             this.add.text(14, 12, draft.metadata.title || '病例试玩', {
               color: '#edf5ff', fontFamily: 'Microsoft YaHei, sans-serif', fontSize: '16px',
             }).setScrollFactor(0)
+            const canvas = this.game.canvas
+            canvas.setAttribute('role', 'application')
+            canvas.setAttribute('aria-label', `${draft.metadata.title} Phaser 病例场景`)
             events.emit('state-changed', 'playing')
             events.emit('case-updated', caseEngine!.getSnapshot())
             resolve()
           } catch (cause) {
             reject(cause)
           }
+        }
+
+        private createPlayer(index: 1 | 2, tileX: number, tileY: number, color: number, platforms: Phaser.Physics.Arcade.StaticGroup) {
+          const shape = this.add.circle(
+            tileX * model.tileSize + model.tileSize / 2,
+            tileY * model.tileSize + model.tileSize / 2,
+            Math.max(4, model.tileSize * 0.38),
+            color,
+          )
+          this.physics.add.existing(shape)
+          const body = shape.body as Phaser.Physics.Arcade.Body
+          body.setCollideWorldBounds(true).setBounce(0.05)
+          this.physics.add.collider(shape, platforms)
+          return { index, shape, body, carryingOxygen: false }
         }
 
         private createNode(node: PhaserSceneModel['nodes'][number], tileSize: number): void {
@@ -113,25 +135,30 @@ export class PhaserGameEngineAdapter implements GameEngine {
             NODE_COLORS[node.kind],
           )
           this.physics.add.existing(marker, true)
-          this.physics.add.overlap(this.player, marker, () => {
-            if (!caseEngine?.isActive()) return
-            if (node.kind === 'oxygen-source') this.carryingOxygen = true
-            if (node.kind === 'target-tissue' && this.carryingOxygen) {
-              if (caseEngine!.dispatch({ type: 'oxygenDelivered', amount: 12, nodeId: node.id })) this.carryingOxygen = false
-            }
-            if (node.kind === 'infection-site') {
-              caseEngine!.dispatch({ type: 'infectionCleared', amount: 20, nodeId: node.id })
-              marker.setAlpha(0.25)
-            }
-          })
+          for (const player of this.players) {
+            this.physics.add.overlap(player.shape, marker, () => {
+              if (!caseEngine?.isActive()) return
+              if (node.kind === 'oxygen-source') player.carryingOxygen = true
+              if (node.kind === 'target-tissue' && player.carryingOxygen) {
+                if (caseEngine.dispatch({ type: 'oxygenDelivered', amount: 12, nodeId: node.id, source: 'player' })) player.carryingOxygen = false
+              }
+              if (node.kind === 'infection-site') {
+                if (caseEngine.dispatch({ type: 'infectionCleared', amount: 20, nodeId: node.id, source: 'player' })) marker.setAlpha(0.25)
+              }
+            })
+          }
         }
 
         override update(_time: number, delta: number): void {
-          const left = this.cursors.left.isDown || pressed.has('left')
-          const right = this.cursors.right.isDown || pressed.has('right')
-          const jump = Phaser.Input.Keyboard.JustDown(this.cursors.up) || pressed.has('jump')
-          this.body.setVelocityX(left ? -150 : right ? 150 : 0)
-          if (jump && this.body.blocked.down) this.body.setVelocityY(-310)
+          for (const player of this.players) {
+            const actions = pressed.get(player.index)!
+            const left = player.index === 1 ? this.cursors.left.isDown || actions.has('left') : this.wasd.A.isDown || actions.has('left')
+            const right = player.index === 1 ? this.cursors.right.isDown || actions.has('right') : this.wasd.D.isDown || actions.has('right')
+            const jumpKey = player.index === 1 ? this.cursors.up : this.wasd.W
+            const jump = Phaser.Input.Keyboard.JustDown(jumpKey) || actions.has('jump')
+            player.body.setVelocityX(left ? -150 : right ? 150 : 0)
+            if (jump && player.body.blocked.down) player.body.setVelocityY(-310)
+          }
           tickRuntime(delta)
         }
       }
@@ -147,11 +174,15 @@ export class PhaserGameEngineAdapter implements GameEngine {
         scene: [CaseScene],
       })
     })
+    if (draft.caseConfig.allowedEvents.length > 0) void this.requestDirector(1)
   }
 
   private tick(deltaMs: number): void {
     if (!this.caseEngine?.isActive()) return
+    const crisisBefore = this.caseEngine.getCrisisSnapshot()
     this.caseEngine.update(Math.min(deltaMs, 100) / 1000)
+    const crisisAfter = this.caseEngine.getCrisisSnapshot()
+    if (crisisBefore && !crisisAfter && this.directorPhase === 1 && !this.directorPending) void this.requestDirector(2)
     const snapshot = this.caseEngine.getSnapshot()
     this.events.emit('case-updated', snapshot)
     if (this.terminalEmitted) return
@@ -166,6 +197,41 @@ export class PhaserGameEngineAdapter implements GameEngine {
     }
   }
 
+  private async requestDirector(phase: 1 | 2): Promise<void> {
+    const engineAtRequest = this.caseEngine
+    const config = this.draft?.caseConfig
+    if (!engineAtRequest || !config || this.directorPending || this.directorPhase >= phase) return
+    const validTargetNodes = Array.from(new Set([
+      ...config.goals.oxygenRoutes.flatMap(route => route.targetIds),
+      ...config.goals.infection.nodeIds,
+    ]))
+    if (config.allowedEvents.length === 0 || validTargetNodes.length === 0) return
+    const snapshot = engineAtRequest.getSnapshot()
+    const context: DirectorContext = {
+      schemaVersion: 1,
+      levelId: this.draft!.id,
+      mode: config.primaryCell === 'coop' ? 'coop' : 'single',
+      primaryCell: config.primaryCell === 'wbc' ? 'wbc' : 'rbc',
+      phase,
+      runId: this.directorRunId,
+      vitals: snapshot.vitals,
+      performance: { deaths: 0, elapsedMs: snapshot.elapsedMs },
+      allowedEvents: config.allowedEvents,
+      validTargetNodes,
+    }
+    this.directorPending = true
+    this.events.emit('director-pending', true)
+    try {
+      const decision = await this.directorClient.nextPlan(context)
+      if (this.caseEngine !== engineAtRequest || !engineAtRequest.startCrisis(decision.plan, decision.source)) return
+      this.directorPhase = phase
+      this.events.emit('director-decision', { ...decision, phase, requestedAt: new Date().toISOString() })
+    } finally {
+      this.directorPending = false
+      this.events.emit('director-pending', false)
+    }
+  }
+
   pause(): void { this.game?.scene.pause('case-runtime'); this.events.emit('state-changed', 'paused') }
   resume(): void { this.game?.scene.resume('case-runtime'); this.events.emit('state-changed', 'playing') }
   retry(): void { if (this.draft) void this.loadCaseDraft(this.draft, this.options) }
@@ -174,9 +240,11 @@ export class PhaserGameEngineAdapter implements GameEngine {
   dispatch(command: GameCommand): void {
     if (command.type === 'pause') return this.pause()
     if (command.type === 'resume') return this.resume()
-    if (command.type !== 'input' || command.player !== 1) return
-    if (command.pressed) this.pressed.add(command.action)
-    else this.pressed.delete(command.action)
+    if (command.type !== 'input') return
+    const actions = this.pressed.get(command.player)
+    if (!actions) return
+    if (command.pressed) actions.add(command.action)
+    else actions.delete(command.action)
   }
   subscribe<K extends keyof GameEngineEventMap>(event: K, listener: GameEngineEventMap[K]): () => void {
     return this.events.subscribe(event, listener)

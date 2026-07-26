@@ -10,7 +10,13 @@ import { useGameUiStore } from './stores/game-ui'
 import CaseHud from './components/CaseHud.vue'
 import DirectorCrisisCard from './components/DirectorCrisisCard.vue'
 import CaseCampaignPanel from './components/CaseCampaignPanel.vue'
-import type { OfficialCaseChapter } from '@/shared/content/official-cases'
+import CaseResultPanel from './components/CaseResultPanel.vue'
+import OnboardingPanel from './components/OnboardingPanel.vue'
+import { OFFICIAL_CASES, type OfficialCaseChapter } from '@/shared/content/official-cases'
+import type { DailyCase } from './services/DailyCaseService'
+import { CaseProgressRepository } from './services/CaseProgressRepository'
+import type { CaseDraft } from '@/shared/models/case-draft'
+import type { CaseResult } from '@/shared/types/case'
 import { bindLegacyMotion } from './motion/legacy-motion'
 import { observeReducedMotion } from './motion/reduced-motion'
 import './styles/motion.css'
@@ -22,6 +28,9 @@ const usePhaserRuntime = query.get('engine') === 'phaser'
 const unsubscribers: Array<() => void> = []
 const previewTitle = ref('')
 const previewError = ref('')
+const caseResult = ref<CaseResult | null>(null)
+const currentDraft = ref<CaseDraft | null>(null)
+const showOnboarding = ref(!isPreviewMode && localStorage.getItem('cellQuest_onboardingVersion') !== '1')
 let engine: GameEngine | null = null
 let previewSession: PreviewSession | null = null
 let motionBinding: ReturnType<typeof bindLegacyMotion> | null = null
@@ -40,6 +49,7 @@ async function startPreviewIfRequested(): Promise<void> {
     previewError.value = parsed.error
     return
   }
+  currentDraft.value = parsed.value.draft
   previewTitle.value = parsed.value.draft.metadata.title || '未命名病例'
   try {
     if (usePhaserRuntime) {
@@ -62,13 +72,43 @@ async function startPreviewIfRequested(): Promise<void> {
   }
 }
 
-function startOfficialCase(officialCase: OfficialCaseChapter): void {
-  const primaryCell = officialCase.draft.caseConfig?.primaryCell ?? 'rbc'
+function openDraftInPhaser(draft: CaseDraft): void {
+  const primaryCell = draft.caseConfig?.primaryCell ?? 'rbc'
   sessionStorage.setItem('cellQuest_previewDraft', JSON.stringify({
-    draft: officialCase.draft,
+    draft,
     options: { role: primaryCell, start: { type: 'full' }, timestamp: Date.now() },
   }))
   window.location.assign('/?preview=1&engine=phaser')
+}
+
+function startOfficialCase(officialCase: OfficialCaseChapter): void {
+  openDraftInPhaser(officialCase.draft)
+}
+
+function startDailyCase(dailyCase: DailyCase): void {
+  openDraftInPhaser(dailyCase.draft)
+}
+
+function completeOnboarding(): void {
+  localStorage.setItem('cellQuest_onboardingVersion', '1')
+  showOnboarding.value = false
+  startOfficialCase(OFFICIAL_CASES[0]!)
+}
+
+function finishCase(result: CaseResult): void {
+  caseResult.value = result
+  if (!currentDraft.value) return
+  const events = store.directorHistory.map(entry => entry.plan.eventId)
+  new CaseProgressRepository(localStorage).record(currentDraft.value.id, result, events)
+}
+
+function replayCase(): void {
+  caseResult.value = null
+  engine?.retry()
+}
+
+function returnToCampaign(): void {
+  window.location.assign('/')
 }
 
 onMounted(async () => {
@@ -87,6 +127,8 @@ onMounted(async () => {
     engine.subscribe('case-updated', store.updateCaseHud),
     engine.subscribe('director-pending', store.setDirectorPending),
     engine.subscribe('director-decision', store.addDirectorDecision),
+    engine.subscribe('case-completed', finishCase),
+    engine.subscribe('case-failed', finishCase),
   )
   if (!usePhaserRuntime) {
     motionPreference = observeReducedMotion(value => { reducedMotion = value })
@@ -108,12 +150,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <CaseCampaignPanel v-if="!isPreviewMode" @start="startOfficialCase" />
-  <div
-    v-if="usePhaserRuntime"
-    id="phaser-case-runtime"
-    data-testid="phaser-case-runtime"
-  />
+  <CaseCampaignPanel v-if="!isPreviewMode" @start="startOfficialCase" @daily="startDailyCase" />
+  <OnboardingPanel v-if="showOnboarding" @complete="completeOnboarding" />
+  <div v-if="usePhaserRuntime" id="phaser-case-runtime" data-testid="phaser-case-runtime" />
   <div v-if="previewTitle" class="case-preview-banner" data-testid="case-preview-banner">
     正在试玩：{{ previewTitle }}
   </div>
@@ -123,7 +162,16 @@ onBeforeUnmount(() => {
     :entry="store.directorHistory[store.directorHistory.length - 1]!"
   />
   <CaseHud v-if="store.caseSnapshot" :snapshot="store.caseSnapshot" />
-  <div v-else class="vue-migration-root" aria-hidden="true" />
+  <CaseResultPanel
+    v-if="caseResult && currentDraft"
+    :title="currentDraft.metadata.title"
+    :result="caseResult"
+    :director-events="store.directorHistory.map(entry => entry.plan.eventId)"
+    :learning-takeaway="currentDraft.caseConfig?.education.topic ?? '维持患者指标稳定需要运输与防御协作。'"
+    @replay="replayCase"
+    @home="returnToCampaign"
+  />
+  <div v-else-if="!store.caseSnapshot" class="vue-migration-root" aria-hidden="true" />
 </template>
 
 <style scoped>
