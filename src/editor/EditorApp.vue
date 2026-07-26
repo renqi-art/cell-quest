@@ -8,12 +8,14 @@ import CaseInspector from './components/CaseInspector.vue'
 import CaseMapCanvas from './components/CaseMapCanvas.vue'
 import CasePlaytestPanel from './components/CasePlaytestPanel.vue'
 import CaseValidationPanel from './components/CaseValidationPanel.vue'
+import CaseSettingsPanel from './components/CaseSettingsPanel.vue'
 import CaseShareDialog from './components/CaseShareDialog.vue'
 import AiCaseGeneratorDialog from './components/AiCaseGeneratorDialog.vue'
 import './styles/case-designer.css'
 import type { EditorTool } from '@/editor/types/editor-tools'
 
 const store = useCaseEditorStore()
+store.initialize()
 const activeTool = ref<EditorTool>('select')
 const showShareDialog = ref(false)
 const showAiDialog = ref(false)
@@ -36,6 +38,7 @@ const selectedNode = computed(() =>
           <CaseMapCanvas :active-tool="activeTool" />
         </main>
         <aside class="editor-sidebar" aria-label="属性与校验">
+          <CaseSettingsPanel />
           <CaseInspector :selected-node="selectedNode" />
           <CaseValidationPanel />
         </aside>

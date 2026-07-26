@@ -46,35 +46,47 @@ export class CaseDraftRepository {
   }
 
   migrateLegacySlot(slot: number): void {
-    const raw = this.storage.get(LEGACY_CUSTOM_LEVELS)
-    if (!raw) return
+    const sourceKeys = [`cellQuest_customLevels_${slot}`, LEGACY_CUSTOM_LEVELS]
+    const current = this.list(slot)
+    const existingIds = new Set(current.map(draft => draft.id))
+    const migrated: CaseDraft[] = []
+    const consumedKeys: string[] = []
 
-    try {
-      const legacyLevels: Array<{ name: string; map: string[]; width: number; height: number }> = JSON.parse(raw)
-      if (!Array.isArray(legacyLevels)) return
-
-      const existing = new Set(this.list(slot).map(d => d.id))
-
-      for (const level of legacyLevels) {
-        const legacyId = `legacy-${level.name}`
-        if (existing.has(legacyId)) continue
-        existing.add(legacyId)
-
-        const draft: CaseDraft = {
-          version: 1,
-          mode: 'classic',
-          id: legacyId,
-          revision: 1,
-          metadata: { title: level.name, author: 'legacy', difficulty: 'standard', tags: [], icon: '🗺️' },
-          map: level.map,
-          nodes: [],
-          caseConfig: null,
-          editorMeta: { source: 'import', updatedAt: new Date().toISOString() },
+    for (const key of sourceKeys) {
+      const raw = this.storage.get(key)
+      if (!raw) continue
+      try {
+        const levels = JSON.parse(raw) as unknown
+        if (!Array.isArray(levels)) continue
+        consumedKeys.push(key)
+        for (const value of levels) {
+          if (typeof value !== 'object' || value === null) continue
+          const level = value as { name?: unknown; map?: unknown }
+          if (typeof level.name !== 'string' || !Array.isArray(level.map) || !level.map.every(row => typeof row === 'string')) continue
+          const id = `legacy-${level.name}`
+          if (existingIds.has(id)) continue
+          existingIds.add(id)
+          migrated.push({
+            version: 1,
+            mode: 'classic',
+            id,
+            revision: 1,
+            metadata: { title: level.name, author: 'legacy', difficulty: 'standard', tags: [], icon: '🗺️' },
+            map: level.map,
+            nodes: [],
+            caseConfig: null,
+            editorMeta: { source: 'import', updatedAt: new Date().toISOString() },
+          })
         }
-        this.saveNamedDraft(slot, draft)
+      } catch {
+        // Keep malformed legacy data untouched so it can be recovered manually.
       }
-    } catch {
-      // corrupted legacy data — skip
+    }
+
+    if (migrated.length > 0) this.writeCollection(slot, [...current, ...migrated])
+    const savedIds = new Set(this.list(slot).map(draft => draft.id))
+    if (migrated.every(draft => savedIds.has(draft.id))) {
+      for (const key of consumedKeys) this.storage.remove(key)
     }
   }
 

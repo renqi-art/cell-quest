@@ -46,12 +46,17 @@ test('hub tools respond without page errors', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('editor templates load without reference errors', async ({ page }) => {
+test('Vue editor creates a validated official case template without page errors', async ({ page }) => {
   const errors = capturePageErrors(page);
 
   await page.goto('/editor.html');
-  await page.locator('#templateSelect').selectOption('basicPlatform');
+  await page.getByTestId('wizard-next').click();
+  await page.locator('[data-template="rbc-transport"]').click();
+  await page.getByTestId('wizard-next').click();
+  await page.getByTestId('wizard-next').click();
+  await page.getByTestId('create-case').click();
 
-  await expect(page.locator('#levelName')).toHaveValue('基础平台');
+  await expect(page.getByTestId('case-title')).toHaveValue('氧气运输');
+  await expect(page.getByTestId('validation-summary')).toContainText('0 个错误');
   expect(errors).toEqual([]);
 });

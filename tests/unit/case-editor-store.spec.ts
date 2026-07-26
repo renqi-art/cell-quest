@@ -48,4 +48,30 @@ describe('case editor store workflows', () => {
 
     expect(store.diagnostics.some(item => item.code === 'REQUIRED_NODE_UNREACHABLE')).toBe(true)
   })
+
+  it('updates case metadata through undoable commands', () => {
+    const store = useCaseEditorStore()
+    store.newDraft('rbc')
+    store.updateMetadata({ title: '新病例', author: '设计者' })
+    expect(store.draft?.metadata.title).toBe('新病例')
+    store.undo()
+    expect(store.draft?.metadata.title).toBe('')
+  })
+
+
+  it('initializes the active slot and opens migrated legacy content', () => {
+    localStorage.setItem('cellQuest_currentSlot', '2')
+    localStorage.setItem('cellQuest_customLevels_2', JSON.stringify([{
+      name: '旧病例',
+      map: ['###'],
+    }]))
+    const store = useCaseEditorStore()
+
+    store.initialize()
+
+    expect(store.currentSlot).toBe(2)
+    expect(store.draft?.metadata.title).toBe('旧病例')
+    expect(localStorage.getItem('cellQuest_customLevels_2')).toBeNull()
+  })
+
 })

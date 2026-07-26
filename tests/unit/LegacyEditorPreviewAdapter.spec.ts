@@ -3,6 +3,7 @@ import { LegacyEditorPreviewAdapter } from '@/editor/services/LegacyEditorPrevie
 import type { EditorPreviewGateway } from '@/editor/services/EditorPreviewGateway'
 import type { CaseDraft } from '@/shared/models/case-draft'
 import type { GameEngine } from '@/game/bridge/GameEngine'
+import type { CaseConfig } from '@/shared/types/case'
 
 function makeMockEngine() {
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
@@ -105,7 +106,7 @@ describe('LegacyEditorPreviewAdapter', () => {
     engine = makeMockEngine()
     registry = makeMockRegistry()
     adapter = new LegacyEditorPreviewAdapter(
-      engine as unknown as GameEngine & { setCaseConfig: (cfg: unknown) => void },
+      engine as unknown as GameEngine & { setCaseConfig: (cfg: CaseConfig) => void },
       registry
     )
   })

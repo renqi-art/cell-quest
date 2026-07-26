@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import NewCaseWizard from '@/editor/components/NewCaseWizard.vue'
+import { useCaseEditorStore } from '@/editor/stores/case-editor'
 
 describe('NewCaseWizard', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -16,4 +17,18 @@ describe('NewCaseWizard', () => {
     const wrapper = mount(NewCaseWizard)
     expect(wrapper.text()).toContain('红细胞')
   })
+
+  it('creates an official oxygen transport template through the wizard', async () => {
+    const wrapper = mount(NewCaseWizard)
+    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
+    await wrapper.get('[data-template="rbc-transport"]').trigger('click')
+    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
+    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
+    await wrapper.get('[data-testid="create-case"]').trigger('click')
+
+    const store = useCaseEditorStore()
+    expect(store.draft?.metadata.title).toBe('氧气运输')
+    expect(store.diagnostics.filter(item => item.severity === 'error')).toEqual([])
+  })
+
 })

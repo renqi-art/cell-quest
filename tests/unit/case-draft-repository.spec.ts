@@ -91,4 +91,16 @@ describe('CaseDraftRepository', () => {
     const list = repo.list(1)
     expect(list).toEqual([])
   })
+
+  it('merges slot-specific and global legacy levels then removes migrated keys', () => {
+    adapter.set('cellQuest_customLevels_0', JSON.stringify([{ name: 'current level', map: ['###'] }]))
+    adapter.set('cellQuest_customLevels', JSON.stringify([{ name: 'legacy level', map: ['   '] }]))
+
+    repo.migrateLegacySlot(0)
+
+    expect(repo.list(0).map(item => item.metadata.title)).toEqual(['current level', 'legacy level'])
+    expect(adapter.get('cellQuest_customLevels_0')).toBeNull()
+    expect(adapter.get('cellQuest_customLevels')).toBeNull()
+  })
+
 })

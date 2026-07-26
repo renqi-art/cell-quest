@@ -1,6 +1,7 @@
 import type { GameEngine } from '@/game/bridge/GameEngine'
 import type { LoadLevelOptions, CellType } from '@/shared/types/game'
 import type { CaseDraft } from '@/shared/models/case-draft'
+import type { CaseConfig } from '@/shared/types/case'
 import type { EditorPreviewGateway, PreviewOptions, PreviewSession, CasePlaytestReport } from './EditorPreviewGateway'
 
 /** Legacy level format that game.js Level constructor understands */
@@ -12,7 +13,7 @@ interface LegacyLevelData {
 }
 
 /** Signature of the preview registration hook on window.CellQuestLegacy */
-interface PreviewLevelRegistry {
+export interface PreviewLevelRegistry {
   registerPreviewLevel(level: LegacyLevelData): string
   unregisterPreviewLevel(id: string): void
 }
@@ -21,7 +22,7 @@ export class LegacyEditorPreviewAdapter implements EditorPreviewGateway {
   private readonly disposers = new Map<string, () => void>()
 
   constructor(
-    private readonly engine: GameEngine & { setCaseConfig?: (cfg: unknown) => void },
+    private readonly engine: GameEngine & { setCaseConfig?: (cfg: CaseConfig) => void },
     private readonly registry: PreviewLevelRegistry
   ) {}
 

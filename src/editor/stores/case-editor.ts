@@ -6,10 +6,11 @@ import type { CaseCommand } from '@/editor/domain/case-commands'
 import { LocalStorageAdapter } from '@/shared/storage/StorageAdapter'
 import { CaseDraftRepository } from '@/shared/services/CaseDraftRepository'
 import { createCaseDraft } from '@/shared/services/CaseSchema'
-import type { CaseNode, PrimaryCell } from '@/shared/types/case'
+import type { CaseMetadata, CaseNode, PrimaryCell } from '@/shared/types/case'
 import { validateCaseDraft } from '@/shared/services/CaseValidationService'
 import { decodeCaseCode, encodeCaseCode } from '@/shared/services/CaseCodec'
 import type { PublishedCase } from '@/shared/services/CaseCodec'
+import { createCaseTemplate, type TemplateId } from '@/shared/models/case-templates'
 
 type SaveState = 'idle' | 'saving' | 'error'
 export type EditorNodeKind = CaseNode['kind']
@@ -41,10 +42,26 @@ export const useCaseEditorStore = defineStore('case-editor', () => {
 
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
+  let initialized = false
+
+  function initialize(): void {
+    if (initialized) return
+    initialized = true
+    const storedSlot = Number(storage.get('cellQuest_currentSlot'))
+    const slot = Number.isInteger(storedSlot) && storedSlot >= 0 && storedSlot <= 99 ? storedSlot : 0
+    currentSlot.value = slot
+    repository.migrateLegacySlot(slot)
+    const firstDraft = repository.list(slot)[0]
+    if (firstDraft) applyNewDraft(firstDraft)
+  }
 
   function newDraft(primaryCell: PrimaryCell): void {
     const created = createCaseDraft({ primaryCell })
     applyNewDraft(created)
+  }
+
+  function newTemplate(templateId: TemplateId): void {
+    applyNewDraft(createCaseTemplate(templateId))
   }
 
   function addNode(kind: EditorNodeKind, x: number, y: number): CaseNode {
@@ -82,6 +99,14 @@ export const useCaseEditorStore = defineStore('case-editor', () => {
 
   function selectNode(id: string | null): void {
     selectedNodeId.value = id
+  }
+
+  function updateMetadata(patch: Partial<CaseMetadata>): void {
+    if (!draft.value) return
+    executeCommand({
+      type: 'replace-metadata',
+      metadata: { ...draft.value.metadata, ...patch },
+    })
   }
 
   function exportCaseCode(): string {
@@ -175,7 +200,9 @@ export const useCaseEditorStore = defineStore('case-editor', () => {
     saveState: readonly(saveState),
     selectedNodeId: readonly(selectedNodeId),
     diagnostics,
+    initialize,
     newDraft,
+    newTemplate,
     openDraft,
     executeCommand,
     undo,
@@ -183,6 +210,7 @@ export const useCaseEditorStore = defineStore('case-editor', () => {
     saveNow,
     addNode,
     selectNode,
+    updateMetadata,
     exportCaseCode,
     importCaseCode,
     repository,

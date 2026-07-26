@@ -1,4 +1,5 @@
 import type { CaseNode, CaseConfig, CaseDraft } from '@/shared/models/case-draft'
+import type { CaseMetadata } from '@/shared/types/case'
 
 export interface CellChange {
   readonly x: number
@@ -12,6 +13,7 @@ export type CaseCommand =
   | { readonly type: 'move-node'; readonly id: string; readonly x: number; readonly y: number }
   | { readonly type: 'remove-node'; readonly id: string }
   | { readonly type: 'replace-config'; readonly config: CaseConfig }
+  | { readonly type: 'replace-metadata'; readonly metadata: CaseMetadata }
   | { readonly type: 'replace-draft'; readonly draft: CaseDraft; readonly reason: 'import' | 'ai-patch' | 'template' }
 
 export class CaseCommandError extends Error {
@@ -58,6 +60,10 @@ export function applyCaseCommand(draft: CaseDraft, command: CaseCommand): CaseDr
 
     case 'replace-config': {
       return { ...draft, caseConfig: command.config, revision: draft.revision + 1, editorMeta: { ...draft.editorMeta, updatedAt: new Date().toISOString() } }
+    }
+
+    case 'replace-metadata': {
+      return { ...draft, metadata: command.metadata, revision: draft.revision + 1, editorMeta: { ...draft.editorMeta, updatedAt: new Date().toISOString() } }
     }
 
     case 'replace-draft': {
