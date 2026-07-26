@@ -97,13 +97,43 @@ export function bindLegacyMotion(
 ): LegacyMotionBinding {
   const observers: MutationObserver[] = []
   const activeControls = new Set<MotionControl>()
+  const overlayControls = new Map<string, MotionControl[]>()
 
   const play = (overlay: HTMLElement): void => {
-    for (const control of playOverlayEntrance(overlay, reducedMotion())) {
+    // Cancel any existing animations for this overlay (prevents rapid show/hide stacking)
+    const existing = overlayControls.get(overlay.id)
+    if (existing) {
+      for (const control of existing) {
+        control.cancel()
+        activeControls.delete(control)
+      }
+    }
+
+    const controls = playOverlayEntrance(overlay, reducedMotion())
+    overlayControls.set(overlay.id, controls)
+
+    for (const control of controls) {
       activeControls.add(control)
       void control.then(
-        () => activeControls.delete(control),
-        () => activeControls.delete(control),
+        () => {
+          activeControls.delete(control)
+          // Remove from overlay tracking once done
+          const tracked = overlayControls.get(overlay.id)
+          if (tracked) {
+            const idx = tracked.indexOf(control)
+            if (idx >= 0) tracked.splice(idx, 1)
+            if (tracked.length === 0) overlayControls.delete(overlay.id)
+          }
+        },
+        () => {
+          activeControls.delete(control)
+          const tracked = overlayControls.get(overlay.id)
+          if (tracked) {
+            const idx = tracked.indexOf(control)
+            if (idx >= 0) tracked.splice(idx, 1)
+            if (tracked.length === 0) overlayControls.delete(overlay.id)
+          }
+        },
       )
     }
   }
@@ -130,6 +160,7 @@ export function bindLegacyMotion(
       observers.forEach((observer) => observer.disconnect())
       activeControls.forEach((control) => control.cancel())
       activeControls.clear()
+      overlayControls.clear()
     },
   }
 }

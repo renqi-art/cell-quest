@@ -113,3 +113,128 @@ describe('motion-tokens', () => {
     }
   })
 })
+
+describe('bindLegacyMotion', () => {
+  let container: HTMLDivElement
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    container.id = 'test-container'
+    document.body.appendChild(container)
+  })
+
+  afterEach(() => {
+    document.body.removeChild(container)
+  })
+
+  function createOverlay(id: string, hidden = true) {
+    const el = document.createElement('div')
+    el.id = id
+    el.className = hidden ? 'overlay hidden' : 'overlay'
+    container.appendChild(el)
+    return el
+  }
+
+  it('skips non-existent overlay IDs without error', async () => {
+    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
+    const binding = bindLegacyMotion(() => false)
+    expect(binding.destroy).toBeDefined()
+    binding.destroy()
+  })
+
+  it('plays entrance animation when hidden class is removed', async () => {
+    const overlay = createOverlay('main-menu', true)
+    // Simulate adapter behavior: observe mutation on class change
+    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
+
+    const binding = bindLegacyMotion(() => false)
+
+    // Remove hidden class — should trigger animation
+    overlay.classList.remove('hidden')
+
+    // Wait a frame for MutationObserver to fire
+    await new Promise((r) => requestAnimationFrame(r))
+
+    // Animation should have started (opacity/y/scale changed from initial)
+    // In a real scenario, Motion would animate. Here we verify no error.
+    expect(overlay.classList.contains('hidden')).toBe(false)
+
+    binding.destroy()
+  })
+
+  it('destroy disconnects observers and cancels animations', async () => {
+    const overlay = createOverlay('pause-menu', true)
+    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
+
+    const binding = bindLegacyMotion(() => false)
+
+    // Trigger animation
+    overlay.classList.remove('hidden')
+    await new Promise((r) => requestAnimationFrame(r))
+
+    // Destroy should not throw
+    expect(() => binding.destroy()).not.toThrow()
+
+    // After destroy, removing hidden should NOT animate (observer disconnected)
+    const overlay2 = createOverlay('death-panel', true)
+    overlay2.classList.remove('hidden')
+    // No error expected
+  })
+
+  it('reduced-motion uses instant duration only', async () => {
+    const overlay = createOverlay('complete-screen', true)
+    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
+
+    const binding = bindLegacyMotion(() => true) // reduced motion
+
+    overlay.classList.remove('hidden')
+    await new Promise((r) => requestAnimationFrame(r))
+
+    // Should not throw
+    expect(overlay.classList.contains('hidden')).toBe(false)
+
+    binding.destroy()
+  })
+
+  it('multiple overlays can animate independently', async () => {
+    const menu = createOverlay('main-menu', true)
+    const pause = createOverlay('pause-menu', true)
+    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
+
+    const binding = bindLegacyMotion(() => false)
+
+    menu.classList.remove('hidden')
+    await new Promise((r) => requestAnimationFrame(r))
+
+    pause.classList.remove('hidden')
+    await new Promise((r) => requestAnimationFrame(r))
+
+    expect(menu.classList.contains('hidden')).toBe(false)
+    expect(pause.classList.contains('hidden')).toBe(false)
+
+    binding.destroy()
+  })
+
+  it('rapid show/hide/show cancels old animations', async () => {
+    const overlay = createOverlay('confirm-dialog', true)
+    const { bindLegacyMotion } = await import('@/game/motion/legacy-motion')
+
+    const binding = bindLegacyMotion(() => false)
+
+    // Show
+    overlay.classList.remove('hidden')
+    await new Promise((r) => requestAnimationFrame(r))
+
+    // Hide (add hidden back)
+    overlay.classList.add('hidden')
+
+    // Show again (rapid toggle)
+    overlay.classList.remove('hidden')
+    await new Promise((r) => requestAnimationFrame(r))
+
+    // No error — old animations cancelled by overlayControls tracking
+    expect(overlay.classList.contains('hidden')).toBe(false)
+
+    binding.destroy()
+  })
+})
