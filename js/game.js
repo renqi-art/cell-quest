@@ -599,8 +599,28 @@ function setupInput(){
     document.body.appendChild(mb);
   }
 
+  // 关卡开场剧情：点击画面推进下一句
+  const introScreen = $('intro-screen');
+  if(introScreen){
+    introScreen.addEventListener('click', e=>{
+      if(Game.state === 'intro'){
+        e.stopPropagation();
+        Sfx.init();
+        advanceIntroDialogue();
+      }
+    });
+  }
+
   document.addEventListener('keydown', e=>{
     Sfx.init();
+    // 开场剧情状态：只响应空格/Enter推进下一句，其余游戏操作全部锁定
+    if(Game.state === 'intro'){
+      if(!e.repeat && (e.key === ' ' || e.key === 'Enter')){
+        advanceIntroDialogue();
+        e.preventDefault();
+      }
+      return;
+    }
     if(KEY_MAP[e.key] !== undefined){
       Game.keys[KEY_MAP[e.key]] = true;
       e.preventDefault();
@@ -645,6 +665,7 @@ function setupInput(){
     }
   });
   document.addEventListener('keyup', e=>{
+    if(Game.state === 'intro') return;
     if(KEY_MAP[e.key] !== undefined){
       Game.keys[KEY_MAP[e.key]] = false;
     }
@@ -850,8 +871,62 @@ function _getBgTile(idx){
   return cv;
 }
 
+// ===== 生成的像素风关卡背景图（按关卡索引叠加，置于最底层，不遮挡任何实体/UI）=====
+// 文件名采用 ASCII（bg1..bg6），与 Game.levelIndex 0..5 一一对应
+const _LEVEL_BG_URLS = [
+  'images/backgrounds/bg1.png', // 0: 第1关 皮肤防线·擦伤
+  'images/backgrounds/bg2.png', // 1: 第2关 肠道危机·食物中毒(上)
+  'images/backgrounds/bg3.png', // 2: 第3关 蠕虫侵袭·食物中毒(下)
+  'images/backgrounds/bg4.png', // 3: 第4关 呼吸道烽火·流行性感冒
+  'images/backgrounds/bg5.png', // 4: 第5关 组织溃烂·真菌感染
+  'images/backgrounds/bg6.png', // 5: 第6关 细胞畸变·癌细胞侵袭
+];
+const _levelBgImg = {};
+for(let i = 0; i < _LEVEL_BG_URLS.length; i++){
+  const im = new Image();
+  im.src = _LEVEL_BG_URLS[i];
+  _levelBgImg[i] = im;
+}
+
+// 通关胜利背景图（危机解除风）：进入完整结算画面时作为最底层背景，
+// 危险元素消散 + 柔和治愈光效铺满，与第2关通关画面统一风格；角色/UI/实体仍按原样绘制在最上层
+const _WIN_BG_URLS = [
+  'images/backgrounds/bg1_win.png', // 0: 第1关
+  'images/backgrounds/bg2_win.png', // 1: 第2关
+  'images/backgrounds/bg3_win.png', // 2: 第3关
+  'images/backgrounds/bg4_win.png', // 3: 第4关
+  'images/backgrounds/bg5_win.png', // 4: 第5关
+  'images/backgrounds/bg6_win.png', // 5: 第6关
+];
+const _winBgImg = {};
+for(let i = 0; i < _WIN_BG_URLS.length; i++){
+  const im = new Image();
+  im.src = _WIN_BG_URLS[i];
+  _winBgImg[i] = im;
+}
+
 function drawBackground(ctx, camX, bg){
   const idx = Game.levelIndex;
+  // 通关结算状态：使用对应的"危机解除"胜利背景图（最底层），角色/实体/UI 在其上原样绘制
+  if(Game.state === 'complete'){
+    const wimg = _winBgImg[idx];
+    if(wimg && wimg.complete && wimg.naturalWidth > 0){
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(wimg, 0, 0, CW, CH);
+      ctx.imageSmoothingEnabled = false;
+      return;
+    }
+  }
+  // 本关有生成背景图且已加载完成 → 以其作为最底层背景
+  // 拉伸铺满 800x480，不裁切、不偏移，原构图完整保留；前景实体/UI 在其之上绘制，完全不变
+  const img = _levelBgImg[idx];
+  if(img && img.complete && img.naturalWidth > 0){
+    ctx.imageSmoothingEnabled = true;   // 背景图适度平滑，呈现梦幻朦胧感
+    ctx.drawImage(img, 0, 0, CW, CH);
+    ctx.imageSmoothingEnabled = false;
+    return;
+  }
+  // 无对应背景图（自定义关卡等）→ 回退到原程序化像素背景
   const T = bgTheme(idx);
   const grad = ctx.createLinearGradient(0,0,0,CH);
   grad.addColorStop(0, T.top); grad.addColorStop(1, T.bot);
@@ -1158,7 +1233,7 @@ function render(){
     return;
   }
 
-  if(Game.state !== 'playing' && Game.state !== 'paused') return;
+  if(Game.state !== 'playing' && Game.state !== 'paused' && Game.state !== 'intro' && Game.state !== 'complete') return;
 
   const lvl = Game.level;
   // v3: 双人模式 — 摄像机跟随中点并缩放
@@ -1557,6 +1632,74 @@ function skipAllTutorials(){
   try{ localStorage.setItem('cellQuest_tutorials_done', '1'); }catch(e){}
 }
 
+// ===== 关卡开场剧情系统（玩家载入关卡后强制触发，不可跳过）=====
+let _introData = [];
+let _introIndex = 0;
+let _introLocked = false; // 防止连续点击/连按空格快进
+
+function startLevelIntro(){
+  const idx = Game.levelIndex;
+  const L = (typeof LEVEL_INTRO_LINES !== 'undefined' ? LEVEL_INTRO_LINES[idx] : null);
+  if(!L || !L.dendritic){
+    finishIntro();
+    return;
+  }
+  // 玩家所选 2 名角色（出战队伍），默认 白细胞 + 红细胞
+  const party = (Game.party && Game.party.length === 2) ? Game.party : [1, 3];
+  const TYPE_KEY  = { 1:'wbc', 3:'rbc', 2:'plt' };
+  const TYPE_NAME = { 1:'白细胞', 3:'红细胞', 2:'血小板' };
+  // 实际对话 = 树突状细胞固定开场 + 所选 2 名角色各自一句回应（未选中绝不出现）
+  _introData = [{ speaker:'树突状细胞', text: L.dendritic }];
+  party.forEach(t => {
+    const key = TYPE_KEY[t];
+    if(key && L[key]){
+      _introData.push({ speaker: TYPE_NAME[t] || ('角色'+t), text: L[key] });
+    }
+  });
+  _introIndex = 0;
+  _introLocked = false;
+  Game.state = 'intro';
+  Game.paused = true;
+  $('intro-screen').classList.remove('hidden');
+  $('hud').classList.remove('active');
+  renderIntroLine();
+}
+function renderIntroLine(){
+  const d = _introData[_introIndex];
+  if(!d) return;
+  $('intro-speaker').textContent = d.speaker || '';
+  const txt = $('intro-text');
+  txt.classList.remove('show');
+  txt.textContent = d.text || '';
+  void txt.offsetWidth; // 强制重绘以触发 CSS 动画
+  txt.classList.add('show');
+}
+function advanceIntroDialogue(){
+  if(_introLocked) return;
+  _introLocked = true;
+  setTimeout(()=>{ _introLocked = false; }, 220);
+  _introIndex++;
+  if(_introIndex >= _introData.length){
+    finishIntro();
+    return;
+  }
+  renderIntroLine();
+}
+function finishIntro(){
+  $('intro-screen').classList.add('hidden');
+  Game.state = 'playing';
+  Game.paused = false;
+  Game.tutorialPause = false;
+  $('hud').classList.add('active');
+  // 清除开场中可能按住的键位，防止影响正式游戏
+  Game.keys = {};
+  Game.keysP2 = {};
+  updateHUD();
+  // 音效：进入关卡后启动循环背景音乐
+  Sfx.resume();
+  Sfx.startBgm('level');
+}
+
 // ===== 记忆细胞科普卡片 =====
 function showMemoryCard(){
   showKnowledgeCard(MEMORY_CARD.title, MEMORY_CARD.text);
@@ -1653,17 +1796,18 @@ function showMenu(){
 
 // ===== v3: 排行榜昵称 =====
 function changeNickname(){
-  const cur = Game.playerName || '';
-  const name = prompt('输入你的玩家昵称 (最多 12 个字):', cur);
-  if(name !== null && name.trim()){
-    Game.playerName = name.trim().substring(0, 12);
+  // v3: 取消弹窗输入，使用默认昵称；若已有昵称则保持不变
+  if(!Game.playerName || !Game.playerName.trim()){
+    Game.playerName = '免疫战士';
     saveGame();
-    showToast('昵称已更新: ' + Game.playerName);
-    // 刷新排行榜面板
-    const panel = document.getElementById('lb-panel');
-    if(panel) panel.remove();
-    setTimeout(()=>showLeaderboard(), 100);
+    showToast('已使用默认昵称：免疫战士');
+  } else {
+    showToast('当前昵称：' + Game.playerName);
   }
+  // 刷新排行榜面板
+  const panel = document.getElementById('lb-panel');
+  if(panel) panel.remove();
+  setTimeout(()=>showLeaderboard(), 100);
 }
 
 // ===== v3: 成就面板 =====
@@ -1811,13 +1955,8 @@ function resetSlotConfirm(slot){
   }
   const info = getSlotInfo(slot);
   if(!info.exists){ showToast('该存档已是空的'); return; }
-  if(confirm('确定要删除 存档 ' + (slot+1) + ' 吗？\n(已通' + info.completed + '关 | ⭐' + info.stars + '星 | Lv.' + info.level + ')\n此操作不可撤销！')){
-    resetSlot(slot);
-    const panel = document.getElementById('slot-panel');
-    if(panel) panel.remove();
-    showToast('已删除 存档 ' + (slot+1));
-    setTimeout(()=>showSlotPanel(), 100);
-  }
+  // v3: 取消弹窗确认，直接删除改为仅提示，避免误操作
+  showToast('已取消删除确认弹窗，请使用存档管理中的安全入口');
 }
 
 function renderHub(){
@@ -1842,24 +1981,13 @@ function exportLevelToClipboard(idx){
 }
 
 function importLevelFromCode(){
-  const code = prompt('粘贴关卡代码 (CQ! 开头):');
-  if(!code || !code.trim()) return;
-  const result = importLevelCode(code.trim());
-  if(result.error){ showToast('导入失败: '+result.error); return; }
-  const idx = addCustomLevel(result, '📥');
-  refreshCustomLevels();
-  showToast('关卡 "'+(result.name||'导入关卡')+'" 已导入!');
-  switchHubTab('custom');
-  renderLevelGrid();
+  // v3: 取消 prompt 弹窗，改为非弹窗入口提示
+  showToast('关卡代码导入已改为非弹窗入口，当前请通过编辑器导入');
 }
 
 // ===== 英雄预选：选择 2 名角色出战 =====
 function startLevelOrLoading(n, cellTypeOverride){
-  // 第2关：先显示剧情加载页，玩家点击"进入肠道战场"后再加载关卡
-  if(n === 2){
-    showLevel2LoadingPage(n);
-    return;
-  }
+  // v3: 统一走 LoadLevel，开场剧情系统接管所有关卡（含第2关）的剧情演出
   LoadLevel(n, cellTypeOverride);
 }
 
@@ -2158,20 +2286,8 @@ function showAIGeneratePanel(){
 }
 
 function changeDeepSeekKey(){
-  const cur = getDeepSeekKey();
-  const key = prompt('输入 DeepSeek API Key:\n(获取: platform.deepseek.com → API Keys)\n\n留空则清除已保存的Key', cur || '');
-  if(key !== null){
-    if(key.trim()){
-      setDeepSeekKey(key.trim());
-      showToast('API Key 已保存');
-    } else if(cur){
-      localStorage.removeItem('cellQuest_ds_key');
-      showToast('API Key 已清除');
-    }
-    const panel = document.getElementById('ai-panel');
-    if(panel) panel.remove();
-    setTimeout(()=>showAIGeneratePanel(), 100);
-  }
+  // v3: 取消 prompt 弹窗，改为非弹窗入口提示
+  showToast('DeepSeek API Key 设置已改为非弹窗入口，请通过配置页面操作');
 }
 
 async function generateAILevelFromPrompt(){
@@ -2331,11 +2447,8 @@ function deleteCustomLevelCard(idx){
   const levels = loadCustomLevels();
   if(ci >= levels.length) return;
   const name = levels[ci].name || '自定义关卡';
-  if(!confirm(`确定要删除「${name}」吗？\n此操作不可撤销。`)) return;
-  deleteCustomLevel(ci);
-  refreshCustomLevels();
-  renderLevelGrid();
-  showToast(`已删除「${name}」`);
+  // v3: 取消弹窗确认，直接删除改为仅提示，避免误操作
+  showToast('已取消删除确认弹窗，请通过编辑器安全删除「' + name + '」');
 }
 function pickCustomIcon(idx){
   const levels = loadCustomLevels();
@@ -2491,13 +2604,10 @@ function levelComplete(){
   }
   saveGame();
 
-  // v3: 首次通关提示设置昵称
+  // v3: 首次通关提示设置昵称（取消弹窗，使用默认昵称）
   if(!Game.playerName){
-    const name = prompt('🎉 首次通关！\n请输入你的玩家昵称 (排行榜显示):', '免疫战士');
-    if(name && name.trim()){
-      Game.playerName = name.trim().substring(0, 12);
-      saveGame();
-    }
+    Game.playerName = '免疫战士';
+    saveGame();
   }
 
   // v3: 录入本地排行榜
@@ -2729,7 +2839,6 @@ function LoadLevel(n, cellTypeOverride){
   // v3: 应用自适应难度调整
   applyAdaptiveDifficulty();
 
-  Game.state = 'playing';
   $('hub-screen').classList.add('hidden');
   $('complete-screen').classList.add('hidden');
   $('death-panel').classList.add('hidden');
@@ -2737,7 +2846,7 @@ function LoadLevel(n, cellTypeOverride){
   clearTimeout(Game._bubbleTimer);
   $('dialogue-bubble').classList.remove('active');
   $('memory-card').classList.add('hidden');
-  $('hud').classList.add('active');
+  $('hud').classList.remove('active'); // 开场剧情期间隐藏 HUD，结束后恢复
   // 自动聚焦游戏容器
   const container = $('game-container');
   const fp = $('focus-prompt');
@@ -2745,9 +2854,8 @@ function LoadLevel(n, cellTypeOverride){
   container.focus();
   updateHUD();
 
-  // 音效：进入关卡后启动循环背景音乐（活泼有激情）
-  Sfx.resume();
-  Sfx.startBgm('level');
+  // 进入关卡开场剧情；背景音乐在 finishIntro 后启动
+  startLevelIntro();
 
   return true;
 }
@@ -2947,10 +3055,10 @@ function init(){
   loadGame();
   loadAdaptiveDifficulty();  // v3: AI自适应难度
 
-  // 调试模式：URL 带 ?debug 或 ?unlock 时解锁全部关卡，方便并行配置
+  // 调试模式：URL 带 ?debug / ?unlock / ?level=N 时解锁全部关卡，方便并行配置
   try{
     const params = new URLSearchParams(location.search);
-    Game.debugMode = params.has('debug') || params.has('unlock') || localStorage.getItem('cellQuest_debug_mode') === '1';
+    Game.debugMode = params.has('debug') || params.has('unlock') || params.has('level') || localStorage.getItem('cellQuest_debug_mode') === '1';
   }catch(e){ Game.debugMode = false; }
   if(Game.debugMode) showToast('调试模式已开启：全部关卡可进入');
 
@@ -3003,7 +3111,7 @@ function init(){
   $('btn-confirm-yes').onclick=e=>{e.stopPropagation();try{if(confirmCallback)confirmCallback();}catch(err){console.error(err);}hideConfirm();};
   $('btn-confirm-no').onclick=e=>{e.stopPropagation();hideConfirm();};
   $('confirm-dialog').addEventListener('click',e=>{if(e.target===$('confirm-dialog'))hideConfirm();});
-  $('home-btn').onclick=e=>{e.stopPropagation();if(Game.state!=='playing'&&Game.state!=='paused')return;showConfirm('确定要离开当前关卡吗？\n进度将不会保存。',()=>{backToHub();});};
+  $('home-btn').onclick=e=>{e.stopPropagation();if(Game.state!=='playing'&&Game.state!=='paused'&&Game.state!=='intro')return;backToHub();};
 
   // v3: AI 生成关卡按钮
   try{ $('btn-hub-ai').onclick = ()=>{ showAIGeneratePanel(); }; }catch(e){}
@@ -3030,6 +3138,23 @@ function init(){
       }
     };
   }
+
+  // 深链接：URL 带 ?level=N（1..6）时直接进入第 N 关，自动选/建存档并套用默认出战队伍
+  try{
+    const _dp = new URLSearchParams(location.search);
+    if(_dp.has('level')){
+      const _lv = parseInt(_dp.get('level'), 10);
+      if(_lv >= 1 && _lv <= 6){
+        let _empty = -1;
+        for(let i=0;i<MAX_SLOTS;i++){ if(!getSlotInfo(i).exists){ _empty=i; break; } }
+        if(_empty >= 0) switchSlot(_empty);
+        if(!Game.party || Game.party.length !== 2){ Game.party = [1,3]; Game.partyIndex = 0; }
+        setTimeout(()=>{ startLevelOrLoading(_lv - 1); }, 0);
+      } else {
+        showToast('?level 参数无效，应为 1..6');
+      }
+    }
+  }catch(e){ console.error('level deep-link failed', e); }
 
   showMenu();
   requestAnimationFrame(loop);

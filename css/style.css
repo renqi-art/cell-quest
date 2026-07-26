@@ -994,3 +994,55 @@ body{
 #scene-info.rbc .scene-speaker{ color:#ff9a9a; }
 #scene-info .scene-text{ font-size:12px; line-height:1.6; color:#e6e6f2; }
 
+/* ===== Level Intro Dialogue (关卡开场剧情) ===== */
+#intro-screen{
+  position:absolute; inset:0; z-index:25;
+  display:flex; align-items:flex-end;
+  pointer-events:auto; cursor:pointer;
+  font-family:'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+}
+#intro-screen.hidden{ display:none !important; }
+
+#intro-dialogue{
+  width:100%; padding:18px 24px 22px;
+  background:linear-gradient(to top, rgba(10,10,24,0.96) 0%, rgba(10,10,24,0.78) 60%, rgba(10,10,24,0.42) 100%);
+  border-top:2px solid rgba(255,255,255,0.22);
+  box-shadow:0 -4px 0 rgba(0,0,0,0.3), inset 0 2px 0 rgba(255,255,255,0.08);
+  color:#fff; image-rendering:pixelated;
+  pointer-events:none;
+  user-select:none;
+}
+#intro-speaker-wrap{
+  display:flex; align-items:center; gap:10px; margin-bottom:8px;
+}
+#intro-speaker{
+  font-size:15px; font-weight:700; color:#ffd700;
+  text-shadow:1px 1px 0 rgba(0,0,0,0.6), 0 0 8px rgba(255,215,0,0.35);
+  letter-spacing:1px;
+}
+#intro-divider{
+  flex:1; height:1px;
+  background:linear-gradient(90deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.08) 100%);
+}
+#intro-text{
+  font-size:15px; line-height:1.75; color:#f8f8f8;
+  text-shadow:1px 1px 0 rgba(0,0,0,0.7);
+  min-height:48px;
+}
+#intro-text.show{
+  animation:introTextIn 0.4s ease-out;
+}
+@keyframes introTextIn{
+  from{ opacity:0; transform:translateY(8px); }
+  to{ opacity:1; transform:translateY(0); }
+}
+#intro-hint{
+  margin-top:10px; font-size:11px; color:rgba(255,255,255,0.55);
+  text-align:right; letter-spacing:0.5px;
+  animation:introHintPulse 1.8s ease-in-out infinite;
+}
+@keyframes introHintPulse{
+  0%,100%{ opacity:0.45; }
+  50%{ opacity:0.85; }
+}
+
