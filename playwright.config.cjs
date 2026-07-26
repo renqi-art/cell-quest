@@ -15,9 +15,9 @@ module.exports = defineConfig({
     headless: true,
   },
   webServer: {
-    command: 'node server.js',
+    command: 'npm run dev',
     url: 'http://127.0.0.1:8080',
     reuseExistingServer: false,
-    timeout: 10_000,
+    timeout: 20_000,
   },
 });
