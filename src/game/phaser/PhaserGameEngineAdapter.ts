@@ -25,6 +25,7 @@ export class PhaserGameEngineAdapter implements GameEngine {
   private options: LoadLevelOptions = { twoPlayer: false, playerOneCell: 1 }
   private caseEngine: CaseEngine | null = null
   private readonly pressed = new Map<1 | 2, Set<PlayerAction>>([[1, new Set()], [2, new Set()]])
+  private readonly playerCells = new Map<1 | 2, 1 | 2>()
   private terminalEmitted = false
   private directorPhase: 0 | 1 | 2 = 0
   private directorPending = false
@@ -59,6 +60,9 @@ export class PhaserGameEngineAdapter implements GameEngine {
     this.pressed.forEach(actions => actions.clear())
     this.draft = draft
     this.options = options
+    this.playerCells.set(1, options.playerOneCell === 2 ? 2 : 1)
+    if (options.twoPlayer) this.playerCells.set(2, options.playerTwoCell === 1 ? 1 : 2)
+    else this.playerCells.delete(2)
     this.caseEngine = new CaseEngine(draft.caseConfig)
     this.terminalEmitted = false
     this.directorPhase = 0
@@ -69,6 +73,7 @@ export class PhaserGameEngineAdapter implements GameEngine {
     const caseEngine = this.caseEngine
     const pressed = this.pressed
     const tickRuntime = (deltaMs: number) => this.tick(deltaMs)
+    const adapterPlayerCell = (index: 1 | 2): 1 | 2 => this.playerCells.get(index) ?? 1
 
     await new Promise<void>((resolve, reject) => {
       class CaseScene extends Phaser.Scene {
@@ -93,8 +98,8 @@ export class PhaserGameEngineAdapter implements GameEngine {
               )
               platforms.add(rectangle)
             }
-            this.players.push(this.createPlayer(1, model.spawn.x, model.spawn.y, 0xe84b5f, platforms))
-            if (options.twoPlayer) this.players.push(this.createPlayer(2, model.spawn.x + 1, model.spawn.y, 0x7bc7ff, platforms))
+            this.players.push(this.createPlayer(1, model.spawn.x, model.spawn.y, this.playerColor(1), platforms))
+            if (options.twoPlayer) this.players.push(this.createPlayer(2, model.spawn.x + 1, model.spawn.y, this.playerColor(2), platforms))
             this.cursors = this.input.keyboard!.createCursorKeys()
             this.wasd = this.input.keyboard!.addKeys('W,A,D') as Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
 
@@ -106,6 +111,7 @@ export class PhaserGameEngineAdapter implements GameEngine {
             canvas.setAttribute('role', 'application')
             canvas.setAttribute('aria-label', `${draft.metadata.title} Phaser 病例场景`)
             canvas.dataset.playerCount = String(this.players.length)
+            canvas.dataset.playerRoles = options.twoPlayer ? 'rbc,wbc' : (options.playerOneCell === 2 ? 'wbc' : 'rbc')
             events.emit('state-changed', 'playing')
             events.emit('case-updated', caseEngine!.getSnapshot())
             resolve()
@@ -121,6 +127,7 @@ export class PhaserGameEngineAdapter implements GameEngine {
             Math.max(4, model.tileSize * 0.38),
             color,
           )
+          shape.setName(`player-${index}`)
           this.physics.add.existing(shape)
           const body = shape.body as Phaser.Physics.Arcade.Body
           body.setCollideWorldBounds(true).setBounce(0.05)
@@ -139,15 +146,20 @@ export class PhaserGameEngineAdapter implements GameEngine {
           for (const player of this.players) {
             this.physics.add.overlap(player.shape, marker, () => {
               if (!caseEngine?.isActive()) return
-              if (node.kind === 'oxygen-source') player.carryingOxygen = true
-              if (node.kind === 'target-tissue' && player.carryingOxygen) {
+              const cell = adapterPlayerCell(player.index)
+              if (node.kind === 'oxygen-source' && cell === 1) player.carryingOxygen = true
+              if (node.kind === 'target-tissue' && cell === 1 && player.carryingOxygen) {
                 if (caseEngine.dispatch({ type: 'oxygenDelivered', amount: 12, nodeId: node.id, source: 'player' })) player.carryingOxygen = false
               }
-              if (node.kind === 'infection-site') {
+              if (node.kind === 'infection-site' && cell === 2) {
                 if (caseEngine.dispatch({ type: 'infectionCleared', amount: 20, nodeId: node.id, source: 'player' })) marker.setAlpha(0.25)
               }
             })
           }
+        }
+
+        private playerColor(index: 1 | 2): number {
+          return adapterPlayerCell(index) === 1 ? 0xe84b5f : 0x7bc7ff
         }
 
         override update(_time: number, delta: number): void {
@@ -238,6 +250,20 @@ export class PhaserGameEngineAdapter implements GameEngine {
   retry(): void { if (this.draft) void this.loadCaseDraft(this.draft, this.options) }
   quitLevel(): void { this.game?.destroy(true); this.game = null; this.events.emit('state-changed', 'hub') }
   setTwoPlayer(enabled: boolean): void { this.options = { ...this.options, twoPlayer: enabled } }
+  swapPlayerRoles(): void {
+    if (!this.options.twoPlayer) return
+    const first = this.playerCells.get(1) ?? 1
+    const second = this.playerCells.get(2) ?? 2
+    this.playerCells.set(1, second)
+    this.playerCells.set(2, first)
+    this.options = { ...this.options, playerOneCell: second, playerTwoCell: first }
+    const scene = this.game?.scene.getScene('case-runtime')
+    const playerOne = scene?.children.getByName('player-1') as Phaser.GameObjects.Arc | null
+    const playerTwo = scene?.children.getByName('player-2') as Phaser.GameObjects.Arc | null
+    playerOne?.setFillStyle(second === 1 ? 0xe84b5f : 0x7bc7ff)
+    playerTwo?.setFillStyle(first === 1 ? 0xe84b5f : 0x7bc7ff)
+    if (this.game?.canvas) this.game.canvas.dataset.playerRoles = second === 1 ? 'rbc,wbc' : 'wbc,rbc'
+  }
   dispatch(command: GameCommand): void {
     if (command.type === 'pause') return this.pause()
     if (command.type === 'resume') return this.resume()

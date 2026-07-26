@@ -27,4 +27,9 @@ test('cooperative chapter creates two role-bound Phaser players', async ({ page 
   await expect(canvas).toBeVisible();
   await expect(canvas).toHaveAttribute('data-player-count', '2');
   await expect(canvas).toHaveAttribute('aria-label', /Phaser 病例场景/);
+  await expect(canvas).toHaveAttribute('data-player-roles', 'rbc,wbc');
+  await expect(page.getByTestId('case-role-panel')).toContainText('P1 红细胞');
+  await page.getByTestId('swap-player-roles').click();
+  await expect(canvas).toHaveAttribute('data-player-roles', 'wbc,rbc');
+  await expect(page.getByTestId('case-role-panel')).toContainText('P1 白细胞');
 });

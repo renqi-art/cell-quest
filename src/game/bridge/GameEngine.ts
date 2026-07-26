@@ -10,6 +10,7 @@ export interface GameEngine {
   retry(): void
   quitLevel(): void
   setTwoPlayer(enabled: boolean): void
+  swapPlayerRoles?(): void
   dispatch(command: GameCommand): void
   subscribe<K extends keyof GameEngineEventMap>(
     event: K,

@@ -11,6 +11,7 @@ import CaseHud from './components/CaseHud.vue'
 import DirectorCrisisCard from './components/DirectorCrisisCard.vue'
 import CaseCampaignPanel from './components/CaseCampaignPanel.vue'
 import CaseResultPanel from './components/CaseResultPanel.vue'
+import CaseRolePanel from './components/CaseRolePanel.vue'
 import OnboardingPanel from './components/OnboardingPanel.vue'
 import { OFFICIAL_CASES, type OfficialCaseChapter } from '@/shared/content/official-cases'
 import type { DailyCase } from './services/DailyCaseService'
@@ -30,6 +31,7 @@ const previewTitle = ref('')
 const previewError = ref('')
 const caseResult = ref<CaseResult | null>(null)
 const currentDraft = ref<CaseDraft | null>(null)
+const rolesSwapped = ref(false)
 const showOnboarding = ref(!isPreviewMode && localStorage.getItem('cellQuest_onboardingVersion') !== '1')
 let engine: GameEngine | null = null
 let previewSession: PreviewSession | null = null
@@ -50,6 +52,7 @@ async function startPreviewIfRequested(): Promise<void> {
     return
   }
   currentDraft.value = parsed.value.draft
+  rolesSwapped.value = false
   previewTitle.value = parsed.value.draft.metadata.title || '未命名病例'
   try {
     if (usePhaserRuntime) {
@@ -95,6 +98,11 @@ function completeOnboarding(): void {
   startOfficialCase(OFFICIAL_CASES[0]!)
 }
 
+function swapPlayerRoles(): void {
+  engine?.swapPlayerRoles?.()
+  rolesSwapped.value = !rolesSwapped.value
+}
+
 function finishCase(result: CaseResult): void {
   caseResult.value = result
   if (!currentDraft.value) return
@@ -112,6 +120,7 @@ function returnToCampaign(): void {
 }
 
 onMounted(async () => {
+  document.body.classList.toggle('phaser-runtime-active', usePhaserRuntime)
   if (usePhaserRuntime) {
     const module = await import('./phaser/PhaserGameEngineAdapter')
     engine = new module.PhaserGameEngineAdapter()
@@ -139,6 +148,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  document.body.classList.remove('phaser-runtime-active')
   previewSession?.dispose()
   previewSession = null
   motionBinding?.destroy()
@@ -182,6 +192,11 @@ onBeforeUnmount(() => {
     v-if="store.directorHistory.length"
     :entry="store.directorHistory[store.directorHistory.length - 1]!"
   />
+  <CaseRolePanel
+    v-if="usePhaserRuntime && currentDraft?.caseConfig?.primaryCell === 'coop'"
+    :swapped="rolesSwapped"
+    @swap="swapPlayerRoles"
+  />
   <CaseHud
     v-if="store.caseSnapshot"
     :snapshot="store.caseSnapshot"
@@ -206,4 +221,5 @@ onBeforeUnmount(() => {
 #phaser-case-runtime { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: #07101f; }
 .case-preview-banner, .case-preview-error { position: fixed; top: 8px; left: 50%; z-index: 30; translate: -50% 0; padding: 7px 14px; border-radius: 999px; background: rgb(8 14 30 / 88%); color: #eaf3ff; font-size: 12px; }
 .case-preview-error { color: #ffaaaa; border: 1px solid #b54b4b; }
+:global(body.phaser-runtime-active #game-container) { visibility: hidden; pointer-events: none; }
 </style>
