@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useCaseEditorStore } from '@/editor/stores/case-editor'
-import { createCaseDraft } from '@/shared/services/CaseSchema'
+import { compileCaseBlueprint } from '@/shared/services/CaseCompiler'
 import { AiCaseDesignerClient, type CaseBlueprint } from '@/editor/services/AiCaseDesignerClient'
-import type { CaseDraft } from '@/shared/models/case-draft'
 
 const emit = defineEmits<{
   close: []
@@ -38,60 +37,13 @@ async function generate() {
 
 function applyBlueprint() {
   if (!blueprint.value) return
-
-  const b = blueprint.value
-
-  // Create a new draft with blueprint settings
-  const draft = createCaseDraft({ primaryCell: b.primaryCell })
-  const newDraft: CaseDraft = {
-    ...draft,
-    metadata: {
-      ...draft.metadata,
-      title: b.title,
-      difficulty: b.difficulty,
-      tags: [...b.tags],
-      icon: b.icon,
-    },
-    caseConfig: {
-      version: 1,
-      primaryCell: b.primaryCell,
-      allyMode: 'scripted',
-      vitals: {
-        oxygen: b.vitals.oxygen,
-        infection: b.vitals.infection,
-        tissue: b.vitals.tissue,
-        oxygenDecayPerSecond: b.oxygenDecayPerSecond,
-        infectionGrowthPerSecond: b.infectionGrowthPerSecond,
-        tissueDecayPerSecond: b.tissueDecayPerSecond,
-      },
-      goals: {
-        oxygenRoutes: [],
-        infection: { nodeIds: [], requiredClears: 0 },
-        stabilitySeconds: b.stabilitySeconds,
-      },
-      allowedEvents: b.allowedEvents.filter(isValidEvent) as ('ACUTE_HYPOXIA' | 'INFECTION_REBOUND' | 'TRANSPORT_BLOCKAGE' | 'ATP_CRISIS')[],
-      briefing: { start: '', success: '', failure: '' },
-      education: { topic: b.educationalTopic, sourceIds: [] },
-    },
-    editorMeta: {
-      source: 'ai',
-      updatedAt: new Date().toISOString(),
-    },
-  }
-
-  store.executeCommand({
-    type: 'replace-draft',
-    draft: newDraft,
-    reason: 'template',
+  const draft = compileCaseBlueprint(blueprint.value, {
+    seed: prompt.value.trim() || blueprint.value.title,
+    source: source.value === 'ai' ? 'ai' : 'template',
   })
-
+  store.executeCommand({ type: 'replace-draft', draft, reason: 'template' })
   applied.value = true
 }
-
-function isValidEvent(id: string): boolean {
-  return ['ACUTE_HYPOXIA', 'INFECTION_REBOUND', 'TRANSPORT_BLOCKAGE', 'ATP_CRISIS'].includes(id)
-}
-
 function close() {
   emit('close')
 }

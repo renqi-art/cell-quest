@@ -32,7 +32,10 @@ const DEFAULT_GOALS = {
 }
 
 function emptyMap(): readonly string[] {
-  return Array.from({ length: MAP_HEIGHT }, () => ' '.repeat(MAP_WIDTH))
+  return [
+    ...Array.from({ length: MAP_HEIGHT - 1 }, () => ' '.repeat(MAP_WIDTH)),
+    '#'.repeat(MAP_WIDTH),
+  ]
 }
 
 const KNOWN_TOP_KEYS = new Set([

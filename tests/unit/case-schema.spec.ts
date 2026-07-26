@@ -10,6 +10,7 @@ describe('case draft creation', () => {
     expect(draft.nodes.length).toBe(1)
     expect(draft.nodes[0]?.kind).toBe('spawn')
     expect(Object.isFrozen(draft)).toBe(true)
+    expect(draft.map.at(-1)).toBe('#'.repeat(80))
   })
 
   it('creates a WBC case draft', () => {

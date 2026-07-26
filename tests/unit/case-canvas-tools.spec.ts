@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lineCells, rectangleCells, floodFillCells } from '@/editor/canvas/case-canvas-tools'
+import { lineCells, rectangleCells, floodFillCells, pointerToGrid } from '@/editor/canvas/case-canvas-tools'
 
 describe('canvas tools — geometry', () => {
   it('lineCells returns horizontal Bresenham line', () => {
@@ -32,5 +32,16 @@ describe('canvas tools — geometry', () => {
     const map = ['   ']
     const cells = floodFillCells(map, { x: 0, y: 0 }, '#')
     expect(cells.length).toBe(3)
+  })
+
+  it('maps a scaled canvas pointer to a semantic grid cell', () => {
+    const point = pointerToGrid(
+      { clientX: 132, clientY: 74 },
+      { left: 100, top: 50, width: 640, height: 240 },
+      { width: 1280, height: 480 },
+      { offsetX: 0, offsetY: 0, zoom: 1, tileSize: 16 },
+    )
+
+    expect(point).toEqual({ x: 4, y: 3 })
   })
 })

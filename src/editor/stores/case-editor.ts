@@ -1,4 +1,4 @@
-import { readonly, ref } from 'vue'
+import { computed, readonly, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { CaseDraft } from '@/shared/models/case-draft'
 import { CaseHistory } from '@/editor/domain/case-history'
@@ -6,9 +6,24 @@ import type { CaseCommand } from '@/editor/domain/case-commands'
 import { LocalStorageAdapter } from '@/shared/storage/StorageAdapter'
 import { CaseDraftRepository } from '@/shared/services/CaseDraftRepository'
 import { createCaseDraft } from '@/shared/services/CaseSchema'
-import type { PrimaryCell } from '@/shared/types/case'
+import type { CaseNode, PrimaryCell } from '@/shared/types/case'
+import { validateCaseDraft } from '@/shared/services/CaseValidationService'
+import { decodeCaseCode, encodeCaseCode } from '@/shared/services/CaseCodec'
+import type { PublishedCase } from '@/shared/services/CaseCodec'
 
 type SaveState = 'idle' | 'saving' | 'error'
+export type EditorNodeKind = CaseNode['kind']
+
+const MOVEMENT_ENVELOPE = {
+  version: 1 as const,
+  maxGapTiles: 5,
+  maxStepUpTiles: 4,
+  maxDropTiles: 8,
+  playerHeightTiles: 2,
+}
+
+let nodeCounter = 0
+
 
 export const useCaseEditorStore = defineStore('case-editor', () => {
   const storage = new LocalStorageAdapter()
@@ -19,12 +34,78 @@ export const useCaseEditorStore = defineStore('case-editor', () => {
   const draft = ref<CaseDraft | null>(null)
   const dirty = ref(false)
   const saveState = ref<SaveState>('idle')
+  const selectedNodeId = ref<string | null>(null)
+  const diagnostics = computed(() => draft.value
+    ? validateCaseDraft(draft.value, MOVEMENT_ENVELOPE)
+    : [])
+
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
   function newDraft(primaryCell: PrimaryCell): void {
     const created = createCaseDraft({ primaryCell })
     applyNewDraft(created)
+  }
+
+  function addNode(kind: EditorNodeKind, x: number, y: number): CaseNode {
+    nodeCounter += 1
+    const id = `${kind}-${Date.now()}-${nodeCounter}`
+    const primaryCell = draft.value?.caseConfig?.primaryCell ?? 'rbc'
+    const base = { id, x, y }
+    let node: CaseNode
+
+    switch (kind) {
+      case 'spawn':
+        node = { ...base, kind, role: primaryCell }
+        break
+      case 'oxygen-source':
+        node = { ...base, kind, capacity: 3 }
+        break
+      case 'target-tissue':
+        node = { ...base, kind, requiredOxygen: 3 }
+        break
+      case 'infection-site':
+        node = { ...base, kind, severity: 2 }
+        break
+      case 'checkpoint':
+        node = { ...base, kind }
+        break
+      case 'knowledge':
+        node = { ...base, kind, sourceId: '' }
+        break
+    }
+
+    executeCommand({ type: 'add-node', node })
+    selectedNodeId.value = node.id
+    return node
+  }
+
+  function selectNode(id: string | null): void {
+    selectedNodeId.value = id
+  }
+
+  function exportCaseCode(): string {
+    if (!draft.value) throw new Error('No active draft')
+    const result = encodeCaseCode(draft.value)
+    if (!result.ok) throw new Error(result.error)
+    return result.code
+  }
+
+  function importCaseCode(code: string): { ok: true } | { ok: false; error: string } {
+    const result = decodeCaseCode(code.trim())
+    if (!result.ok) return result
+    applyNewDraft(publishedToDraft(result.value))
+    return { ok: true }
+  }
+
+  function publishedToDraft(value: PublishedCase): CaseDraft {
+    return {
+      version: 1, mode: 'case', id: value.id, revision: value.revision,
+      metadata: { title: value.name, author: value.author, difficulty: value.difficulty, tags: value.tags, icon: value.icon },
+
+      map: value.map, nodes: value.nodes, caseConfig: value.caseConfig,
+      editorMeta: { source: 'import', updatedAt: new Date().toISOString() },
+    }
   }
 
   function openDraft(slot: number, id: string): void {
@@ -83,6 +164,7 @@ export const useCaseEditorStore = defineStore('case-editor', () => {
     draft.value = newDraft
     dirty.value = false
     saveState.value = 'idle'
+    selectedNodeId.value = null
   }
 
   return {
@@ -91,12 +173,18 @@ export const useCaseEditorStore = defineStore('case-editor', () => {
     draft: readonly(draft),
     dirty: readonly(dirty),
     saveState: readonly(saveState),
+    selectedNodeId: readonly(selectedNodeId),
+    diagnostics,
     newDraft,
     openDraft,
     executeCommand,
     undo,
     redo,
     saveNow,
+    addNode,
+    selectNode,
+    exportCaseCode,
+    importCaseCode,
     repository,
   }
 })

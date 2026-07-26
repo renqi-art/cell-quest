@@ -75,6 +75,14 @@
 
 .palette-tools button, .palette-nodes button {
   width: 36px;
+.editor-sidebar {
+  width: 220px;
+  background: #111420;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.editor-sidebar .case-inspector { width: auto; padding: 0; }
   height: 36px;
   font-size: 18px;
   background: #1a1a2e;

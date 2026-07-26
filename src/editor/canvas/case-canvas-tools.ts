@@ -65,3 +65,35 @@ export function floodFillCells(map: readonly string[], start: GridPoint, blockTi
   }
   return result
 }
+
+export interface PointerPosition {
+  readonly clientX: number
+  readonly clientY: number
+}
+
+export interface CanvasBounds {
+  readonly left: number
+  readonly top: number
+  readonly width: number
+  readonly height: number
+}
+
+export interface CanvasPixels {
+  readonly width: number
+  readonly height: number
+}
+
+export interface GridViewport {
+  readonly offsetX: number
+  readonly offsetY: number
+  readonly zoom: number
+  readonly tileSize: number
+}
+
+export function pointerToGrid(pointer: PointerPosition, bounds: CanvasBounds, pixels: CanvasPixels, viewport: GridViewport): GridPoint {
+  const scaleX = bounds.width > 0 ? pixels.width / bounds.width : 1
+  const scaleY = bounds.height > 0 ? pixels.height / bounds.height : 1
+  const x = ((pointer.clientX - bounds.left) * scaleX - viewport.offsetX) / (viewport.tileSize * viewport.zoom)
+  const y = ((pointer.clientY - bounds.top) * scaleY - viewport.offsetY) / (viewport.tileSize * viewport.zoom)
+  return { x: Math.floor(x), y: Math.floor(y) }
+}
