@@ -4,7 +4,8 @@ const os = require('node:os');
 const { execFileSync, spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npmCli = process.env.npm_execpath;
+if (!npmCli) throw new Error('report:tests must be launched through npm');
 const checks = [
   ['TypeScript', ['run', 'typecheck']],
   ['ESLint', ['run', 'lint']],
@@ -24,8 +25,8 @@ const results = [];
 for (const [name, args] of checks) {
   console.log(`REPORT: ${name}`);
   const startedAt = Date.now();
-  const run = spawnSync(npm, args, { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
-  const output = `${run.stdout || ''}\n${run.stderr || ''}`.trim();
+  const run = spawnSync(process.execPath, [npmCli, ...args], { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  const output = `${run.stdout || ''}\n${run.stderr || ''}\n${run.error?.stack || ''}`.trim();
   results.push({ name, command: `npm ${args.join(' ')}`, exitCode: run.status ?? 1, durationMs: Date.now() - startedAt, output: output.split(/\r?\n/).slice(-12).join('\n') });
   if (run.status !== 0) break;
 }
