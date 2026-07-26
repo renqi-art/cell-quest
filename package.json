@@ -10,6 +10,7 @@
     "lint": "eslint \"src/**/*.{ts,vue}\"",
     "test": "playwright test",
     "test:unit": "vitest run",
+    "test:component": "vitest run tests/component",
     "test:server": "node --test tests/server.test.cjs"
   },
   "devDependencies": {

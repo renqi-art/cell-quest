@@ -1,0 +1,171 @@
+.case-designer-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #0a0a18;
+  color: #e8e8f0;
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #111420;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.editor-toolbar button {
+  padding: 4px 12px;
+  background: #1a1a2e;
+  border: 1px solid #3a3a5a;
+  color: #e8e8f0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.editor-toolbar button:hover { background: #2a2a4e; }
+.editor-toolbar button:disabled { opacity: 0.4; cursor: default; }
+.editor-toolbar .toolbar-sep { color: #3a3a5a; }
+.editor-toolbar .dirty-indicator { color: #ffd700; font-size: 12px; }
+.editor-toolbar .saved-indicator { color: #4caf50; font-size: 12px; }
+
+.editor-workspace {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.editor-canvas {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+}
+
+.canvas-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #4a4a6a;
+}
+
+.case-tool-palette, .case-inspector {
+  width: 200px;
+  background: #111420;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.case-tool-palette h3, .case-inspector h3 {
+  font-size: 13px;
+  color: #7ac;
+  margin: 8px 0 6px;
+  border-bottom: 1px solid #2a2a4a;
+  padding-bottom: 4px;
+}
+
+.palette-tools, .palette-nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.palette-tools button, .palette-nodes button {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  background: #1a1a2e;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.palette-tools button:hover, .palette-nodes button:hover {
+  border-color: #ffd700;
+  background: rgba(255, 215, 0, .1);
+}
+
+.inspector-field {
+  margin: 6px 0;
+}
+
+.inspector-field label {
+  font-size: 11px;
+  color: #7ac;
+  display: block;
+}
+
+.inspector-field span {
+  font-size: 12px;
+}
+
+.inspector-empty {
+  font-size: 12px;
+  color: #4a4a6a;
+  text-align: center;
+  margin-top: 16px;
+}
+
+.editor-status {
+  height: 24px;
+  background: #111420;
+  border-top: 1px solid #2a2a4a;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 11px;
+  color: #7ac;
+}
+
+/* Wizard */
+.new-case-wizard {
+  max-width: 500px;
+  margin: 40px auto;
+  padding: 24px;
+  background: #111420;
+  border-radius: 12px;
+}
+
+.wizard-steps {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.wizard-steps span {
+  font-size: 12px;
+  color: #4a4a6a;
+}
+
+.wizard-steps span.active {
+  color: #ffd700;
+}
+
+.wizard-body { margin: 16px 0; }
+.wizard-body h3 { color: #7ac; margin-bottom: 8px; }
+.wizard-body label { display: block; margin: 4px 0; cursor: pointer; }
+
+.wizard-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.wizard-actions button {
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #1a1a2e;
+  border: 1px solid #3a3a5a;
+  color: #e8e8f0;
+}
+
+.wizard-actions button.primary {
+  background: #7ac;
+  border-color: #7ac;
+  color: #0a0a18;
+  font-weight: bold;
+}
