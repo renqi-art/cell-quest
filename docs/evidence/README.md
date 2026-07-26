@@ -17,5 +17,6 @@
 ## 当前状态
 
 - 本地自动化、生产构建和白名单离线打包工具：已实现。
+- 病例模式已使用 Phaser；经典模式仍通过 Legacy 兼容层，完整经典机制的 Phaser 等价迁移尚未完成。
 - 在线正式 URL、部署 SHA、90 秒视频、实体参考机签字、六章真实手工通关、三次彩排：`PENDING`。
 - 因此实现线程不会宣称 `GATE A: PASS`、`GATE B: PASS` 或 `RELEASE APPROVED`。
