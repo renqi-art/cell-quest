@@ -5,6 +5,7 @@ import NewCaseWizard from './components/NewCaseWizard.vue'
 import EditorToolbar from './components/EditorToolbar.vue'
 import CaseToolPalette from './components/CaseToolPalette.vue'
 import CaseInspector from './components/CaseInspector.vue'
+import CaseMapCanvas from './components/CaseMapCanvas.vue'
 import './styles/case-designer.css'
 import type { CaseNode } from '@/shared/types/case'
 
@@ -19,9 +20,7 @@ const selectedNode = ref<CaseNode | null>(null)
       <div class="editor-workspace">
         <CaseToolPalette :selected-node="selectedNode" />
         <main class="editor-canvas" aria-label="病例画布">
-          <div class="canvas-placeholder">
-            画布加载中...
-          </div>
+          <CaseMapCanvas />
         </main>
         <CaseInspector :selected-node="selectedNode" />
       </div>
