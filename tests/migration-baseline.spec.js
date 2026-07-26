@@ -14,14 +14,17 @@ test('legacy game, editor, and deck entry points remain available', async ({ pag
   const errors = capturePageErrors(page);
 
   await page.goto('/');
+  await expect(page.locator('#vue-game-root')).toHaveAttribute('data-vue-mounted', 'true');
   await expect(page.locator('#main-menu')).toBeVisible();
   await page.locator('#btn-start').click();
   await expect(page.locator('#hub-screen')).not.toHaveClass(/hidden/);
 
   await page.goto('/editor.html');
+  await expect(page.locator('#vue-editor-root')).toHaveAttribute('data-vue-mounted', 'true');
   await expect(page.locator('#gridWrap')).toBeVisible();
 
   await page.goto('/deck.html');
+  await expect(page.locator('#vue-deck-root')).toHaveAttribute('data-vue-mounted', 'true');
   await expect(page.locator('body')).not.toBeEmpty();
   const levelsResponse = await page.request.get('/levels');
   expect(levelsResponse.ok()).toBe(true);
