@@ -3,6 +3,10 @@
  * ==================================================================== */
 
 const $ = id => document.getElementById(id);
+
+// Preview level registry (used by Vue editor adapter)
+const _PREVIEW_LEVELS = {};
+const _PREVIEW_CONFIGS = {};
 function bindClick(id, handler){
   const element = $(id);
   if(!element) return null;
@@ -2119,6 +2123,79 @@ function backToHub(){
 
 // ===== 关卡加载（通用入口函数） =====
 function LoadLevel(n, cellTypeOverride){
+  // Preview level: n is a string key
+  if(typeof n === 'string' && _PREVIEW_LEVELS[n]){
+    const mapData = _PREVIEW_LEVELS[n];
+    const cfg = _PREVIEW_CONFIGS[n];
+    if(!mapData.map || mapData.map.length === 0){ showToast('该关卡正在建设中...'); return false; }
+    Game.levelIndex = -1; // preview marker
+    Game._previewLevelId = n;
+    Game.qBlocks = [];
+    Game.dcNPCs = [];
+    Game.level = new Level(mapData);
+
+    const defaultCell = cellTypeOverride || cfg.cellType || 1;
+    Game.players = [];
+    const p1 = new Player(Game.level.playerSpawn.x, Game.level.playerSpawn.y, 0);
+    p1.cellType = defaultCell;
+    Game.players.push(p1);
+
+    if(Game.twoPlayer){
+      const p2 = new Player(Game.level.playerSpawn.x + 40, Game.level.playerSpawn.y, 1);
+      p2.cellType = Game._p2CellType || defaultCell;
+      Game.players.push(p2);
+      Game._p2CellType = null;
+    }
+
+    Game.player = Game.players[0];
+    Game.player.cellType = defaultCell;
+    if(cellTypeOverride){ cfg.winCondition = defaultCell === 3 ? WIN_COLLECT_ALL : WIN_KILL_ALL; }
+    Game.winCondition = cfg.winCondition || WIN_KILL_ALL;
+    Game.itemsCollected = 0;
+    Game.totalItems = Game.level.items.length;
+    Game.particles = []; Game.damageNumbers = [];
+    Game.player.checkpointX = Game.level.playerSpawn.x;
+    Game.player.checkpointY = Game.level.playerSpawn.y;
+    Game.tempPlatforms = [];
+    Game.projectiles = [];
+    Game.camera = {x:0, y:0, shake:0};
+    Game.stats = {kills:0, items:0, deaths:0, foundMemory:false};
+    Game.tutShown = {};
+    tutorialQueue = [];
+    Game.tutorialPause = false;
+    Game.memoryCardOpen = false;
+    Game.paused = false;
+    Game.deathTimer = 0;
+    Game.tideTimer = 0;
+    Game.bleedingTimer = 0;
+    Game.gapBloodMult = 1;
+    Game.bridgeUsedInGap = false;
+    Game.pusTiles = [];
+    Game.oxyField = false;
+    Game.tidePaused = 0;
+    Game.healingProgress = 0;
+    Game.cells = 99;  // infinite lives for preview
+    Game.deathsThisRun = 0;
+    Game.keysP2 = {};
+    Game.prevKeysP2 = {};
+    Game.swordTimer = 0;
+    Game.swordCooldown = 0;
+    Game.allEnemiesDead = false;
+
+    closeAllOverlays();
+    if(Game.started){ Game.state = 'playing'; endTime = 0; }
+    else {
+      Game.state = 'playing';
+      Game.started = true;
+      Game.startTime = performance.now();
+      hideFocusPrompt();
+      if(!Game.loopStarted){ Game.loopStarted = true; Game.lastTime = performance.now(); requestAnimationFrame(loop); }
+    }
+    // Emit state-changed for Vue adapter
+    if(window.CellQuestLegacy._emitStateChanged) window.CellQuestLegacy._emitStateChanged();
+    return true;
+  }
+
   const idx = n - 1; // v3: 1-based → 0-based array index
   const configs = buildLevelConfigs();
   if(idx < 0 || idx >= configs.length) return false;
@@ -2527,6 +2604,10 @@ window.CellQuestLegacy = {
   loadLevel(levelId, options) {
     Game.twoPlayer = Boolean(options.twoPlayer);
     if (options.playerTwoCell) Game._p2CellType = options.playerTwoCell;
+    // Support preview string IDs
+    if (typeof levelId === 'string' && _PREVIEW_LEVELS[levelId]) {
+      return LoadLevel(levelId, options.playerOneCell);
+    }
     return LoadLevel(Number(levelId), options.playerOneCell);
   },
   pause() {
@@ -2548,6 +2629,33 @@ window.CellQuestLegacy = {
     if (command.type !== 'input') return;
     const target = command.player === 2 ? Game.keysP2 : Game.keys;
     target[command.action] = command.pressed;
+  },
+
+  // ---- Preview level support (Vue case designer) ----
+
+  registerPreviewLevel(levelData) {
+    const id = 'preview-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    _PREVIEW_LEVELS[id] = levelData;
+    _PREVIEW_CONFIGS[id] = {
+      name: levelData._name || '病例试玩',
+      icon: levelData._icon || '🔬',
+      _isPreview: true,
+      bgMusic: 'tutorial',
+      enemies: [],
+      mechanics: [],
+    };
+    return id;
+  },
+
+  unregisterPreviewLevel(id) {
+    delete _PREVIEW_LEVELS[id];
+    delete _PREVIEW_CONFIGS[id];
+  },
+
+  // Internal: emit state change (called by LoadLevel for preview)
+  _emitStateChanged() {
+    // State change is handled by the LegacyGameEngineAdapter tick observer.
+    // This stub exists for future hooking.
   },
 };
 

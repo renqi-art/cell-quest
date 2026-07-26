@@ -6,6 +6,7 @@ import EditorToolbar from './components/EditorToolbar.vue'
 import CaseToolPalette from './components/CaseToolPalette.vue'
 import CaseInspector from './components/CaseInspector.vue'
 import CaseMapCanvas from './components/CaseMapCanvas.vue'
+import CasePlaytestPanel from './components/CasePlaytestPanel.vue'
 import './styles/case-designer.css'
 import type { CaseNode } from '@/shared/types/case'
 
@@ -26,6 +27,7 @@ const selectedNode = ref<CaseNode | null>(null)
       </div>
       <footer class="editor-status" aria-live="polite">
         {{ store.dirty ? '未保存' : '已保存' }}
+        <CasePlaytestPanel />
       </footer>
     </template>
     <template v-else>
