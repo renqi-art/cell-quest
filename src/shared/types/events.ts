@@ -1,4 +1,5 @@
 import type { GameScreenState, HudSnapshot } from './game'
+import type { CaseSnapshot, CaseResult } from './case'
 
 export interface TutorialViewModel {
   readonly speaker: string
@@ -43,4 +44,7 @@ export interface GameEngineEventMap {
   'player-died': (result: DeathResult) => void
   'toast-requested': (toast: ToastViewModel) => void
   'fatal-error': (error: EngineFailure) => void
+  'case-updated': (snapshot: CaseSnapshot) => void
+  'case-completed': (result: CaseResult) => void
+  'case-failed': (result: CaseResult) => void
 }

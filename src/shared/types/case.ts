@@ -55,3 +55,36 @@ export interface CaseMetadata {
   readonly tags: readonly string[]
   readonly icon: string
 }
+
+/** 不可变的病例快照，由 CaseEngine.getSnapshot() 产出，Vue HUD 只读 */
+export interface CaseSnapshot {
+  readonly status: 'active' | 'complete' | 'failed'
+  readonly vitals: {
+    readonly oxygen: number
+    readonly infection: number
+    readonly tissue: number
+  }
+  readonly progress: {
+    readonly oxygenDeliveries: number
+    readonly infectionSitesCleared: number
+  }
+  readonly stableFor: number
+  readonly currentObjective: string
+  readonly elapsedMs: number
+}
+
+/** 病例事件载荷，从运行时送入 CaseEngine.dispatch() */
+export type CaseEvent =
+  | { readonly type: 'oxygenDelivered'; readonly amount: number; readonly nodeId: string; readonly source?: 'ally' | 'player' }
+  | { readonly type: 'infectionCleared'; readonly amount: number; readonly nodeId: string; readonly source?: 'ally' | 'player' }
+  | { readonly type: 'playerDied'; readonly playerIndex: 1 | 2 }
+
+/** 病例结束时的完整报告 */
+export interface CaseResult {
+  readonly status: 'complete' | 'failed'
+  readonly vitals: { readonly oxygen: number; readonly infection: number; readonly tissue: number }
+  readonly progress: { readonly oxygenDeliveries: number; readonly infectionSitesCleared: number }
+  readonly durationMs: number
+  readonly deaths: number
+  readonly atpEfficiency: number
+}
