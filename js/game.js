@@ -531,22 +531,24 @@ class Level {
 
 // ===== 输入系统 =====
 const KEY_MAP = {
-  ArrowLeft:'left', a:'left', A:'left',
-  ArrowRight:'right', d:'right', D:'right',
-  ArrowUp:'jump', w:'jump', W:'jump', ' ':'jump',
-  ArrowDown:'down', s:'down', S:'down',
+  a:'left', A:'left',
+  d:'right', D:'right',
+  w:'jump', W:'jump', ' ':'jump',
+  s:'down', S:'down',
+  ArrowLeft:'left', ArrowRight:'right',
+  ArrowUp:'jump', ArrowDown:'down',
   e:'skill', E:'skill',
   Shift:'dash',
   q:'switchCell', Q:'switchCell',
   '1':'skill1', '2':'skill2', '3':'skill3', '4':'skill4',
 };
 
-// v3: P2 键位映射（方向键 + 小键盘区域）
+// P2 键位映射（双人模式时 P1 不响应方向键，由 P2 独占）
 const KEY_MAP_P2 = {
-  'j':'left', 'J':'left',
-  'l':'right', 'L':'right',
-  'i':'jump', 'I':'jump',
-  'k':'down', 'K':'down',
+  ArrowLeft:'left',
+  ArrowRight:'right',
+  ArrowUp:'jump',
+  ArrowDown:'down',
   'u':'skill', 'U':'skill',
   'o':'dash', 'O':'dash',
   'y':'switchCell', 'Y':'switchCell',
@@ -575,7 +577,10 @@ function setupInput(){
   document.addEventListener('keydown', e=>{
     Sfx.init();
     if(KEY_MAP[e.key] !== undefined){
-      Game.keys[KEY_MAP[e.key]] = true;
+      // 双人模式下 P1 不响应方向键（留给 P2）
+      if(!Game.twoPlayer || !e.key.startsWith('Arrow')){
+        Game.keys[KEY_MAP[e.key]] = true;
+      }
       e.preventDefault();
     }
     // v3: P2 输入路由
@@ -613,7 +618,9 @@ function setupInput(){
   });
   document.addEventListener('keyup', e=>{
     if(KEY_MAP[e.key] !== undefined){
-      Game.keys[KEY_MAP[e.key]] = false;
+      if(!Game.twoPlayer || !e.key.startsWith('Arrow')){
+        Game.keys[KEY_MAP[e.key]] = false;
+      }
     }
     // v3: P2 keyup
     if(KEY_MAP_P2[e.key] !== undefined && Game.twoPlayer){
@@ -1251,9 +1258,9 @@ function updateHUD(){
 
 // ===== 头像：使用角色设计原画裁切图 =====
 const _AVATAR_SPRITES = {
-  1: { src: 'images/avatar-wbc.png', name: 'wbc' },   // 白细胞 Aetherion 脸部
-  2: { src: 'images/avatar-plt.png', name: 'plt' },     // 血小板 脸部
-  3: { src: 'images/avatar-rbc.png', name: 'rbc' },     // 红细胞 R-07 脸部
+  1: { src: 'images/avatar-wbc.webp', name: 'wbc' },   // 白细胞 Aetherion 脸部
+  2: { src: 'images/avatar-plt.webp', name: 'plt' },     // 血小板 脸部
+  3: { src: 'images/avatar-rbc.webp', name: 'rbc' },     // 红细胞 R-07 脸部
 };
 
 // 根据细胞类型返回左上角头像 HTML
@@ -1406,7 +1413,7 @@ function closePedia(){
   $('hub-screen').classList.remove('hidden');
 }
 function showCharDetail(type){
-  const bgMap = { wbc: 'char-wbc.jpg', rbc: 'char-rbc.jpg', plt: 'char-plt.jpg' };
+  const bgMap = { wbc: 'char-wbc.webp', rbc: 'char-rbc.webp', plt: 'char-plt.webp' };
   const img = $('char-detail-img');
   img.src = 'images/' + bgMap[type];
   $('pedia-screen').classList.add('hidden');
@@ -2371,9 +2378,9 @@ function showDeathPanel(){
   $('death-cell-name').textContent = cellNames[Game.player.cellType] || '未知细胞';
 
   // 根据 cellType 选头像（WBC=1, PLT=2, RBC=3）
-  const avatarMap = {1:'images/avatar-wbc.png', 2:'images/avatar-plt.png', 3:'images/avatar-rbc.png'};
+  const avatarMap = {1:'images/avatar-wbc.webp', 2:'images/avatar-plt.webp', 3:'images/avatar-rbc.webp'};
   const avatarEl = $('death-cell-avatar');
-  avatarEl.src = avatarMap[Game.player.cellType] || 'images/avatar-rbc.png';
+  avatarEl.src = avatarMap[Game.player.cellType] || 'images/avatar-rbc.webp';
   // Game.cells <= 0 时头像变灰
   if(Game.cells <= 0){
     avatarEl.classList.add('lost');
@@ -2544,7 +2551,7 @@ function init(){
       btn2p.style.borderColor = Game.twoPlayer ? '#81c784' : '#4fc3f7';
       btn2p.style.color = Game.twoPlayer ? '#81c784' : '#4fc3f7';
       if(Game.twoPlayer){
-        showToast('双人模式已开启 | P1: WASD+Space/E/Shift | P2: IJKL+U/O | 技能: P1=1234 P2=7890');
+        showToast('双人模式已开启 | P1: WASD+Space/E/Shift | P2: ↑↓←→+U/O | 技能: P1=1234 P2=7890');
       }
     };
   }
