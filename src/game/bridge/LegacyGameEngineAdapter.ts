@@ -31,7 +31,13 @@ export class LegacyGameEngineAdapter implements GameEngine {
   constructor(
     private readonly legacy: LegacyGameBridge,
     private readonly directorClient: Pick<CaseDirectorClient, 'nextPlan'> = new CaseDirectorClient(),
-  ) {}
+  ) {
+    // Hook legacy case level loading
+    const self = this;
+    (legacy as unknown as Record<string, unknown>)._onCaseLevelLoad = function(caseData: Record<string, unknown>) {
+      self.startCaseFromLegacy(caseData)
+    }
+  }
 
   async mount(_host: HTMLElement): Promise<void> {}
 
@@ -94,6 +100,55 @@ export class LegacyGameEngineAdapter implements GameEngine {
     this.events.emit(event, ...args)
   }
 
+  /** Hook from legacy game: level data contains case config */
+  private startCaseFromLegacy(caseData: Record<string, unknown>): void {
+    const nodes = (caseData.nodes as Array<Record<string, unknown>>) || []
+    const oxygenSourceIds: string[] = []
+    const targetTissueIds: string[] = []
+    for (const n of nodes) {
+      if (n.kind === 'oxygen-source') oxygenSourceIds.push(n.id as string)
+      if (n.kind === 'target-tissue') targetTissueIds.push(n.id as string)
+    }
+    const config: CaseConfig = {
+      version: 1,
+      primaryCell: (caseData.primaryCell as string) === 'wbc' ? 'wbc' : 'rbc',
+      allyMode: 'scripted',
+      vitals: {
+        oxygen: (caseData.vitals as Record<string, number>)?.oxygen ?? 80,
+        infection: (caseData.vitals as Record<string, number>)?.infection ?? 5,
+        tissue: (caseData.vitals as Record<string, number>)?.tissue ?? 75,
+        oxygenDecayPerSecond: (caseData.oxygenDecayPerSecond as number) ?? 0.6,
+        infectionGrowthPerSecond: (caseData.infectionGrowthPerSecond as number) ?? 0.15,
+        tissueDecayPerSecond: (caseData.tissueDecayPerSecond as number) ?? 0.15,
+      },
+      goals: {
+        oxygenRoutes: oxygenSourceIds.length > 0 && targetTissueIds.length > 0 ? [{
+          id: 'route-0',
+          sourceId: oxygenSourceIds[0]!,
+          targetIds: targetTissueIds.slice(0, 1),
+          requiredDeliveries: 3,
+        }] : [],
+        infection: { nodeIds: [], requiredClears: 0 },
+        stabilitySeconds: (caseData.stabilitySeconds as number) ?? 5,
+      },
+      allowedEvents: [],
+      briefing: { start: '', success: '', failure: '' },
+      education: { topic: '', sourceIds: [] },
+    }
+    this.setCaseConfig(config)
+    this.events.emit('case-updated', this.caseEngine!.getSnapshot())
+
+    // Expose dispatch for legacy game to call on node interaction
+    const ce = this.caseEngine!;
+    (this.legacy as unknown as Record<string, unknown>)._dispatchCaseEvent = function(type: string, nodeId: string) {
+      if (type === 'oxygenDelivered') {
+        ce.dispatch({ type: 'oxygenDelivered', amount: 12, nodeId, source: 'player' })
+      } else if (type === 'infectionCleared') {
+        ce.dispatch({ type: 'infectionCleared', amount: 20, nodeId, source: 'player' })
+      }
+    }
+  }
+
   /** Attach a CaseEngine to the tick loop. Called when loading a case level. */
   setCaseConfig(config: CaseConfig): void {
     // Remove previous tick listener
@@ -141,6 +196,9 @@ export class LegacyGameEngineAdapter implements GameEngine {
       if (snap.status === 'complete' && this.caseEngine.isComplete()) {
         this.events.emit('case-completed', this.caseEngine.buildResult())
         this.legacy.onTick = undefined
+        // Trigger classic level complete screen
+        const trigger = (window as unknown as Record<string, unknown>).cellQuest_triggerComplete
+        if (typeof trigger === 'function') trigger()
       }
       if (snap.status === 'failed' && this.caseEngine.isFailed()) {
         this.events.emit('case-failed', this.caseEngine.buildResult())

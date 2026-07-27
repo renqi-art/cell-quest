@@ -6,9 +6,9 @@ const props = defineProps<{
   snapshot: CaseSnapshot
 }>()
 
-const oxygenPercent = computed(() => `${props.snapshot.vitals.oxygen}%`)
-const infectionPercent = computed(() => `${props.snapshot.vitals.infection}%`)
-const tissuePercent = computed(() => `${props.snapshot.vitals.tissue}%`)
+const oxygenPercent = computed(() => `${Math.round(props.snapshot.vitals.oxygen)}%`)
+const infectionPercent = computed(() => `${Math.round(props.snapshot.vitals.infection)}%`)
+const tissuePercent = computed(() => `${Math.round(props.snapshot.vitals.tissue)}%`)
 
 function barClass(value: number): string {
   if (value <= 20) return 'critical'
@@ -61,7 +61,7 @@ const stabilityDisplay = computed(() => {
           :style="{ width: oxygenPercent }"
         />
       </div>
-      <span class="case-bar-value">{{ snapshot.vitals.oxygen }}</span>
+      <span class="case-bar-value">{{ Math.round(snapshot.vitals.oxygen) }}</span>
     </div>
 
     <!-- 感染 -->
@@ -81,7 +81,7 @@ const stabilityDisplay = computed(() => {
           :style="{ width: infectionPercent }"
         />
       </div>
-      <span class="case-bar-value">{{ snapshot.vitals.infection }}</span>
+      <span class="case-bar-value">{{ Math.round(snapshot.vitals.infection) }}</span>
     </div>
 
     <!-- 组织 -->
@@ -101,7 +101,7 @@ const stabilityDisplay = computed(() => {
           :style="{ width: tissuePercent }"
         />
       </div>
-      <span class="case-bar-value">{{ snapshot.vitals.tissue }}</span>
+      <span class="case-bar-value">{{ Math.round(snapshot.vitals.tissue) }}</span>
     </div>
 
     <!-- 当前目标 + 稳定倒计时 -->

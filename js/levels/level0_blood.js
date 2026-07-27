@@ -29,4 +29,17 @@ const LEVEL_0 = {
   ],
   tutorials: [],
   knowledgeCards: [],
+  /* 病例模式：O₂运输 */
+  case: {
+    primaryCell: 'rbc',
+    vitals: { oxygen: 80, infection: 5, tissue: 75 },
+    oxygenDecayPerSecond: 0.6,
+    infectionGrowthPerSecond: 0.15,
+    tissueDecayPerSecond: 0.15,
+    stabilitySeconds: 5,
+    nodes: [
+      { kind: 'oxygen-source', x: 30, y: 10, id: 'o2-src-0' },
+      { kind: 'target-tissue', x: 115, y: 10, id: 'tissue-tgt-0' },
+    ],
+  },
 };

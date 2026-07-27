@@ -92,144 +92,147 @@ export class PhaserGameEngineAdapter implements GameEngine {
     })
   }
 
-  async loadCaseDraft(draft: CaseDraft, options: LoadLevelOptions): Promise<void> {
+  async loadCaseDraft(draft: CaseDraft, options: LoadLevelOptions, classicLevelId?: string): Promise<void> {
     if (!this.host) throw new Error('Phaser adapter must be mounted before loading a case')
     if (!draft.caseConfig) throw new Error('Phaser case runtime requires caseConfig')
+
+    // Classic level mode: load the full classic level scene, then overlay case mechanics
+    if (classicLevelId) {
+      await this.loadClassicLevelScene(classicLevelId, options)
+      this.draft = draft
+      this.activeMode = 'case'
+      this.activeSceneKey = CLASSIC_SCENE_KEY
+      this.classicLevelId = classicLevelId
+      this.playerCells.set(1, options.playerOneCell === 2 ? 2 : 1)
+      if (options.twoPlayer) this.playerCells.set(2, options.playerTwoCell === 1 ? 1 : 2)
+      else this.playerCells.delete(2)
+      this.caseEngine = new CaseEngine(draft.caseConfig)
+      this.terminalEmitted = false
+      this.directorPhase = 0
+      this.directorPending = false
+      this.directorRunId = `phaser-${draft.id}-${Date.now().toString(36)}`
+      this.overlayCaseNodesOnClassicScene(draft)
+      this.events.emit('case-updated', this.caseEngine.getSnapshot())
+      if (draft.caseConfig.allowedEvents.length > 0) void this.requestDirector(1)
+      return
+    }
+
+    // Standalone case scene (editor preview) — not supported yet
+    throw new Error('Case requires classicLevelId')
+  }
+
+  private async loadClassicLevelScene(levelId: string, options: LoadLevelOptions): Promise<void> {
+    const level = this.classicLevels.get(levelId)
     this.game?.destroy(true)
     this.pressed.forEach(actions => actions.clear())
-    this.draft = draft
     this.options = options
-    this.activeMode = 'case'
-    this.activeSceneKey = 'case-runtime'
-    this.classicLevelId = null
-    this.playerCells.set(1, options.playerOneCell === 2 ? 2 : 1)
-    if (options.twoPlayer) this.playerCells.set(2, options.playerTwoCell === 1 ? 1 : 2)
-    else this.playerCells.delete(2)
-    this.caseEngine = new CaseEngine(draft.caseConfig)
-    this.terminalEmitted = false
-    this.directorPhase = 0
-    this.directorPending = false
-    this.directorRunId = `phaser-${draft.id}-${Date.now().toString(36)}`
-    const model = buildPhaserSceneModel(draft)
-    const events = this.events
-    const caseEngine = this.caseEngine
-    const pressed = this.pressed
-    const tickRuntime = (deltaMs: number) => this.tick(deltaMs)
-    const adapterPlayerCell = (index: 1 | 2): 1 | 2 => this.playerCells.get(index) ?? 1
 
-    await new Promise<void>((resolve, reject) => {
-      class CaseScene extends Phaser.Scene {
-        private players: Array<{ index: 1 | 2; shape: Phaser.GameObjects.Arc; body: Phaser.Physics.Arcade.Body; carryingOxygen: boolean }> = []
-        private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
-        private wasd!: Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
-
-        constructor() { super('case-runtime') }
-
-        create(): void {
-          try {
-            this.cameras.main.setBackgroundColor('#07101f')
-            this.physics.world.setBounds(0, 0, model.worldWidth, model.worldHeight)
-            const platforms = this.physics.add.staticGroup()
-            for (const tile of model.solids) {
-              const rectangle = this.add.rectangle(
-                tile.x * model.tileSize + model.tileSize / 2,
-                tile.y * model.tileSize + model.tileSize / 2,
-                model.tileSize,
-                model.tileSize,
-                tile.tile === '#' ? 0x253a5c : 0x275f4b,
-              )
-              platforms.add(rectangle)
-            }
-            this.players.push(this.createPlayer(1, model.spawn.x, model.spawn.y, this.playerColor(1), platforms))
-            if (options.twoPlayer) this.players.push(this.createPlayer(2, model.spawn.x + 1, model.spawn.y, this.playerColor(2), platforms))
-            this.cursors = this.input.keyboard!.createCursorKeys()
-            this.wasd = this.input.keyboard!.addKeys('W,A,D') as Record<'W' | 'A' | 'D', Phaser.Input.Keyboard.Key>
-
-            for (const node of model.nodes) this.createNode(node, model.tileSize)
-            this.add.text(14, 12, draft.metadata.title || '病例试玩', {
-              color: '#edf5ff', fontFamily: 'Microsoft YaHei, sans-serif', fontSize: '16px',
-            }).setScrollFactor(0)
-            const canvas = this.game.canvas
-            canvas.setAttribute('role', 'application')
-            canvas.setAttribute('aria-label', `${draft.metadata.title} Phaser 病例场景`)
-            canvas.dataset.playerCount = String(this.players.length)
-            canvas.dataset.playerRoles = options.twoPlayer ? 'rbc,wbc' : (options.playerOneCell === 2 ? 'wbc' : 'rbc')
-            events.emit('state-changed', 'playing')
-            events.emit('case-updated', caseEngine!.getSnapshot())
-            resolve()
-          } catch (cause) {
-            reject(cause)
-          }
-        }
-
-        private createPlayer(index: 1 | 2, tileX: number, tileY: number, color: number, platforms: Phaser.Physics.Arcade.StaticGroup) {
-          const shape = this.add.circle(
-            tileX * model.tileSize + model.tileSize / 2,
-            tileY * model.tileSize + model.tileSize / 2,
-            Math.max(4, model.tileSize * 0.38),
-            color,
-          )
-          shape.setName(`player-${index}`)
-          this.physics.add.existing(shape)
-          const body = shape.body as Phaser.Physics.Arcade.Body
-          body.setCollideWorldBounds(true).setBounce(0.05)
-          this.physics.add.collider(shape, platforms)
-          return { index, shape, body, carryingOxygen: false }
-        }
-
-        private createNode(node: PhaserSceneModel['nodes'][number], tileSize: number): void {
-          const marker = this.add.circle(
-            node.x * tileSize + tileSize / 2,
-            node.y * tileSize + tileSize / 2,
-            Math.max(4, tileSize * 0.32),
-            NODE_COLORS[node.kind],
-          )
-          this.physics.add.existing(marker, true)
-          for (const player of this.players) {
-            this.physics.add.overlap(player.shape, marker, () => {
-              if (!caseEngine?.isActive()) return
-              const cell = adapterPlayerCell(player.index)
-              if (node.kind === 'oxygen-source' && cell === 1) player.carryingOxygen = true
-              if (node.kind === 'target-tissue' && cell === 1 && player.carryingOxygen) {
-                if (caseEngine.dispatch({ type: 'oxygenDelivered', amount: 12, nodeId: node.id, source: 'player' })) player.carryingOxygen = false
-              }
-              if (node.kind === 'infection-site' && cell === 2) {
-                if (caseEngine.dispatch({ type: 'infectionCleared', amount: 20, nodeId: node.id, source: 'player' })) marker.setAlpha(0.25)
-              }
-            })
-          }
-        }
-
-        private playerColor(index: 1 | 2): number {
-          return adapterPlayerCell(index) === 1 ? 0xe84b5f : 0x7bc7ff
-        }
-
-        override update(_time: number, delta: number): void {
-          for (const player of this.players) {
-            const actions = pressed.get(player.index)!
-            const left = player.index === 1 ? this.cursors.left.isDown || actions.has('left') : this.wasd.A.isDown || actions.has('left')
-            const right = player.index === 1 ? this.cursors.right.isDown || actions.has('right') : this.wasd.D.isDown || actions.has('right')
-            const jumpKey = player.index === 1 ? this.cursors.up : this.wasd.W
-            const jump = Phaser.Input.Keyboard.JustDown(jumpKey) || actions.has('jump')
-            player.body.setVelocityX(left ? -150 : right ? 150 : 0)
-            if (jump && player.body.blocked.down) player.body.setVelocityY(-310)
-          }
-          tickRuntime(delta)
+    return new Promise<void>((resolve) => {
+      const Scene = createClassicScene({ level, options, pressed: this.pressed, events: this.events })
+      // Wrap the scene to resolve the promise after create() runs
+      const BootstrappedScene = class extends (Scene as new (...args: unknown[]) => Phaser.Scene & { create(): void }) {
+        override create(): void {
+          super.create()
+          resolve()
         }
       }
-
       this.game = this.gameFactory({
         type: Phaser.CANVAS,
         parent: this.host!,
-        width: 960,
-        height: 540,
-        backgroundColor: '#07101f',
-        physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 760 }, debug: false } },
+        width: 800,
+        height: 480,
+        backgroundColor: level.definition.sky[0],
+        physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 }, debug: false } },
         scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-        scene: [CaseScene],
+        scene: [BootstrappedScene],
       })
     })
-    if (draft.caseConfig.allowedEvents.length > 0) void this.requestDirector(1)
+  }
+
+  private overlayCaseNodesOnClassicScene(draft: CaseDraft): void {
+    const scene = this.game!.scene.getScene(CLASSIC_SCENE_KEY)
+    if (!scene) return
+    const TILE = 12
+    const caseEngine = this.caseEngine!
+    const adapterPlayerCell = (index: 1 | 2): 1 | 2 => this.playerCells.get(index) ?? 1
+
+    for (const node of draft.nodes) {
+      if (node.kind === 'spawn') continue
+      const gfx = scene.add.graphics()
+      const cx = node.x * TILE + TILE / 2
+      const cy = node.y * TILE
+      const r = TILE * 0.45
+
+      switch (node.kind) {
+        case 'oxygen-source':
+          gfx.fillStyle(0x4fc3f7, 1); gfx.fillCircle(cx, cy, r)
+          gfx.lineStyle(2, 0xffffff, 0.6); gfx.strokeCircle(cx, cy, r)
+          gfx.fillStyle(0xffffff, 0.6); gfx.fillCircle(cx, cy, r * 0.3)
+          break
+        case 'target-tissue':
+          gfx.fillStyle(0xffb74d, 1); gfx.fillCircle(cx, cy, r)
+          gfx.lineStyle(2, 0xffffff, 0.6); gfx.strokeCircle(cx, cy, r)
+          gfx.lineStyle(1, 0xffffff, 0.6)
+          gfx.lineBetween(cx - r * 0.5, cy, cx + r * 0.5, cy)
+          gfx.lineBetween(cx, cy - r * 0.5, cx, cy + r * 0.5)
+          break
+        case 'infection-site':
+          gfx.fillStyle(0xef5350, 1); gfx.fillCircle(cx, cy, r)
+          gfx.lineStyle(2, 0xffffff, 0.5); gfx.strokeCircle(cx, cy, r)
+          gfx.fillStyle(0x000000, 0.4); gfx.fillCircle(cx, cy, r * 0.35)
+          break
+        default:
+          gfx.fillStyle(0x888888, 0.5); gfx.fillCircle(cx, cy, r)
+      }
+      gfx.setDepth(5)
+
+      // Pulse animation
+      scene.tweens.add({
+        targets: gfx, alpha: 0.7, duration: 800,
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+      })
+
+      // Store node data for overlap detection
+      ;(gfx as unknown as Record<string, unknown>).caseNode = node
+
+      // Poll-based overlap: check in tick callback
+      const updateLoop = scene.time.addEvent({
+        delay: 200, loop: true,
+        callback: () => {
+          if (!caseEngine?.isActive()) return
+          // Check if any player is near this node via scene children
+          const p1 = scene.children.getByName('player-1') as Phaser.GameObjects.GameObject | null
+          if (!p1) return
+          const dist = Phaser.Math.Distance.Between(
+            (p1 as Phaser.GameObjects.Sprite).x ?? (p1 as unknown as { x: number }).x ?? 0,
+            (p1 as Phaser.GameObjects.Sprite).y ?? (p1 as unknown as { y: number }).y ?? 0,
+            cx, cy,
+          )
+          if (dist > TILE * 1.5) return
+
+          const cell = adapterPlayerCell(1)
+          if (node.kind === 'oxygen-source' && cell === 1) {
+            const p = (scene as unknown as Record<string, unknown>)._p1Carry as { o2: boolean } | undefined
+            if (p) p.o2 = true
+            gfx.setAlpha(0.35)
+          }
+          if (node.kind === 'target-tissue' && cell === 1) {
+            const p = (scene as unknown as Record<string, unknown>)._p1Carry as { o2: boolean } | undefined
+            if (p?.o2 && caseEngine.dispatch({ type: 'oxygenDelivered', amount: 12, nodeId: node.id, source: 'player' })) {
+              if (p) p.o2 = false
+            }
+          }
+          if (node.kind === 'infection-site' && cell === 2) {
+            if (caseEngine.dispatch({ type: 'infectionCleared', amount: 20, nodeId: node.id, source: 'player' })) {
+              gfx.setAlpha(0.2)
+            }
+          }
+        },
+      })
+
+      // Store timer for cleanup
+      ;(gfx as unknown as Record<string, unknown>)._caseTimer = updateLoop
+    }
   }
 
   private tick(deltaMs: number): void {

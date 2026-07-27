@@ -906,6 +906,29 @@ function update(){
   // 知识卡片触发
   checkKnowledgeCards();
 
+  // 病例节点交互
+  if(Game._caseData && window.CellQuestLegacy._dispatchCaseEvent) {
+    const caseNodes = Game._caseData.nodes;
+    const px = p.x + p.w/2, py = p.y + p.h/2;
+    if(!Game._caseCooldowns) Game._caseCooldowns = {};
+    for(const node of caseNodes) {
+      const nx = node.x * TILE + TILE/2, ny = node.y * TILE + TILE/2;
+      const dist = Math.hypot(px - nx, py - ny);
+      if(dist < TILE * 2 && !Game._caseCooldowns[node.id]) {
+        Game._caseCooldowns[node.id] = 60; // 1 second cooldown
+        window.CellQuestLegacy._dispatchCaseEvent(
+          node.kind === 'oxygen-source' || node.kind === 'target-tissue' ? 'oxygenDelivered' : 'infectionCleared',
+          node.id
+        );
+        Sfx.pickup ? Sfx.pickup() : 0;
+      }
+    }
+    // Tick cooldowns
+    for(const k in Game._caseCooldowns) {
+      if(Game._caseCooldowns[k] > 0) Game._caseCooldowns[k]--;
+    }
+  }
+
   // 相机
   updateCamera();
 
@@ -2247,6 +2270,16 @@ function LoadLevel(n, cellTypeOverride){
   container.focus();
   updateHUD();
 
+  // 病例模式：如果关卡带 case 数据，通知适配器
+  if(mapData.case) {
+    Game._caseData = mapData.case;
+    if(window.CellQuestLegacy._onCaseLevelLoad) {
+      window.CellQuestLegacy._onCaseLevelLoad(mapData.case);
+    }
+  } else {
+    Game._caseData = null;
+  }
+
   return true;
 }
 
@@ -2471,6 +2504,7 @@ function init(){
   bindClick('btn-quit', ()=>{ backToHub(); });
   bindClick('btn-next-level', ()=>{ backToHub(); });
   bindClick('btn-complete-menu', ()=>{ showMenu(); });
+  bindClick('btn-complete-home', ()=>{ showMenu(); });
   // 死亡面板按钮
   bindClick('btn-retry', ()=>{ retryFromDeath(); });
   bindClick('btn-death-quit', ()=>{ quitFromDeath(); });
@@ -2588,5 +2622,11 @@ window.CellQuestLegacy = {
     // This stub exists for future hooking.
   },
 };
+
+// Open the case editor in a new tab
+function openEditor() { window.open('/editor.html', '_blank') }
+
+// Bridge: trigger level complete from case engine
+window.cellQuest_triggerComplete = levelComplete;
 
 window.addEventListener('load', init);
