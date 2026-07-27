@@ -29,6 +29,7 @@ class Level {
     this.finish = null;
     this.playerSpawn = { x:64, y:384 };
     this.width = mapData.width || 80;
+    this.height = (mapData.map && mapData.map.length) || 15;
     this.tutorials = mapData.tutorials || [];
     this.bg = mapData.sky || [C.sky1, C.sky3];
     this.miniSpawnArea = mapData.miniSpawnArea || null;
@@ -719,6 +720,9 @@ function updateCamera(){
   let cx = p.x - CW/2 + p.w/2;
   cx = Math.max(0, Math.min(cx, lvl.width*TILE - CW));
   Game.camera.x = cx;
+  let cy = p.y - CH/2 + p.h/2;
+  cy = Math.max(0, Math.min(cy, lvl.height*TILE - CH));
+  Game.camera.y = cy;
   if(Game.camera.shake > 0){
     Game.camera.shake *= 0.85;
     if(Game.camera.shake < 0.3) Game.camera.shake = 0;
@@ -745,8 +749,10 @@ function loop(time){
 }
 
 // ===== 更新逻辑 =====
+let _updateFirstFrame = true;
 function update(){
   if(Game.state !== 'playing') return;
+  if(_updateFirstFrame){ console.log('[DEBUG] First update frame! player=(' + Game.player.x + ',' + Game.player.y + ') state=' + Game.state); _updateFirstFrame = false; }
 
   if(Game.memoryCardOpen){
     Game.prevKeys = {...Game.keys};
@@ -991,17 +997,28 @@ function render(){
     camX=ex-CW/2+p.w/2;
   }
   camX=Math.max(0,Math.min(camX,lvl.width*TILE-CW*zoomScale));
+  // Y camera: follow player vertically
+  let camY = 0;
+  if(!Game.twoPlayer){
+    const py = Game.player.y;
+    camY = py - CH/2 + Game.player.h/2;
+    camY = Math.max(0, Math.min(camY, lvl.height*TILE - CH));
+  }
   const shakeX=Game.camera.shake>0?Math.sin(Game.frame*1.7)*Game.camera.shake*0.7:0;
   const shakeY=Game.camera.shake>0?Math.cos(Game.frame*2.3)*Game.camera.shake*0.7:0;
 
   ctx.save();
   if(zoomScale < 1){
     ctx.scale(1/zoomScale, 1/zoomScale);
-    ctx.translate(-camX*(1-zoomScale), 0);
+    ctx.translate(-camX*(1-zoomScale), -camY*(1-zoomScale));
   }
   ctx.translate(shakeX, shakeY);
 
   drawBackground(ctx, camX, lvl.bg);
+
+  // Vertical camera: shift game world up by camY
+  ctx.translate(0, -camY);
+
   lvl.draw(ctx, camX);
   for(const tp of Game.tempPlatforms) tp.draw(ctx, camX);
   for(const pt of Game.pusTiles) pt.draw(ctx, camX);
@@ -2083,6 +2100,7 @@ function backToHub(){
 
 // ===== 关卡加载（通用入口函数） =====
 function LoadLevel(n, cellTypeOverride){
+  console.log('[DEBUG] LoadLevel n=' + n + ' cell=' + cellTypeOverride + ' state=' + Game.state);
   // Preview level: n is a string key
   if(typeof n === 'string' && _PREVIEW_LEVELS[n]){
     const mapData = _PREVIEW_LEVELS[n];
@@ -2262,6 +2280,8 @@ function LoadLevel(n, cellTypeOverride){
   // v3: 应用自适应难度调整
   applyAdaptiveDifficulty();
 
+  console.log('[DEBUG] Setting Game.state=playing, player=(' + Game.player.x + ',' + Game.player.y + ') health=' + Game.player.health + ' levelRows=' + Game.level.height);
+  _updateFirstFrame = true;
   Game.state = 'playing';
   $('hub-screen').classList.add('hidden');
   $('complete-screen').classList.add('hidden');
@@ -2371,6 +2391,7 @@ function level5Mechanics(player, level){ /* Boss感染：三阶段Boss战 */ }
 
 // ===== 死亡面板 =====
 function showDeathPanel(){
+  console.error('[DEBUG] showDeathPanel called! player=' + (Game.player ? Game.player.y : 'null') + ' state=' + Game.state);
   if(!Game.player) return;
 
   // 更新细胞名称
@@ -2631,7 +2652,7 @@ window.CellQuestLegacy = {
 };
 
 // Open the case editor in a new tab
-function openEditor() { window.open('/editor.html', '_blank') }
+function openEditor() { window.open('editor.html', '_blank') }
 
 // Bridge: trigger level complete from case engine
 window.cellQuest_triggerComplete = levelComplete;

@@ -305,7 +305,9 @@ class Player {
     if(this.onGround) this.coyote = COYOTE_FRAMES;
 
     // ===== 掉落虚空死亡 =====
-    if(this.y > CH + 60){
+    const dl = level.height * TILE + 60;
+    if(this.y > dl){
+      console.error('[DEBUG] FALL DEATH y=' + this.y + ' > ' + dl + ' (levelRows=' + level.height + ')');
       this.die(level);
       return;
     }
@@ -877,6 +879,7 @@ class Player {
   }
 
   takeDamage(level){
+    console.warn('[DAMAGE] health=' + this.health + ' inv=' + this.invincible);
     if(this.invincible > 0) return;
     if(this.shield > 0){
       this.shield = 0;
@@ -898,6 +901,7 @@ class Player {
   }
 
   die(level){
+    console.warn('[DIE] y=' + this.y + ' health=' + this.health + ' cells=' + Game.cells);
     Sfx.death();
     Game.deathTimer = 30;
     Game.camera.shake = 12;

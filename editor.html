@@ -67,6 +67,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',monospace;background:#0a0a18;color
     <button onclick="resetLevel()" style="background:#6a3a1a;border-color:#9a5a2a">🔄 重置</button>
     <span class="sep">|</span>
     <span>宽:</span><input type="number" id="mapWidth" value="135" min="20" max="200" style="width:60px">
+    <span>高:</span><input type="number" id="mapHeight" value="30" min="10" max="80" style="width:60px" onchange="resizeMap()">
     <span>关卡名:</span><input type="text" id="levelName" value="新关卡" style="width:120px">
     <span class="sep">|</span>
     <button onclick="exportMap()" style="background:#e94560;border-color:#ff6b6b">导出</button>
@@ -251,12 +252,14 @@ function buildExtraStr(){
 // ── Grid ──
 function newMap(w,h){
   w = w || parseInt(document.getElementById('mapWidth').value) || 135;
-  h = h || 15;
+  h = h || parseInt(document.getElementById('mapHeight').value) || 30;
   mapWidth = w; mapHeight = h;
   grid = Array.from({length:h}, ()=>Array(w).fill(' '));
   snapshot = grid.map(r=>[...r]);
   document.getElementById('levelSelect').value = '';
   document.getElementById('levelName').value = '自定义关卡';
+  document.getElementById('mapWidth').value = w;
+  document.getElementById('mapHeight').value = h;
   editorPipeSpawners = [];
   editorKnowledgeCards = [];
   editorTutorials = [];
@@ -273,17 +276,19 @@ function resetLevel(){
   mapHeight = snapshot.length;
   grid = snapshot.map(r=>[...r]);
   document.getElementById('mapWidth').value = mapWidth;
+  document.getElementById('mapHeight').value = mapHeight;
   draw();
-  alert('已重置（配置数组保留）');
+  alert('已重置');
 }
 function resizeMap(){
   const w = parseInt(document.getElementById('mapWidth').value) || 135;
-  if(w === mapWidth) return;
-  const newGrid = Array.from({length:mapHeight}, ()=>Array(w).fill(' '));
-  for(let r=0;r<mapHeight;r++)
+  const h = parseInt(document.getElementById('mapHeight').value) || 30;
+  if(w === mapWidth && h === mapHeight) return;
+  const newGrid = Array.from({length:h}, ()=>Array(w).fill(' '));
+  for(let r=0;r<Math.min(h,mapHeight);r++)
     for(let c=0;c<Math.min(w,mapWidth);c++)
-      newGrid[r][c] = grid[r][c]?.[c] || ' ';
-  grid = newGrid; mapWidth = w;
+      newGrid[r][c] = grid[r] ? (grid[r][c] || ' ') : ' ';
+  grid = newGrid; mapWidth = w; mapHeight = h;
   draw();
 }
 
@@ -677,6 +682,7 @@ function doImport(){
   mapHeight = mapRows.length;
   grid = mapRows.map(r=>r.split(''));
   document.getElementById('mapWidth').value = mapWidth;
+  document.getElementById('mapHeight').value = mapHeight;
   const nameMatch = text.match(/name:\s*'([^']+)'/);
   if(nameMatch) document.getElementById('levelName').value = nameMatch[1];
   parseExtraConfig(text);
@@ -697,7 +703,7 @@ async function loadPresetList(){
     try{
       const r = await fetch(`js/levels/${files[i]}.js`);
       const code = await r.text();
-      sel.innerHTML += `<option value="builtin_${i}">第${i}关: ${names[i]}</option>`;
+      sel.innerHTML += `<option value="builtin_${i}">第${i+1}关: ${names[i]}</option>`;
       sel.dataset['code_builtin_'+i] = code;
     }catch(e){}
   }
@@ -743,6 +749,7 @@ function loadCustomPreset(ci){
   grid = lvl.map ? lvl.map.map(r => r.padEnd(mapWidth, ' ').split('')) : Array.from({length:mapHeight},()=>Array(mapWidth).fill(' '));
   snapshot = grid.map(r=>[...r]);
   document.getElementById('mapWidth').value = mapWidth;
+  document.getElementById('mapHeight').value = mapHeight;
   document.getElementById('levelName').value = lvl.name || '自定义关卡';
   editorPipeSpawners = lvl.pipeSpawners || [];
   editorKnowledgeCards = lvl.knowledgeCards || [];
@@ -810,12 +817,12 @@ function doImportRaw(text){
   grid = mapRows.map(r=>r.padEnd(mapWidth,' ').slice(0,mapWidth).split(''));
   snapshot = grid.map(r=>[...r]);
   document.getElementById('mapWidth').value = mapWidth;
+  document.getElementById('mapHeight').value = mapHeight;
   const nameMatch = text.match(/name:\s*'([^']+)'/);
   if(nameMatch) document.getElementById('levelName').value = nameMatch[1];
   parseExtraConfig(text);
   draw();
 }
-
 // 从关卡源码中解析 pipeSpawners / tutorials / knowledgeCards 为 JS 数组
 function parseExtraConfig(text){
   editorPipeSpawners = [];
