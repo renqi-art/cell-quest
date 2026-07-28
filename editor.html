@@ -160,6 +160,7 @@ let isDragging = false;
 let lastCell = null;
 let eraseMode = false;
 let snapshot = null;
+let snapshotEditorState = null;
 
 // 编辑器可编辑的配置数组
 let editorPipeSpawners = [];  // [{col, row, dir, trigger, type, range, cooldown, interval}]
@@ -258,6 +259,7 @@ function newMap(w,h){
   mapWidth = w; mapHeight = h;
   grid = Array.from({length:h}, ()=>Array(w).fill(' '));
   snapshot = grid.map(r=>[...r]);
+  snapshotEditorState = null;
   document.getElementById('levelSelect').value = '';
   document.getElementById('levelName').value = '自定义关卡';
   document.getElementById('mapWidth').value = w;
@@ -281,6 +283,19 @@ function resetLevel(){
   grid = snapshot.map(r=>[...r]);
   document.getElementById('mapWidth').value = mapWidth;
   document.getElementById('mapHeight').value = mapHeight;
+  if(snapshotEditorState){
+    const previous = snapshotEditorState;
+    document.getElementById('levelName').value = previous.name;
+    editorCellType = previous.cellType;
+    editorWinCondition = previous.winCondition;
+    editorPipeSpawners = previous.pipeSpawners.map(item=>({...item}));
+    editorKnowledgeCards = previous.knowledgeCards.map(item=>({...item}));
+    editorTutorials = previous.tutorials.map(item=>({...item}));
+    currentCustomIdx = previous.currentCustomIdx;
+    document.getElementById('customActions').style.display = previous.customActions;
+    snapshotEditorState = null;
+    renderPalette();
+  }
   draw();
   alert('已重置');
 }
@@ -570,12 +585,41 @@ function deleteKnowledgeCard(idx){
 }
 
 // ── Export / Import ──
+function parseEditorMetadata(text){
+  const source = String(text);
+  let name = null;
+  const jsonNameMatch = source.match(/name:\s*("(?:\\.|[^"\\])*")/);
+  if(jsonNameMatch){
+    try{
+      const parsedName = JSON.parse(jsonNameMatch[1]);
+      if(typeof parsedName === 'string') name = parsedName;
+    }catch(e){}
+  }
+  if(name === null){
+    const legacyNameMatch = source.match(/name:\s*'([^']+)'/);
+    if(legacyNameMatch) name = legacyNameMatch[1];
+  }
+  const cellTypeMatch = source.match(/cellType:\s*(1|3)\b/);
+  const winConditionMatch = source.match(/winCondition:\s*(WIN_KILL_ALL|WIN_COLLECT_ALL)\b/);
+  return {
+    name,
+    cellType: cellTypeMatch ? Number(cellTypeMatch[1]) : 3,
+    winCondition: winConditionMatch?.[1] === 'WIN_KILL_ALL' ? 'killAll' : 'collectAll',
+  };
+}
+function applyEditorMetadata(text){
+  const metadata = parseEditorMetadata(text);
+  if(metadata.name !== null) document.getElementById('levelName').value = metadata.name;
+  editorCellType = metadata.cellType;
+  editorWinCondition = metadata.winCondition;
+}
 function exportMap(){
   const name = document.getElementById('levelName').value || '新关卡';
   const w = mapWidth;
   const lines = grid.map(row => `      "${row.join('')}",`);
   const extras = buildExtraStr();
-  const code = `/* ${name} */\nconst LEVEL_X = {\n  name: '${name}',\n  width: ${w},\n  cellType: ${editorCellType},\n  winCondition: ${editorWinCondition === 'killAll' ? 'WIN_KILL_ALL' : 'WIN_COLLECT_ALL'},\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};`;
+  const serializedName = JSON.stringify(name);
+  const code = `const LEVEL_X = {\n  name: ${serializedName},\n  width: ${w},\n  cellType: ${editorCellType},\n  winCondition: ${editorWinCondition === 'killAll' ? 'WIN_KILL_ALL' : 'WIN_COLLECT_ALL'},\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};`;
   document.getElementById('exportText').value = code;
   document.getElementById('exportModal').classList.add('show');
 }
@@ -602,7 +646,8 @@ async function saveLevel(){
   }
   const lines = grid.map(row => `      "${row.join('')}",`);
   const extras = buildExtraStr();
-  const code = `/* ${name} */\nconst LEVEL_${levelNum} = {\n  name: '${name}',\n  width: ${mapWidth},\n  cellType: ${editorCellType},\n  winCondition: ${editorWinCondition === 'killAll' ? 'WIN_KILL_ALL' : 'WIN_COLLECT_ALL'},\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};\n`;
+  const serializedName = JSON.stringify(name);
+  const code = `const LEVEL_${levelNum} = {\n  name: ${serializedName},\n  width: ${mapWidth},\n  cellType: ${editorCellType},\n  winCondition: ${editorWinCondition === 'killAll' ? 'WIN_KILL_ALL' : 'WIN_COLLECT_ALL'},\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};\n`;
   try{
     const r = await fetch('/save', {
       method:'POST',
@@ -685,10 +730,11 @@ function doImport(){
   mapWidth = mapRows[0].length;
   mapHeight = mapRows.length;
   grid = mapRows.map(r=>r.split(''));
+  snapshot = grid.map(r=>[...r]);
+  snapshotEditorState = null;
   document.getElementById('mapWidth').value = mapWidth;
   document.getElementById('mapHeight').value = mapHeight;
-  const nameMatch = text.match(/name:\s*'([^']+)'/);
-  if(nameMatch) document.getElementById('levelName').value = nameMatch[1];
+  applyEditorMetadata(text);
   parseExtraConfig(text);
   draw();
   document.getElementById('importModal').classList.remove('show');
@@ -752,6 +798,7 @@ function loadCustomPreset(ci){
   mapHeight = lvl.map ? lvl.map.length : 15;
   grid = lvl.map ? lvl.map.map(r => r.padEnd(mapWidth, ' ').split('')) : Array.from({length:mapHeight},()=>Array(mapWidth).fill(' '));
   snapshot = grid.map(r=>[...r]);
+  snapshotEditorState = null;
   document.getElementById('mapWidth').value = mapWidth;
   document.getElementById('mapHeight').value = mapHeight;
   document.getElementById('levelName').value = lvl.name || '自定义关卡';
@@ -822,14 +869,10 @@ function doImportRaw(text){
   // 规范化行长度：统一补齐/截断到 mapWidth
   grid = mapRows.map(r=>r.padEnd(mapWidth,' ').slice(0,mapWidth).split(''));
   snapshot = grid.map(r=>[...r]);
+  snapshotEditorState = null;
   document.getElementById('mapWidth').value = mapWidth;
   document.getElementById('mapHeight').value = mapHeight;
-  const nameMatch = text.match(/name:\s*'([^']+)'/);
-  if(nameMatch) document.getElementById('levelName').value = nameMatch[1];
-  const cellTypeMatch = text.match(/cellType:\s*(1|3)\b/);
-  const winConditionMatch = text.match(/winCondition:\s*(WIN_KILL_ALL|WIN_COLLECT_ALL)\b/);
-  editorCellType = cellTypeMatch ? Number(cellTypeMatch[1]) : 3;
-  editorWinCondition = winConditionMatch?.[1] === 'WIN_KILL_ALL' ? 'killAll' : 'collectAll';
+  applyEditorMetadata(text);
   parseExtraConfig(text);
   draw();
 }

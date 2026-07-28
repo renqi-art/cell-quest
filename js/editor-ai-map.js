@@ -78,6 +78,16 @@
       showError('生成地图尺寸无效');
       return;
     }
+    snapshotEditorState = {
+      name: document.getElementById('levelName').value,
+      cellType: editorCellType,
+      winCondition: editorWinCondition,
+      pipeSpawners: editorPipeSpawners.map(item => ({ ...item })),
+      knowledgeCards: editorKnowledgeCards.map(item => ({ ...item })),
+      tutorials: editorTutorials.map(item => ({ ...item })),
+      currentCustomIdx,
+      customActions: document.getElementById('customActions').style.display,
+    };
     snapshot = grid.map(row => [...row]);
     mapWidth = pendingLevel.width;
     mapHeight = pendingLevel.height;
@@ -98,6 +108,13 @@
   }
 
   async function openDialog() {
+    pendingLevel = null;
+    errorNode.textContent = '';
+    resultNode.hidden = true;
+    applyButton.hidden = true;
+    modal.querySelector('#aiMapTarget').textContent =
+      `目标尺寸：${document.getElementById('mapWidth').value}×${document.getElementById('mapHeight').value}`;
+    modal.classList.add('show');
     try {
       const response = await fetch('/api/ai-config');
       const status = await response.json();
@@ -106,13 +123,6 @@
         location.href = '/ai-settings.html?return=%2Feditor.html';
         return;
       }
-      pendingLevel = null;
-      errorNode.textContent = '';
-      resultNode.hidden = true;
-      applyButton.hidden = true;
-      modal.querySelector('#aiMapTarget').textContent =
-        `目标尺寸：${document.getElementById('mapWidth').value}×${document.getElementById('mapHeight').value}`;
-      modal.classList.add('show');
       promptNode.focus();
     } catch {
       showError('无法检查 AI 配置状态');

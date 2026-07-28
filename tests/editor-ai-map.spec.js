@@ -212,3 +212,180 @@ test('AI-controlled names and summaries render as inert text', async ({ page }) 
   expect(await page.locator('#aiMapResult img, #aiMapResult svg').count()).toBe(0);
   expect(await page.evaluate(() => [window.__aiNameXss || 0, window.__aiThemeXss || 0])).toEqual([0, 0]);
 });
+
+test('serializes applied AI names as inert strings in export and save source', async ({ page }) => {
+  const modelName = '*/alert(1)/*';
+  let savedCode = '';
+  page.on('dialog', dialog => dialog.accept());
+  await page.route('**/api/generate-map', route => route.fulfill({
+    json: generatedFixture(20, 10, { level: { name: modelName } }),
+  }));
+  await page.route('**/save', async route => {
+    savedCode = route.request().postDataJSON().code;
+    await route.fulfill({ json: { ok: true } });
+  });
+  await openConfiguredDialog(page);
+  await page.locator('#mapWidth').fill('20');
+  await page.locator('#mapHeight').fill('10');
+  await page.getByTestId('ai-map-prompt').fill('safe export');
+  await page.getByTestId('generate-ai-map').click();
+  await page.getByTestId('apply-ai-map').click();
+
+  const exportedCode = await page.evaluate(() => {
+    exportMap();
+    return document.getElementById('exportText').value;
+  });
+  await page.evaluate(() => saveLevel());
+  await expect.poll(() => savedCode).not.toBe('');
+
+  for (const code of [exportedCode, savedCode]) {
+    expect(code).toContain(`name: ${JSON.stringify(modelName)}`);
+    expect(code).not.toContain(`/* ${modelName} */`);
+    expect(code).not.toMatch(/^\/\*/);
+  }
+});
+
+test('shows a visible error when the AI configuration response is not JSON', async ({ page }) => {
+  await page.route('**/api/ai-config', route => route.fulfill({
+    status: 502,
+    contentType: 'text/plain',
+    body: 'not-json',
+  }));
+  await page.goto('/editor.html');
+
+  await page.getByTestId('open-ai-map').click();
+
+  await expect(page.locator('#aiMapModal')).toHaveClass(/show/);
+  await expect(page.locator('#aiMapError')).toBeVisible();
+  await expect(page.locator('#aiMapError')).toHaveText('无法检查 AI 配置状态');
+});
+
+test('reset after AI apply restores the complete prior editor state only once', async ({ page }) => {
+  page.on('dialog', dialog => dialog.accept());
+  await page.route('**/api/generate-map', route => route.fulfill({
+    json: generatedFixture(20, 10),
+  }));
+  await openConfiguredDialog(page);
+  const before = await page.evaluate(() => {
+    mapWidth = 20;
+    mapHeight = 10;
+    grid = Array.from({ length: 10 }, (_, row) => (
+      Array.from({ length: 20 }, (_, col) => (row === 8 && col === 1 ? 'P' : ' '))
+    ));
+    document.getElementById('mapWidth').value = '20';
+    document.getElementById('mapHeight').value = '10';
+    document.getElementById('levelName').value = 'original level';
+    editorCellType = 3;
+    editorWinCondition = 'collectAll';
+    editorPipeSpawners = [{ col: 4, row: 5, trigger: 'timer' }];
+    editorKnowledgeCards = [{ x: 8, key: 'wbc', title: 'card', text: 'body' }];
+    editorTutorials = [{ x: 2, body: 'tutorial' }];
+    currentCustomIdx = 2;
+    document.getElementById('customActions').style.display = 'inline';
+    draw();
+    return {
+      grid: grid.map(row => row.join('')),
+      name: document.getElementById('levelName').value,
+      cellType: editorCellType,
+      winCondition: editorWinCondition,
+      pipeSpawners: editorPipeSpawners,
+      knowledgeCards: editorKnowledgeCards,
+      tutorials: editorTutorials,
+      currentCustomIdx,
+      customActions: document.getElementById('customActions').style.display,
+    };
+  });
+  await page.getByTestId('ai-map-prompt').fill('temporary AI level');
+  await page.getByTestId('generate-ai-map').click();
+  await page.getByTestId('apply-ai-map').click();
+
+  await page.evaluate(() => resetLevel());
+
+  const restored = await page.evaluate(() => ({
+    grid: grid.map(row => row.join('')),
+    name: document.getElementById('levelName').value,
+    cellType: editorCellType,
+    winCondition: editorWinCondition,
+    pipeSpawners: editorPipeSpawners,
+    knowledgeCards: editorKnowledgeCards,
+    tutorials: editorTutorials,
+    currentCustomIdx,
+    customActions: document.getElementById('customActions').style.display,
+  }));
+  expect(restored).toEqual(before);
+
+  await page.evaluate(() => {
+    document.getElementById('levelName').value = 'after reset';
+    editorCellType = 1;
+    editorWinCondition = 'killAll';
+    editorPipeSpawners = [];
+    document.getElementById('customActions').style.display = 'none';
+    resetLevel();
+  });
+  expect(await page.evaluate(() => ({
+    name: document.getElementById('levelName').value,
+    cellType: editorCellType,
+    winCondition: editorWinCondition,
+    pipeSpawners: editorPipeSpawners,
+    customActions: document.getElementById('customActions').style.display,
+  }))).toEqual({
+    name: 'after reset',
+    cellType: 1,
+    winCondition: 'killAll',
+    pipeSpawners: [],
+    customActions: 'none',
+  });
+});
+
+test('manual import round-trips exported cell and win-condition metadata', async ({ page }) => {
+  await page.goto('/editor.html');
+
+  const result = await page.evaluate(() => {
+    mapWidth = 20;
+    mapHeight = 10;
+    grid = Array.from({ length: 10 }, () => Array(20).fill(' '));
+    document.getElementById('mapWidth').value = '20';
+    document.getElementById('mapHeight').value = '10';
+    document.getElementById('levelName').value = 'metadata round trip';
+    editorCellType = 1;
+    editorWinCondition = 'killAll';
+    exportMap();
+    const firstExport = document.getElementById('exportText').value;
+    document.getElementById('levelName').value = 'stale name';
+    editorCellType = 3;
+    editorWinCondition = 'collectAll';
+    document.getElementById('importText').value = firstExport;
+    doImport();
+    exportMap();
+    return {
+      name: document.getElementById('levelName').value,
+      cellType: editorCellType,
+      winCondition: editorWinCondition,
+      secondExport: document.getElementById('exportText').value,
+    };
+  });
+
+  expect(result.name).toBe('metadata round trip');
+  expect(result.cellType).toBe(1);
+  expect(result.winCondition).toBe('killAll');
+  expect(result.secondExport).toContain('cellType: 1');
+  expect(result.secondExport).toContain('winCondition: WIN_KILL_ALL');
+});
+
+test('malformed successful generation remains temporary and cannot be applied', async ({ page }) => {
+  await page.route('**/api/generate-map', route => route.fulfill({
+    json: generatedFixture(20, 10, { level: { map: Array(10).fill('short') } }),
+  }));
+  await openConfiguredDialog(page);
+  await page.locator('#mapWidth').fill('20');
+  await page.locator('#mapHeight').fill('10');
+  await page.getByTestId('ai-map-prompt').fill('malformed result');
+  const before = await page.evaluate(() => grid.map(row => row.join('')));
+
+  await page.getByTestId('generate-ai-map').click();
+  await page.getByTestId('apply-ai-map').click();
+
+  await expect(page.locator('#aiMapError')).toHaveText('生成地图尺寸无效');
+  await expect(page.locator('#aiMapModal')).toHaveClass(/show/);
+  expect(await page.evaluate(() => grid.map(row => row.join('')))).toEqual(before);
+});
