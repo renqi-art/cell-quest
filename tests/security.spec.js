@@ -1,21 +1,32 @@
 const { test, expect } = require('playwright/test');
-
-
-test('browser removes legacy AI secrets and never calls the model upstream directly', async ({ page }) => {
-  const upstreamRequests = [];
-
-  await page.route('https://api.deepseek.com/**', async route => {
-    upstreamRequests.push(route.request().url());
-    await route.abort();
+async function routeSameOriginApi(page, testInfo, pathname, handler) {
+  const expectedUrl = new URL(pathname, testInfo.project.use.baseURL);
+  await page.route(expectedUrl.href, async route => {
+    const actualUrl = new URL(route.request().url());
+    expect(actualUrl.origin).toBe(expectedUrl.origin);
+    expect(actualUrl.pathname).toBe(pathname);
+    expect(actualUrl.search).toBe('');
+    await handler(route);
   });
-  await page.route('**/api/ai-config', async route => {
+  return expectedUrl;
+}
+
+
+test('browser removes legacy AI secrets and never calls the model upstream directly', async ({ page }, testInfo) => {
+  const upstreamRequests = [];
+  let settingsPostCount = 0;
+
+  const configUrl = await routeSameOriginApi(page, testInfo, '/api/ai-config', async route => {
     if (route.request().method() === 'GET') {
       return route.fulfill({ json: { configured: true, source: 'runtime' } });
     }
+    expect(route.request().method()).toBe('POST');
+    settingsPostCount += 1;
     expect(route.request().postDataJSON()).toEqual({ apiKey: 'runtime-secret' });
     return route.fulfill({ json: { ok: true, configured: true, source: 'runtime' } });
   });
-  await page.route('**/api/generate-map', async route => {
+  await routeSameOriginApi(page, testInfo, '/api/generate-map', async route => {
+    expect(route.request().method()).toBe('POST');
     const { width, height } = route.request().postDataJSON();
     const map = Array.from({ length: height }, () => ' '.repeat(width));
     map[height - 2] = `  P${' '.repeat(width - 6)}F  `;
@@ -36,20 +47,31 @@ test('browser removes legacy AI secrets and never calls the model upstream direc
       },
     });
   });
-
-  await page.goto('/');
-  await page.evaluate(() => localStorage.setItem('cellQuest_ds_key', 'legacy-browser-secret'));
-  await page.reload();
+  await page.route('https://api.deepseek.com/**', async route => {
+    upstreamRequests.push(route.request().url());
+    await route.abort();
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem('cellQuest_ds_key', 'legacy-browser-secret');
+  });
 
   await page.goto('/editor.html');
+  expect(await page.evaluate(() => localStorage.getItem('cellQuest_ds_key'))).toBeNull();
   await page.getByTestId('open-ai-map').click();
   await page.getByTestId('ai-map-prompt').fill('security-test');
   await page.getByTestId('generate-ai-map').click();
   await expect(page.getByTestId('ai-map-preview')).toBeVisible();
 
   await page.goto('/ai-settings.html');
+  expect(await page.evaluate(() => localStorage.getItem('cellQuest_ds_key'))).toBeNull();
   await page.getByTestId('ai-api-key').fill('runtime-secret');
+  const settingsPost = page.waitForRequest(request => (
+    request.url() === configUrl.href && request.method() === 'POST'
+  ));
   await page.getByTestId('save-ai-key').click();
+  const settingsRequest = await settingsPost;
+  expect(settingsRequest.postDataJSON()).toEqual({ apiKey: 'runtime-secret' });
+  await expect.poll(() => settingsPostCount).toBe(1);
 
   expect(upstreamRequests).toEqual([]);
   expect(await page.evaluate(() => localStorage.getItem('cellQuest_ds_key'))).toBeNull();
@@ -167,4 +189,150 @@ test('classic editor import rejects code-shaped and unknown CQ2 payloads without
 
   expect(dialogMessages).toContain('未找到 map 数组');
   expect(await page.evaluate(() => window.__editorImportExecuted || 0)).toBe(0);
+});
+
+test('classic editor import does not execute expressions in extra config', async ({ page }) => {
+  const map = Array.from({ length: 10 }, (_, row) => (
+    row === 8 ? ` P${' '.repeat(16)}F ` : ' '.repeat(20)
+  ));
+  const expressions = [
+    '(()=>{globalThis.__editorImportExecuted=1;return {}})()',
+    'globalThis.__editorImportCall()',
+    'function(){globalThis.__editorImportExecuted=1}',
+    'Math.PI',
+  ];
+  const sources = expressions.map(expression => `const LEVEL_X = {
+    name: "inert classic import",
+    width: 20,
+    cellType: 3,
+    winCondition: WIN_COLLECT_ALL,
+    map: [
+      ${map.map(row => `${JSON.stringify(row)},`).join('\n      ')}
+    ],
+    pipeSpawners:[${expression}],
+    tutorials: [],
+    knowledgeCards: [],
+  };`);
+
+  await page.goto('/editor.html');
+  const result = await page.evaluate(classicSources => {
+    globalThis.__editorImportExecuted = 0;
+    globalThis.__editorImportCall = () => {
+      globalThis.__editorImportExecuted += 1;
+      return {};
+    };
+    const imports = classicSources.map(classicSource => {
+      document.getElementById('importText').value = classicSource;
+      doImport();
+      return {
+        executed: globalThis.__editorImportExecuted,
+        pipeSpawnerCount: editorPipeSpawners.length,
+      };
+    });
+    delete globalThis.__editorImportCall;
+    delete globalThis.__editorImportExecuted;
+    return {
+      imports,
+      width: mapWidth,
+      height: mapHeight,
+      map: grid.map(row => row.join('')),
+    };
+  }, sources);
+
+  expect(result.imports).toEqual(expressions.map(() => ({
+    executed: 0,
+    pipeSpawnerCount: 0,
+  })));
+  expect(result.width).toBe(20);
+  expect(result.height).toBe(10);
+  expect(result.map).toEqual(map);
+});
+
+test('classic editor import preserves supported literal extra config', async ({ page }) => {
+  const source = `const LEVEL_X = {
+    name: "literal compatibility",
+    width: 20,
+    map: [
+      ${Array.from({ length: 10 }, () => `${JSON.stringify(' '.repeat(20))},`).join('\n      ')}
+    ],
+    pipeSpawners: [
+      // Built-in levels use identifier keys and single-quoted strings.
+      { col: 10, row: 9, dir: 'up_jump', trigger: 'proximity', range: 2, },
+    ],
+    tutorials: [
+      { x: 600, useCurrent: true, body: 'line 1\\nline 2', },
+    ],
+    knowledgeCards: [
+      /* Comments, null, double-quoted strings, and trailing commas are valid. */
+      { x: 300, y: null, key: "alveoli", title: 'card', text: 'body', },
+    ],
+  };`;
+
+  await page.goto('/editor.html');
+  const result = await page.evaluate(classicSource => {
+    document.getElementById('importText').value = classicSource;
+    doImport();
+    return {
+      pipeSpawners: editorPipeSpawners,
+      tutorials: editorTutorials,
+      knowledgeCards: editorKnowledgeCards,
+    };
+  }, source);
+
+  expect(result).toEqual({
+    pipeSpawners: [
+      { col: 10, row: 9, dir: 'up_jump', trigger: 'proximity', range: 2 },
+    ],
+    tutorials: [
+      { x: 600, useCurrent: true, body: 'line 1\nline 2' },
+    ],
+    knowledgeCards: [
+      { x: 300, y: null, key: 'alveoli', title: 'card', text: 'body' },
+    ],
+  });
+});
+
+test('classic editor loads actual built-in and exported extra config', async ({ page }) => {
+  await page.goto('/editor.html');
+  const result = await page.evaluate(async () => {
+    const source = await fetch('/js/levels/level5_boss.js').then(response => response.text());
+    doImportRaw(source);
+    const builtIn = {
+      pipeSpawners: editorPipeSpawners.map(item => ({ ...item })),
+      tutorials: editorTutorials.map(item => ({ ...item })),
+      knowledgeCards: editorKnowledgeCards.map(item => ({ ...item })),
+    };
+
+    exportMap();
+    const exportedSource = document.getElementById('exportText').value;
+    editorPipeSpawners = [];
+    editorTutorials = [];
+    editorKnowledgeCards = [];
+    document.getElementById('importText').value = exportedSource;
+    doImport();
+
+    return {
+      builtIn,
+      exported: {
+        pipeSpawners: editorPipeSpawners,
+        tutorials: editorTutorials,
+        knowledgeCards: editorKnowledgeCards,
+      },
+    };
+  });
+
+  expect(result.builtIn.pipeSpawners).toHaveLength(2);
+  expect(result.builtIn.pipeSpawners[0]).toMatchObject({
+    col: 30,
+    row: 0,
+    type: 'staph',
+    interval: 360,
+    trigger: 'timer',
+    maxSpawn: 3,
+  });
+  expect(result.builtIn.tutorials).toHaveLength(1);
+  expect(result.builtIn.knowledgeCards).toHaveLength(1);
+  expect(result.exported.pipeSpawners).toHaveLength(2);
+  expect(result.exported.tutorials).toHaveLength(1);
+  expect(result.exported.knowledgeCards).toHaveLength(1);
 });

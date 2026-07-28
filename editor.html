@@ -52,6 +52,8 @@ body{font-family:'Segoe UI','Microsoft YaHei',monospace;background:#0a0a18;color
 .inline-form .btn-row button.ok{color:#7ac;border-color:#4a7a4a}
 .inline-form .btn-row button.ok:hover{background:#3a4a3a}
 </style>
+<script src="js/ai-browser-security.js"></script>
+<script src="js/classic-literal-parser.js"></script>
 </head>
 <body oncontextmenu="return false">
 
@@ -895,26 +897,15 @@ function parseExtraConfig(text){
   editingPsIdx = -1;
   editingKcIdx = -1;
 
-  // 安全 eval：构造 JS 表达式并求值
-  function safeEvalArray(key){
-    const re = new RegExp(key + ':\\s*(\\[[\\s\\S]*?\\])\\s*[,\\x7D]');
-    const m = text.match(re);
-    if(!m || m[1].trim() === '[]') return null;
-    try{
-      // 用 eval 解析 JS 字面量数组
-      return eval('(' + m[1] + ')');
-    }catch(e){
-      console.warn('parseExtraConfig: failed to eval ' + key, e);
-      return null;
-    }
+  const parser = globalThis.ClassicLiteralParser;
+  if(parser){
+    const ps = parser.parseArrayProperty(text, 'pipeSpawners');
+    if(Array.isArray(ps)) editorPipeSpawners = ps;
+    const tut = parser.parseArrayProperty(text, 'tutorials');
+    if(Array.isArray(tut)) editorTutorials = tut;
+    const kc = parser.parseArrayProperty(text, 'knowledgeCards');
+    if(Array.isArray(kc)) editorKnowledgeCards = kc;
   }
-
-  const ps = safeEvalArray('pipeSpawners');
-  if(ps) editorPipeSpawners = ps;
-  const tut = safeEvalArray('tutorials');
-  if(tut) editorTutorials = tut;
-  const kc = safeEvalArray('knowledgeCards');
-  if(kc) editorKnowledgeCards = kc;
 
   renderPalette();
 }
