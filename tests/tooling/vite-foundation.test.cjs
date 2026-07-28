@@ -23,3 +23,9 @@ test('Vite proxies all server-side AI routes in dev and preview', () => {
   assert.match(viteConfig, /['"]\/api['"]\s*:/);
   assert.match(viteConfig, /legacyApiProxy/);
 });
+
+test('AI settings page is available to both the static server and Vite build', () => {
+  const viteConfig = fs.readFileSync(path.join(root, 'vite.config.ts'), 'utf8');
+  assert.ok(fs.existsSync(path.join(root, 'ai-settings.html')));
+  assert.match(viteConfig, /aiSettings\s*:\s*resolve\(root, 'ai-settings\.html'\)/);
+});

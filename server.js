@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const { handleDirectorRequest } = require('./server/director');
 const { handleGenerateCaseRequest } = require('./server/case-generator');
+const { getAiConfigStatus, handleGetAiConfig, handleSetAiConfig } = require('./server/ai-runtime-config');
+const { handleGenerateMapRequest } = require('./server/ai-map-generator');
 
 const ROOT = __dirname;
 const LEVEL_DIR = path.join(ROOT, 'js', 'levels');
@@ -35,7 +37,7 @@ const mime = {
   '.wav': 'audio/wav',
 };
 
-const PUBLIC_FILES = new Set(['/index.html', '/editor.html', '/deck.html']);
+const PUBLIC_FILES = new Set(['/index.html', '/editor.html', '/deck.html', '/ai-settings.html']);
 const PUBLIC_PREFIXES = ['/js/', '/css/', '/images/', '/audio/'];
 const LEVEL_FILENAME = /^level\d+_[a-z0-9_-]+\.js$/i;
 
@@ -197,7 +199,7 @@ const server = http.createServer(async (req, res) => {
       ok: true,
       service: 'cell-quest',
       version: VERSION,
-      aiConfigured: Boolean(process.env.CELL_QUEST_AI_API_KEY),
+      aiConfigured: getAiConfigStatus().configured,
     });
     return;
   }
@@ -215,6 +217,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+
+  if (req.method === 'POST' && requestPath === '/api/generate-map') {
+    await handleGenerateMapRequest(req, res, sendJson);
+    return;
+  }
   if (req.method === 'POST' && requestPath === '/api/generate-case') {
     await handleGenerateCaseRequest(req, res, sendJson);
     return;
@@ -232,6 +239,16 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && requestPath === '/reset') {
     await handleReset(req, res);
+    return;
+  }
+
+  if (req.method === 'GET' && requestPath === '/api/ai-config') {
+    handleGetAiConfig(res, sendJson);
+    return;
+  }
+
+  if (req.method === 'POST' && requestPath === '/api/ai-config') {
+    await handleSetAiConfig(req, res, sendJson);
     return;
   }
 

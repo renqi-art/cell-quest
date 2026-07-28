@@ -5,7 +5,8 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const BASE_URL = 'http://127.0.0.1:8080';
+const TEST_PORT = 18080;
+const BASE_URL = 'http://127.0.0.1:' + TEST_PORT;
 const TRAVERSAL_PROBE = path.join(ROOT, '.tmp-server-traversal-probe.js');
 let child;
 
@@ -38,6 +39,7 @@ test.before(async () => {
   child = spawn(process.execPath, ['server.js'], {
     cwd: ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, CELL_QUEST_PORT: String(TEST_PORT), CELL_QUEST_AI_API_KEY: '' },
   });
   await waitForServer(child);
 });
@@ -92,6 +94,32 @@ test('exposes a bounded health check without secret configuration', async () => 
     version: '4.0.0',
     aiConfigured: false,
   });
+});
+
+test('reports AI configuration status without exposing a key', async () => {
+  const response = await fetch(`${BASE_URL}/api/ai-config`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { configured: false, source: 'none' });
+});
+
+test('accepts runtime AI configuration without returning the submitted key', async () => {
+  const secret = 'runtime-secret';
+  const response = await fetch(`${BASE_URL}/api/ai-config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiKey: secret }),
+  });
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.deepEqual(payload, { ok: true, configured: true, source: 'runtime' });
+  assert.equal(JSON.stringify(payload).includes(secret), false);
+
+  const clearResponse = await fetch(`${BASE_URL}/api/ai-config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiKey: '' }),
+  });
+  assert.equal(clearResponse.status, 200);
 });
 
 test('serves browser security headers', async () => {
