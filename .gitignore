@@ -24,6 +24,7 @@ output/
 .edgeone/*
 .tef_dist/*
 .worktrees/
+.superpowers/
 
 # Playwright output
 test-results/
