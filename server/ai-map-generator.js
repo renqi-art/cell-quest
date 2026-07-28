@@ -74,6 +74,10 @@ function seededRandom(seed) {
 }
 
 function compileMap(blueprint, width, height, seed) {
+  if (!Number.isInteger(width) || width < 20 || width > 200
+    || !Number.isInteger(height) || height < 10 || height > 80) {
+    throw new RangeError('Map dimensions must be within supported bounds');
+  }
   const random = seededRandom(seed);
   const cells = Array.from({ length: height }, () => Array(width).fill(' '));
   const groundRow = height - 2;
@@ -130,6 +134,9 @@ function compileMap(blueprint, width, height, seed) {
 function validateCompiledLevel(level) {
   if (!level || typeof level !== 'object') return { ok: false, error: '地图对象无效' };
   if (!Number.isInteger(level.width) || !Number.isInteger(level.height)) return { ok: false, error: '地图尺寸无效' };
+  if (level.width < 20 || level.width > 200 || level.height < 10 || level.height > 80) {
+    return { ok: false, error: 'Map dimensions out of bounds' };
+  }
   if (!Array.isArray(level.map) || level.map.length !== level.height) return { ok: false, error: '地图高度无效' };
   if (!level.map.every(row => typeof row === 'string' && row.length === level.width)) {
     return { ok: false, error: '地图宽度无效' };

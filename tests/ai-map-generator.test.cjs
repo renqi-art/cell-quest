@@ -59,3 +59,20 @@ test('rejects malformed compiled levels', () => {
   assert.equal(validateCompiledLevel({ ...level, map: [...level.map.slice(0, -1), 'x'.repeat(level.width)] }).ok, false);
   assert.equal(validateCompiledLevel({ ...level, map: [...level.map.slice(0, -2), ' '.repeat(level.width), level.map.at(-1)] }).ok, false);
 });
+
+test('rejects compiled levels outside the supported dimensions', () => {
+  for (const [width, height] of [[19, 10], [201, 10], [20, 9], [20, 81]]) {
+    const map = Array.from({ length: height }, () => ' '.repeat(width));
+    map[height - 3] = `${' '.repeat(2)}P${' '.repeat(width - 6)}F${' '.repeat(2)}`;
+    map[height - 2] = '#'.repeat(width);
+    map[height - 1] = '#'.repeat(width);
+    assert.equal(validateCompiledLevel({ width, height, map }).ok, false);
+  }
+});
+
+test('rejects invalid compiler dimensions before allocating a map', () => {
+  assert.throws(() => compileMap(VALID_BLUEPRINT, 19, 10, hashSeed('fixture')), /dimensions/);
+  assert.throws(() => compileMap(VALID_BLUEPRINT, 201, 10, hashSeed('fixture')), /dimensions/);
+  assert.throws(() => compileMap(VALID_BLUEPRINT, 20, 9, hashSeed('fixture')), /dimensions/);
+  assert.throws(() => compileMap(VALID_BLUEPRINT, 20, 81, hashSeed('fixture')), /dimensions/);
+});
