@@ -165,6 +165,8 @@ let snapshot = null;
 let editorPipeSpawners = [];  // [{col, row, dir, trigger, type, range, cooldown, interval}]
 let editorKnowledgeCards = []; // [{x, y, key, title, text}]
 let editorTutorials = [];      // [{x, useCurrent, body}]
+let editorCellType = 3;
+let editorWinCondition = 'collectAll';
 let editingPsIdx = -1;  // 正在编辑的管道刷怪索引
 let editingKcIdx = -1;  // 正在编辑的知识卡片索引
 let currentCustomIdx = -1; // 当前加载的自定义关卡索引（-1 = 无）
@@ -263,6 +265,8 @@ function newMap(w,h){
   editorPipeSpawners = [];
   editorKnowledgeCards = [];
   editorTutorials = [];
+  editorCellType = 3;
+  editorWinCondition = 'collectAll';
   editingPsIdx = -1;
   editingKcIdx = -1;
   currentCustomIdx = -1;
@@ -571,7 +575,7 @@ function exportMap(){
   const w = mapWidth;
   const lines = grid.map(row => `      "${row.join('')}",`);
   const extras = buildExtraStr();
-  const code = `/* ${name} */\nconst LEVEL_X = {\n  name: '${name}',\n  width: ${w},\n  cellType: 3,\n  winCondition: WIN_COLLECT_ALL,\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};`;
+  const code = `/* ${name} */\nconst LEVEL_X = {\n  name: '${name}',\n  width: ${w},\n  cellType: ${editorCellType},\n  winCondition: ${editorWinCondition === 'killAll' ? 'WIN_KILL_ALL' : 'WIN_COLLECT_ALL'},\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};`;
   document.getElementById('exportText').value = code;
   document.getElementById('exportModal').classList.add('show');
 }
@@ -598,7 +602,7 @@ async function saveLevel(){
   }
   const lines = grid.map(row => `      "${row.join('')}",`);
   const extras = buildExtraStr();
-  const code = `/* ${name} */\nconst LEVEL_${levelNum} = {\n  name: '${name}',\n  width: ${mapWidth},\n  cellType: 3,\n  winCondition: WIN_COLLECT_ALL,\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};\n`;
+  const code = `/* ${name} */\nconst LEVEL_${levelNum} = {\n  name: '${name}',\n  width: ${mapWidth},\n  cellType: ${editorCellType},\n  winCondition: ${editorWinCondition === 'killAll' ? 'WIN_KILL_ALL' : 'WIN_COLLECT_ALL'},\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};\n`;
   try{
     const r = await fetch('/save', {
       method:'POST',
@@ -651,7 +655,7 @@ function doSaveToGame(){
   const name = document.getElementById('customLevelName').value.trim() || '自定义关卡';
   const mapRows = grid.map(row => row.join(''));
   const levelData = {
-    name, width: mapWidth, cellType: 3, winCondition: 'collectAll',
+    name, width: mapWidth, cellType: editorCellType, winCondition: editorWinCondition,
     sky: ['#7a2a3e','#e8a0a0'], map: mapRows,
     floatPlatforms: [], pipeSpawners: editorPipeSpawners,
     tutorials: editorTutorials, knowledgeCards: editorKnowledgeCards,
@@ -754,6 +758,8 @@ function loadCustomPreset(ci){
   editorPipeSpawners = lvl.pipeSpawners || [];
   editorKnowledgeCards = lvl.knowledgeCards || [];
   editorTutorials = lvl.tutorials || [];
+  editorCellType = lvl.cellType === 1 ? 1 : 3;
+  editorWinCondition = lvl.winCondition === 'killAll' ? 'killAll' : 'collectAll';
   editingPsIdx = -1;
   editingKcIdx = -1;
   currentCustomIdx = ci;
@@ -820,6 +826,10 @@ function doImportRaw(text){
   document.getElementById('mapHeight').value = mapHeight;
   const nameMatch = text.match(/name:\s*'([^']+)'/);
   if(nameMatch) document.getElementById('levelName').value = nameMatch[1];
+  const cellTypeMatch = text.match(/cellType:\s*(1|3)\b/);
+  const winConditionMatch = text.match(/winCondition:\s*(WIN_KILL_ALL|WIN_COLLECT_ALL)\b/);
+  editorCellType = cellTypeMatch ? Number(cellTypeMatch[1]) : 3;
+  editorWinCondition = winConditionMatch?.[1] === 'WIN_KILL_ALL' ? 'killAll' : 'collectAll';
   parseExtraConfig(text);
   draw();
 }
@@ -857,5 +867,6 @@ function parseExtraConfig(text){
 
 init();
 </script>
+<script src="js/editor-ai-map.js"></script>
 </body>
 </html>
