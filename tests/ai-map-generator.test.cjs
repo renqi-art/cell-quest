@@ -22,6 +22,15 @@ const VALID_BLUEPRINT = {
   itemDensity: 0.35,
   regions: ['open', 'steps', 'arena', 'hazards'],
 };
+const VALID_BLUEPRINT_ENRICHED = {
+  ...VALID_BLUEPRINT,
+  atmosphere: 'default',
+  pathStyle: 'zigzag',
+  enemyTypes: ['g', 't'],
+  itemTypes: ['a', 'o', 'D'],
+  mechanicTiles: [],
+  checkpointSpacing: 30,
+};
 function completion(content) {
   return {
     ok: true,
@@ -109,7 +118,7 @@ test('sends a bounded blueprint-only completion request', async () => {
     },
   );
 
-  assert.deepEqual(result, VALID_BLUEPRINT);
+  assert.deepEqual(result, VALID_BLUEPRINT_ENRICHED);
   assert.equal(upstream.options.headers.Authorization, 'Bearer runtime-secret');
   assert.equal(JSON.parse(upstream.options.body).response_format.type, 'json_object');
   assert.equal(JSON.parse(upstream.options.body).messages.every(message => !message.content.includes('#'.repeat(20))), true);
@@ -204,4 +213,150 @@ test('rejects generate request bodies above 16 KiB', async () => {
   });
   assert.equal(response.status, 413);
   assert.equal(response.payload.code, 'INVALID_REQUEST');
+});
+
+// ── 新增：蓝图字段兼容性 ──
+test('fills defaults for missing optional blueprint fields', () => {
+  const result = validateMapBlueprint(VALID_BLUEPRINT);
+  assert.equal(result.ok, true);
+  assert.equal(result.value.atmosphere, 'default');
+  assert.equal(result.value.pathStyle, 'zigzag');
+  assert.deepEqual(result.value.enemyTypes, ['g', 't']);
+  assert.deepEqual(result.value.itemTypes, ['a', 'o', 'D']);
+  assert.deepEqual(result.value.mechanicTiles, []);
+  assert.equal(result.value.checkpointSpacing, 30);
+});
+
+test('accepts all optional blueprint fields', () => {
+  const full = {
+    ...VALID_BLUEPRINT,
+    atmosphere: 'tense',
+    pathStyle: 'climb',
+    enemyTypes: ['g', 't', 'G'],
+    itemTypes: ['a', 'D', 'M'],
+    mechanicTiles: ['^', 'B'],
+    checkpointSpacing: 20,
+  };
+  const result = validateMapBlueprint(full);
+  assert.equal(result.ok, true);
+  assert.equal(result.value.atmosphere, 'tense');
+  assert.equal(result.value.pathStyle, 'climb');
+  assert.deepEqual(result.value.mechanicTiles, ['^', 'B']);
+  assert.equal(result.value.checkpointSpacing, 20);
+});
+
+test('rejects invalid optional blueprint values', () => {
+  assert.equal(validateMapBlueprint({ ...VALID_BLUEPRINT, atmosphere: 'invalid' }).ok, false);
+  assert.equal(validateMapBlueprint({ ...VALID_BLUEPRINT, pathStyle: 'spiral' }).ok, false);
+  assert.equal(validateMapBlueprint({ ...VALID_BLUEPRINT, enemyTypes: ['X'] }).ok, false);
+  assert.equal(validateMapBlueprint({ ...VALID_BLUEPRINT, itemTypes: ['Z'] }).ok, false);
+  assert.equal(validateMapBlueprint({ ...VALID_BLUEPRINT, mechanicTiles: ['K'] }).ok, false);
+  assert.equal(validateMapBlueprint({ ...VALID_BLUEPRINT, checkpointSpacing: -1 }).ok, false);
+  assert.equal(validateMapBlueprint({ ...VALID_BLUEPRINT, checkpointSpacing: 101 }).ok, false);
+  assert.equal(validateMapBlueprint({ ...VALID_BLUEPRINT, enemyTypes: [] }).ok, false);
+  assert.equal(validateMapBlueprint({ ...VALID_BLUEPRINT, enemyTypes: ['g', 't', 'g', 't'] }).ok, false);
+  assert.equal(validateMapBlueprint({ ...VALID_BLUEPRINT, mechanicTiles: ['V', 'J', 'H', 'B', '^'] }).ok, false);
+});
+
+test('rejects G enemy in RBC (cellType=3) levels', () => {
+  const rbcBlueprint = { ...VALID_BLUEPRINT, cellType: 3 };
+  assert.equal(validateMapBlueprint({ ...rbcBlueprint, enemyTypes: ['g', 'G'] }).ok, false);
+  assert.equal(validateMapBlueprint({ ...rbcBlueprint, enemyTypes: ['g', 't'] }).ok, true);
+});
+
+// ── 新增：编译器结构测试 ──
+test('different pathStyles produce structurally different maps', () => {
+  const base = { ...VALID_BLUEPRINT_ENRICHED, width: 80, height: 20 };
+  const seed = hashSeed('path-test');
+  const maps = {};
+  for (const style of ['zigzag', 'climb', 'cave_dive', 'open_arena', 'linear']) {
+    const level = compileMap({ ...base, pathStyle: style }, 80, 20, seed);
+    assert.equal(level.map.length, 20);
+    assert.equal(level.map.every(row => row.length === 80), true);
+    maps[style] = level.map;
+  }
+  // 不同 pathStyle 应产生至少 3 行有差异的地图
+  const differences = Object.values(maps).filter(m => {
+    let diffs = 0;
+    for (let r = 0; r < 20; r += 1) {
+      if (m[r] !== maps.zigzag[r]) diffs += 1;
+    }
+    return diffs >= 3;
+  }).length;
+  assert.ok(differences >= 2, `Only ${differences} pathStyles differ from zigzag`);
+});
+
+test('theme keywords bias generated tile selection', () => {
+  const seed = hashSeed('theme-test');
+  const infectionLevel = compileMap(
+    { ...VALID_BLUEPRINT_ENRICHED, theme: '败血感染区', difficulty: 'hard' },
+    60, 15, seed,
+  );
+  const oxygenLevel = compileMap(
+    { ...VALID_BLUEPRINT_ENRICHED, theme: '氧气充盈的肺泡', difficulty: 'easy' },
+    60, 15, seed,
+  );
+  const infectionStr = infectionLevel.map.join('');
+  const oxygenStr = oxygenLevel.map.join('');
+  // 感染主题应更多 B（失血区）
+  const infectionB = (infectionStr.match(/B/g) || []).length;
+  const oxygenB = (oxygenStr.match(/B/g) || []).length;
+  // 氧气主题应更多 O（氧气瓶）
+  const infectionO = (infectionStr.match(/O/g) || []).length;
+  const oxygenO = (oxygenStr.match(/O/g) || []).length;
+  assert.ok(infectionB >= oxygenB, `Expected infection B(${infectionB}) >= oxygen B(${oxygenB})`);
+  assert.ok(oxygenO >= infectionO, `Expected oxygen O(${oxygenO}) >= infection O(${infectionO})`);
+});
+
+test('checkpointSpacing controls checkpoint count', () => {
+  const seed = hashSeed('checkpoint-test');
+  const dense = compileMap(
+    { ...VALID_BLUEPRINT_ENRICHED, checkpointSpacing: 15 },
+    80, 15, seed,
+  );
+  const none = compileMap(
+    { ...VALID_BLUEPRINT_ENRICHED, checkpointSpacing: 0 },
+    80, 15, seed,
+  );
+  const denseC = (dense.map.join('').match(/C/g) || []).length;
+  const noneC = (none.map.join('').match(/C/g) || []).length;
+  assert.ok(denseC >= 2, `Expected >=2 checkpoints, got ${denseC}`);
+  assert.equal(noneC, 0);
+});
+
+test('cellType=3 RBC levels include collect-focused items', () => {
+  const seed = hashSeed('rbc-collect');
+  const rbcBp = {
+    ...VALID_BLUEPRINT_ENRICHED,
+    cellType: 3,
+    enemyDensity: 0.25,
+    itemDensity: 0.55,
+    itemTypes: ['o', 'O', 'n', 'f'],
+    enemyTypes: ['g', 't'],
+  };
+  const level = compileMap(rbcBp, 100, 15, seed);
+  const mapStr = level.map.join('');
+  // RBC 关卡应含收集品
+  const itemCount = (mapStr.match(/[oOnf]/g) || []).length;
+  assert.ok(itemCount >= 4, `Expected >=4 items, got ${itemCount}`);
+  // RBC 关卡不应有 G
+  assert.equal(mapStr.includes('G'), false);
+});
+
+test('new compiler preserves structural guarantees', () => {
+  for (const [width, height] of [[30, 12], [100, 20], [150, 40]]) {
+    const level = compileMap(VALID_BLUEPRINT_ENRICHED, width, height, hashSeed('structure'));
+    const validated = validateCompiledLevel(level);
+    assert.equal(validated.ok, true, `Failed at ${width}×${height}: ${validated.error}`);
+    assert.equal(level.width, width);
+    assert.equal(level.height, height);
+    assert.equal(level.map.length, height);
+    assert.equal(level.map.every(row => row.length === width), true);
+    const joined = level.map.join('');
+    assert.equal((joined.match(/P/g) || []).length, 1, 'Must have exactly 1 spawn');
+    assert.equal((joined.match(/F/g) || []).length, 1, 'Must have exactly 1 finish');
+    // 至少使用 6 种瓦片（旧编译器只用了 ~6 种，新编译器应 >= 8）
+    const tileCount = new Set(joined.replace(/ /g, '')).size;
+    assert.ok(tileCount >= 6, `Expected >=6 tile types, got ${tileCount}`);
+  }
 });
