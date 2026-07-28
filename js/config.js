@@ -187,6 +187,14 @@ const C = {
   gateLocked:'#8b6914', gateOpen:'#ffd700', gateGlow:'rgba(255,215,0,0.4)',
   // 碎裂平台
   crumble:'#8a6a3a', crumbleTop:'#aa8a4a', crumbleShake:'#ffaa44',
+  // 新增瓦片（v4.1）
+  cilia:'#5a8a5a', ciliaLight:'#7aba7a', ciliaDark:'#3a5a3a',
+  ciliaArrow:'#aaffaa',
+  mucus:'#8a9a3a', mucusLight:'#aaba5a', mucusDark:'#5a6a2a',
+  chemokine:'#4a8aca', chemokineLight:'#6aaaea', chemokineGlow:'#aad4ff',
+  valve:'#6a4a8a', valveArrow:'#c4a0ff',
+  turret:'#8a4a4a', turretBarrel:'#5a2a2a', turretGlow:'#ff4444',
+  phagosome:'#4a2080', phagosomeGlow:'#8a50d0', phagosomeRim:'#c080ff',
 };
 
 // ===== 三细胞定义 =====
@@ -308,7 +316,7 @@ function exportLevelCode(idx){
 const MAX_SHARED_LEVEL_CODE = 200_000;
 const MAX_SHARED_LEVEL_ROWS = 30;
 const MAX_SHARED_LEVEL_WIDTH = 200;
-const SHARED_LEVEL_TILES = /^[ #=po?FPCgGtbBS^VJHDOnfda*MXN_]*$/;
+const SHARED_LEVEL_TILES = /^[ #=po?FPCgGtbBS^VJHDOnfda*MXN_~%+@!><]*$/;
 const SHARED_LEVEL_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
 function importLevelCode(code){

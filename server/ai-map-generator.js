@@ -1,4 +1,4 @@
-const REQUEST_KEYS = new Set(['prompt', 'width', 'height']);
+﻿const REQUEST_KEYS = new Set(['prompt', 'width', 'height']);
 const BLUEPRINT_REQUIRED = new Set([
   'name', 'theme', 'cellType', 'difficulty',
   'platformDensity', 'enemyDensity', 'itemDensity', 'regions',
@@ -12,10 +12,10 @@ const REGION_STYLES = new Set(['open', 'steps', 'arena', 'hazards']);
 const DIFFICULTIES = new Set(['easy', 'normal', 'hard']);
 const ATMOSPHERES = new Set(['tense', 'exploratory', 'speedrun', 'tactical', 'default']);
 const PATH_STYLES = new Set(['zigzag', 'climb', 'cave_dive', 'open_arena', 'linear']);
-const MECHANIC_TILE_OPTIONS = new Set(['V', 'J', 'H', 'B', 'p', '^', '?', '*', 'S', '_']);
+const MECHANIC_TILE_OPTIONS = new Set(['V', 'J', 'H', 'B', 'p', '^', '?', '*', 'S', '_', '~', '%', '+', '@', '!', '>', '<']);
 const ENEMY_TILE_OPTIONS = new Set(['g', 't', 'G']);
 const ITEM_TILE_OPTIONS = new Set(['a', 'o', 'D', 'O', 'n', 'f', 'd', 'M']);
-const ALLOWED_TILES = new Set(' #=po?FPCgGtbBS^VJHDOnfda*M_'.split(''));
+const ALLOWED_TILES = new Set(' #=po?FPCgGtbBS^VJHDOnfda*M_~%+@!><'.split(''));
 const UNSAFE_TEXT = /<\s*(script|iframe)|javascript:|\beval\s*\(|\bfunction\s*\(/i;
 
 function exactObject(value, keys) {
@@ -492,8 +492,10 @@ const SYSTEM_PROMPT = [
   // ── 瓦片目录 ──
   '【瓦片目录 — 你可以在 mechanicTiles / enemyTypes / itemTypes 中引用】',
   '地形：#地面(实心) =平台(可穿越) S痂皮平台 _碎裂平台(踩上会崩解)',
-  '敌人：g葡萄球菌(普通) t链球菌(冲刺) G大型葡萄球菌(分裂,仅WBC关卡)',
+  '敌人：g葡萄球菌(普通) t链球菌(冲刺) G大型葡萄球菌(分裂,仅WBC关卡) !抗体炮台(固定·定时发射弹丸)',
   '机制：V弹簧(弹射) J血液泵(推流) ^尖刺(接触即死) B失血区(持续扣能量) H隐藏墙(半透明实心)',
+  '机制(新)：~纤毛(传送带·向右推动) %黏液网(减速区·移速×0.4) +趋化因子(加速区·移速×1.5)',
+  '机制(新)：@吞噬体(配对传送门·自动传送到最远另一个@) >瓣膜右通(仅允许→通过) <瓣膜左通(仅允许←通过)',
   '道具：aATP能量 o金币 D护盾 O氧气瓶 n营养包 f食物 d饮料 M补体弹药',
   '特殊：C存档点 ?问号方块(随机掉落) *记忆细胞(永久加成,每关最多1个) p管道(定时刷怪)',
   '标记：P出生点(必须1个) F终点门(必须1个)',
