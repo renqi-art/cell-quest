@@ -212,49 +212,75 @@ function selectTile(ch){
 }
 
 // ── 配置数据序列化 ──
-function buildExtraStr(){
-  const lines = [];
-  if(editorPipeSpawners.length > 0){
-    const items = editorPipeSpawners.map(ps => {
-      let s = `{ col:${ps.col}, row:${ps.row}, dir:'${ps.dir||'up'}', trigger:'${ps.trigger||'timer'}'`;
-      if(ps.type && ps.type !== 'staph') s += `, type:'${ps.type}'`;
-      if(ps.range) s += `, range:${ps.range}`;
-      if(ps.cooldown) s += `, cooldown:${ps.cooldown}`;
-      if(ps.interval) s += `, interval:${ps.interval}`;
-      s += ' }';
-      return s;
-    });
-    lines.push('  pipeSpawners: [\n    ' + items.join(',\n    ') + '\n  ],');
-  } else {
-    lines.push('  pipeSpawners: [],');
+const EXTRA_CONFIG_SCHEMAS = Object.freeze({
+  pipeSpawners: Object.freeze({
+    col: value=>Number.isFinite(value),
+    row: value=>Number.isFinite(value),
+    dir: value=>['up','down','up_jump'].includes(value),
+    trigger: value=>['timer','proximity','contact'].includes(value),
+    type: value=>['staph','strep','staphLarge'].includes(value),
+    range: value=>Number.isFinite(value),
+    cooldown: value=>Number.isFinite(value),
+    interval: value=>Number.isFinite(value),
+    maxSpawn: value=>Number.isFinite(value),
+    vy: value=>Number.isFinite(value),
+  }),
+  tutorials: Object.freeze({
+    x: value=>Number.isFinite(value),
+    useCurrent: value=>typeof value === 'boolean',
+    speaker: value=>typeof value === 'string' && value.length <= 200,
+    color: value=>typeof value === 'string' && value.length <= 100,
+    body: value=>typeof value === 'string' && value.length <= 4000,
+  }),
+  knowledgeCards: Object.freeze({
+    x: value=>Number.isFinite(value),
+    y: value=>value === null || Number.isFinite(value),
+    key: value=>typeof value === 'string' && value.length <= 100,
+    title: value=>typeof value === 'string' && value.length <= 500,
+    text: value=>typeof value === 'string' && value.length <= 4000,
+  }),
+});
+
+const EXTRA_CONFIG_REQUIRED_FIELDS = Object.freeze({
+  pipeSpawners: Object.freeze(['col','row']),
+  tutorials: Object.freeze(['x','body']),
+  knowledgeCards: Object.freeze(['x','key','title','text']),
+});
+
+function normalizeExtraConfigArray(value, schemaName){
+  if(!Array.isArray(value)) return null;
+  const schema = EXTRA_CONFIG_SCHEMAS[schemaName];
+  const required = EXTRA_CONFIG_REQUIRED_FIELDS[schemaName];
+  if(!schema || value.length > 500) return null;
+  const normalized = [];
+  for(const item of value){
+    if(!item || typeof item !== 'object' || Array.isArray(item)) return null;
+    if(required.some(key=>!Object.prototype.hasOwnProperty.call(item,key))) return null;
+    const copy = {};
+    for(const [key, fieldValue] of Object.entries(item)){
+      if(!Object.prototype.hasOwnProperty.call(schema,key) || !schema[key](fieldValue)) return null;
+      copy[key] = fieldValue;
+    }
+    normalized.push(copy);
   }
-  // tutorials 仍保留原始字符串（编辑器暂不提供 UI 编辑）
-  if(editorTutorials.length > 0){
-    const items = editorTutorials.map(t=>{
-      let s = `{ x:${t.x}`;
-      if(t.useCurrent) s += `, useCurrent:true`;
-      s += `, body:'${t.body.replace(/\n/g,'\\n').replace(/'/g,"\\'")}' }`;
-      return s;
-    });
-    lines.push('  tutorials: [\n    ' + items.join(',\n    ') + '\n  ],');
-  } else {
-    lines.push('  tutorials: [],');
-  }
-  if(editorKnowledgeCards.length > 0){
-    const items = editorKnowledgeCards.map(kc=>{
-      let s = `{ x:${kc.x}`;
-      if(kc.y !== undefined) s += `, y:${kc.y}`;
-      s += `, key:'${kc.key}', title:'${kc.title.replace(/'/g,"\\'")}', text:'${kc.text.replace(/\n/g,'\\n').replace(/'/g,"\\'")}' }`;
-      return s;
-    });
-    lines.push('  knowledgeCards: [\n    ' + items.join(',\n    ') + '\n  ],');
-  } else {
-    lines.push('  knowledgeCards: [],');
-  }
-  return lines.join('\n') + '\n';
+  return normalized;
 }
 
-// ── Grid ──
+function serializeExtraConfigArray(key, value){
+  const normalized = normalizeExtraConfigArray(value, key) || [];
+  const json = JSON.stringify(normalized, null, 2).replace(/\n/g, '\n  ');
+  return `  ${key}: ${json},`;
+}
+
+function buildExtraStr(){
+  return [
+    serializeExtraConfigArray('pipeSpawners', editorPipeSpawners),
+    serializeExtraConfigArray('tutorials', editorTutorials),
+    serializeExtraConfigArray('knowledgeCards', editorKnowledgeCards),
+  ].join('\n') + '\n';
+}
+
+// ─── Grid ───
 function newMap(w,h){
   w = w || parseInt(document.getElementById('mapWidth').value) || 135;
   h = h || parseInt(document.getElementById('mapHeight').value) || 30;
@@ -824,9 +850,9 @@ function loadCustomPreset(ci){
   document.getElementById('mapWidth').value = mapWidth;
   document.getElementById('mapHeight').value = mapHeight;
   document.getElementById('levelName').value = lvl.name || '自定义关卡';
-  editorPipeSpawners = lvl.pipeSpawners || [];
-  editorKnowledgeCards = lvl.knowledgeCards || [];
-  editorTutorials = lvl.tutorials || [];
+  editorPipeSpawners = normalizeExtraConfigArray(lvl.pipeSpawners || [], 'pipeSpawners') || [];
+  editorKnowledgeCards = normalizeExtraConfigArray(lvl.knowledgeCards || [], 'knowledgeCards') || [];
+  editorTutorials = normalizeExtraConfigArray(lvl.tutorials || [], 'tutorials') || [];
   editorCellType = lvl.cellType === 1 ? 1 : 3;
   editorWinCondition = lvl.winCondition === 'killAll' ? 'killAll' : 'collectAll';
   editingPsIdx = -1;
@@ -908,12 +934,12 @@ function parseExtraConfig(text){
 
   const parser = globalThis.ClassicLiteralParser;
   if(parser){
-    const ps = parser.parseArrayProperty(text, 'pipeSpawners');
-    if(Array.isArray(ps)) editorPipeSpawners = ps;
-    const tut = parser.parseArrayProperty(text, 'tutorials');
-    if(Array.isArray(tut)) editorTutorials = tut;
-    const kc = parser.parseArrayProperty(text, 'knowledgeCards');
-    if(Array.isArray(kc)) editorKnowledgeCards = kc;
+    const ps = normalizeExtraConfigArray(parser.parseArrayProperty(text, 'pipeSpawners'), 'pipeSpawners');
+    if(ps) editorPipeSpawners = ps;
+    const tut = normalizeExtraConfigArray(parser.parseArrayProperty(text, 'tutorials'), 'tutorials');
+    if(tut) editorTutorials = tut;
+    const kc = normalizeExtraConfigArray(parser.parseArrayProperty(text, 'knowledgeCards'), 'knowledgeCards');
+    if(kc) editorKnowledgeCards = kc;
   }
 
   renderPalette();

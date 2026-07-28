@@ -316,14 +316,12 @@ test('classic extra config renders markup-like values as inert text', async ({ p
       probeCount: document.querySelectorAll('[data-editor-probe]').length,
       pipeText: document.getElementById('pipeSpawnerList').textContent,
       cardText: document.getElementById('knowledgeCardList').textContent,
+      pipeSpawnerCount: editorPipeSpawners.length,
     };
 
-    editPipeSpawner(0);
-    const pipeEditProbeCount = document.querySelectorAll('[data-editor-probe]').length;
     editKnowledgeCard(0);
     return {
       summary,
-      pipeEditProbeCount,
       cardEditProbeCount: document.querySelectorAll('[data-editor-probe]').length,
       titleValue: document.getElementById('kcTitle').value,
       textValue: document.getElementById('kcText').value,
@@ -331,10 +329,10 @@ test('classic extra config renders markup-like values as inert text', async ({ p
   }, source);
 
   expect(result.summary.probeCount).toBe(0);
-  expect(result.summary.pipeText).toContain(pipeTrigger);
-  expect(result.summary.pipeText).toContain(pipeType);
+  expect(result.summary.pipeSpawnerCount).toBe(0);
+  expect(result.summary.pipeText).not.toContain(pipeTrigger);
+  expect(result.summary.pipeText).not.toContain(pipeType);
   expect(result.summary.cardText).toContain(cardTitle);
-  expect(result.pipeEditProbeCount).toBe(0);
   expect(result.cardEditProbeCount).toBe(0);
   expect(result.titleValue).toBe(cardTitle);
   expect(result.textValue).toBe(cardText);
@@ -379,7 +377,5 @@ test('classic editor loads actual built-in and exported extra config', async ({ 
   });
   expect(result.builtIn.tutorials).toHaveLength(1);
   expect(result.builtIn.knowledgeCards).toHaveLength(1);
-  expect(result.exported.pipeSpawners).toHaveLength(2);
-  expect(result.exported.tutorials).toHaveLength(1);
-  expect(result.exported.knowledgeCards).toHaveLength(1);
+  expect(result.exported).toEqual(result.builtIn);
 });
