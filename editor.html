@@ -429,14 +429,23 @@ function updateInfo(cell){
 }
 
 // ===== 管道刷怪编辑器 =====
+function escapeEditorHtml(value){
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderPipeSpawnerList(){
   const el = document.getElementById('pipeSpawnerList');
   if(!el) return;
   if(editingPsIdx >= 0){
     const ps = editingPsIdx < editorPipeSpawners.length ? editorPipeSpawners[editingPsIdx] : {col:'',row:'',trigger:'timer',type:'staph',dir:'up',cooldown:'',range:'',interval:''};
     el.innerHTML = `<div class="inline-form">
-      <label>列 (col)</label><input type="number" id="psCol" value="${ps.col||''}" min="0" max="${mapWidth-1}">
-      <label>行 (row)</label><input type="number" id="psRow" value="${ps.row||''}" min="0" max="${mapHeight-1}">
+      <label>列 (col)</label><input type="number" id="psCol" value="${escapeEditorHtml(ps.col||'')}" min="0" max="${mapWidth-1}">
+      <label>行 (row)</label><input type="number" id="psRow" value="${escapeEditorHtml(ps.row||'')}" min="0" max="${mapHeight-1}">
       <label>触发方式</label>
       <select id="psTrigger">
         <option value="timer" ${ps.trigger==='timer'?'selected':''}>timer 定时</option>
@@ -450,9 +459,9 @@ function renderPipeSpawnerList(){
         <option value="staphLarge" ${ps.type==='staphLarge'?'selected':''}>大型葡萄球菌</option>
       </select>
       <label>方向</label><select id="psDir"><option value="up" ${ps.dir==='up'?'selected':''}>上</option><option value="down" ${ps.dir==='down'?'selected':''}>下</option></select>
-      <label>冷却帧 (cooldown, timer用)</label><input type="number" id="psCooldown" value="${ps.cooldown||''}" min="0" placeholder="180">
-      <label>接近范围格子 (range, proximity用)</label><input type="number" id="psRange" value="${ps.range||''}" min="1" placeholder="4">
-      <label>间隔帧 (interval, timer用)</label><input type="number" id="psInterval" value="${ps.interval||''}" min="1" placeholder="300">
+      <label>冷却帧 (cooldown, timer用)</label><input type="number" id="psCooldown" value="${escapeEditorHtml(ps.cooldown||'')}" min="0" placeholder="180">
+      <label>接近范围格子 (range, proximity用)</label><input type="number" id="psRange" value="${escapeEditorHtml(ps.range||'')}" min="1" placeholder="4">
+      <label>间隔帧 (interval, timer用)</label><input type="number" id="psInterval" value="${escapeEditorHtml(ps.interval||'')}" min="1" placeholder="300">
       <div class="btn-row">
         <button class="ok" onclick="savePipeSpawner()">✅ 保存</button>
         <button onclick="cancelPipeSpawner()">取消</button>
@@ -465,8 +474,8 @@ function renderPipeSpawnerList(){
     return;
   }
   el.innerHTML = editorPipeSpawners.map((ps,i)=>`<div class="config-item">
-    <span class="tag">${ps.trigger}</span>
-    <span>(${ps.col},${ps.row}) ${ps.type}</span>
+    <span class="tag">${escapeEditorHtml(ps.trigger)}</span>
+    <span>(${escapeEditorHtml(ps.col)},${escapeEditorHtml(ps.row)}) ${escapeEditorHtml(ps.type)}</span>
     <button onclick="editPipeSpawner(${i})">✏️</button>
     <button class="del" onclick="deletePipeSpawner(${i})">✕</button>
   </div>`).join('');
@@ -523,16 +532,16 @@ function renderKnowledgeCardList(){
   if(editingKcIdx >= 0){
     const kc = editingKcIdx < editorKnowledgeCards.length ? editorKnowledgeCards[editingKcIdx] : {x:'',y:'',key:'wbc',title:'',text:''};
     el.innerHTML = `<div class="inline-form">
-      <label>触发位置 x (像素)</label><input type="number" id="kcX" value="${kc.x||''}" min="0" placeholder="200">
-      <label>触发高度 y (像素，可选)</label><input type="number" id="kcY" value="${kc.y||''}" min="0" placeholder="留空=不限制">
+      <label>触发位置 x (像素)</label><input type="number" id="kcX" value="${escapeEditorHtml(kc.x||'')}" min="0" placeholder="200">
+      <label>触发高度 y (像素，可选)</label><input type="number" id="kcY" value="${escapeEditorHtml(kc.y||'')}" min="0" placeholder="留空=不限制">
       <label>细胞类型</label>
       <select id="kcKey">
         <option value="wbc" ${kc.key==='wbc'?'selected':''}>白细胞 WBC</option>
         <option value="rbc" ${kc.key==='rbc'?'selected':''}>红细胞 RBC</option>
         <option value="plt" ${kc.key==='plt'?'selected':''}>血小板 PLT</option>
       </select>
-      <label>标题</label><input type="text" id="kcTitle" value="${kc.title||''}" placeholder="卡片标题">
-      <label>正文（\\n 换行）</label><textarea id="kcText" placeholder="卡片正文内容...">${kc.text||''}</textarea>
+      <label>标题</label><input type="text" id="kcTitle" value="${escapeEditorHtml(kc.title||'')}" placeholder="卡片标题">
+      <label>正文（\\n 换行）</label><textarea id="kcText" placeholder="卡片正文内容...">${escapeEditorHtml(kc.text||'')}</textarea>
       <div class="btn-row">
         <button class="ok" onclick="saveKnowledgeCard()">✅ 保存</button>
         <button onclick="cancelKnowledgeCard()">取消</button>
@@ -545,8 +554,8 @@ function renderKnowledgeCardList(){
     return;
   }
   el.innerHTML = editorKnowledgeCards.map((kc,i)=>`<div class="config-item">
-    <span class="tag">${kc.key||'?'}</span>
-    <span>x=${kc.x} ${kc.title||'(无标题)'}</span>
+    <span class="tag">${escapeEditorHtml(kc.key||'?')}</span>
+    <span>x=${escapeEditorHtml(kc.x)} ${escapeEditorHtml(kc.title||'(无标题)')}</span>
     <button onclick="editKnowledgeCard(${i})">✏️</button>
     <button class="del" onclick="deleteKnowledgeCard(${i})">✕</button>
   </div>`).join('');

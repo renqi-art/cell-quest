@@ -292,6 +292,53 @@ test('classic editor import preserves supported literal extra config', async ({ 
   });
 });
 
+test('classic extra config renders markup-like values as inert text', async ({ page }) => {
+  const pipeTrigger = '</span><em data-editor-probe="pipe-trigger">pipe</em>';
+  const pipeType = '</span><em data-editor-probe="pipe-type">type</em>';
+  const cardTitle = '"><em data-editor-probe="card-title">title</em>';
+  const cardText = '</textarea><em data-editor-probe="card-text">body</em>';
+  const source = `const LEVEL_X = {
+    name: "inert markup",
+    width: 20,
+    map: [
+      ${Array.from({ length: 10 }, () => `${JSON.stringify(' '.repeat(20))},`).join('\n      ')}
+    ],
+    pipeSpawners: [{ col: 1, row: 2, trigger: ${JSON.stringify(pipeTrigger)}, type: ${JSON.stringify(pipeType)} }],
+    tutorials: [],
+    knowledgeCards: [{ x: 10, key: 'wbc', title: ${JSON.stringify(cardTitle)}, text: ${JSON.stringify(cardText)} }],
+  };`;
+
+  await page.goto('/editor.html');
+  const result = await page.evaluate(classicSource => {
+    document.getElementById('importText').value = classicSource;
+    doImport();
+    const summary = {
+      probeCount: document.querySelectorAll('[data-editor-probe]').length,
+      pipeText: document.getElementById('pipeSpawnerList').textContent,
+      cardText: document.getElementById('knowledgeCardList').textContent,
+    };
+
+    editPipeSpawner(0);
+    const pipeEditProbeCount = document.querySelectorAll('[data-editor-probe]').length;
+    editKnowledgeCard(0);
+    return {
+      summary,
+      pipeEditProbeCount,
+      cardEditProbeCount: document.querySelectorAll('[data-editor-probe]').length,
+      titleValue: document.getElementById('kcTitle').value,
+      textValue: document.getElementById('kcText').value,
+    };
+  }, source);
+
+  expect(result.summary.probeCount).toBe(0);
+  expect(result.summary.pipeText).toContain(pipeTrigger);
+  expect(result.summary.pipeText).toContain(pipeType);
+  expect(result.summary.cardText).toContain(cardTitle);
+  expect(result.pipeEditProbeCount).toBe(0);
+  expect(result.cardEditProbeCount).toBe(0);
+  expect(result.titleValue).toBe(cardTitle);
+  expect(result.textValue).toBe(cardText);
+});
 test('classic editor loads actual built-in and exported extra config', async ({ page }) => {
   await page.goto('/editor.html');
   const result = await page.evaluate(async () => {
