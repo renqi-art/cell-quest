@@ -172,8 +172,10 @@ function updateHUD(){
         p2HealthBar.classList.toggle('critical', pct2 <= 25);
       }
       if(p2HealthText) p2HealthText.textContent = p2.health + '/' + p2.maxHealth;
-      document.getElementById('cell-name-p2').textContent = p2.cell.name;
-      document.getElementById('p2-indicator').textContent = 'P2 ' + p2.cell.short;
+      const p2CellName = document.getElementById('cell-name-p2');
+      const p2Indicator = document.getElementById('p2-indicator');
+      if(p2CellName) p2CellName.textContent = p2.cell.name;
+      if(p2Indicator) p2Indicator.textContent = 'P2 ' + p2.cell.short;
     }
   } else if(p2hud){
     p2hud.style.display = 'none';
