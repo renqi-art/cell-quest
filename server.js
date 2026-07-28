@@ -5,6 +5,7 @@ const path = require('path');
 const { handleDirectorRequest } = require('./server/director');
 const { handleGenerateCaseRequest } = require('./server/case-generator');
 const { getAiConfigStatus, handleGetAiConfig, handleSetAiConfig } = require('./server/ai-runtime-config');
+const { handleGenerateMapRequest } = require('./server/ai-map-generator');
 
 const ROOT = __dirname;
 const LEVEL_DIR = path.join(ROOT, 'js', 'levels');
@@ -216,6 +217,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+
+  if (req.method === 'POST' && requestPath === '/api/generate-map') {
+    await handleGenerateMapRequest(req, res, sendJson);
+    return;
+  }
   if (req.method === 'POST' && requestPath === '/api/generate-case') {
     await handleGenerateCaseRequest(req, res, sendJson);
     return;

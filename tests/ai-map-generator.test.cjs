@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { Readable } = require('node:stream');
 
 const {
   compileMap,
@@ -7,6 +8,8 @@ const {
   validateCompiledLevel,
   validateMapBlueprint,
   validateMapRequest,
+  requestMapBlueprint,
+  handleGenerateMapRequest,
 } = require('../server/ai-map-generator');
 
 const VALID_BLUEPRINT = {
@@ -19,7 +22,23 @@ const VALID_BLUEPRINT = {
   itemDensity: 0.35,
   regions: ['open', 'steps', 'arena', 'hazards'],
 };
+function completion(content) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ choices: [{ message: { content } }] }),
+  };
+}
 
+async function callHandler(body, options = {}, headers = { 'content-type': 'application/json' }) {
+  const req = Readable.from([typeof body === 'string' ? body : JSON.stringify(body)]);
+  req.headers = headers;
+  let response;
+  await handleGenerateMapRequest(req, {}, (_res, status, payload) => {
+    response = { status, payload };
+  }, options);
+  return response;
+}
 test('accepts only the exact bounded map request contract', () => {
   assert.deepEqual(validateMapRequest({ prompt: '  生成一张地图  ', width: 20, height: 10 }), {
     ok: true,
@@ -75,4 +94,88 @@ test('rejects invalid compiler dimensions before allocating a map', () => {
   assert.throws(() => compileMap(VALID_BLUEPRINT, 201, 10, hashSeed('fixture')), /dimensions/);
   assert.throws(() => compileMap(VALID_BLUEPRINT, 20, 9, hashSeed('fixture')), /dimensions/);
   assert.throws(() => compileMap(VALID_BLUEPRINT, 20, 81, hashSeed('fixture')), /dimensions/);
+});
+
+test('sends a bounded blueprint-only completion request', async () => {
+  let upstream;
+  const result = await requestMapBlueprint(
+    { prompt: '感染检查', width: 135, height: 30 },
+    {
+      apiKey: 'runtime-secret',
+      fetchImpl: async (url, options) => {
+        upstream = { url, options };
+        return completion(JSON.stringify(VALID_BLUEPRINT));
+      },
+    },
+  );
+
+  assert.deepEqual(result, VALID_BLUEPRINT);
+  assert.equal(upstream.options.headers.Authorization, 'Bearer runtime-secret');
+  assert.equal(JSON.parse(upstream.options.body).response_format.type, 'json_object');
+  assert.equal(JSON.parse(upstream.options.body).messages.every(message => !message.content.includes('#'.repeat(20))), true);
+});
+
+test('returns AI_NOT_CONFIGURED without local fallback', async () => {
+  const response = await callHandler(
+    { prompt: '感染检查', width: 135, height: 30 },
+    { getApiKey: () => '' },
+  );
+  assert.equal(response.status, 409);
+  assert.equal(response.payload.code, 'AI_NOT_CONFIGURED');
+  assert.equal(response.payload.level, undefined);
+});
+
+test('returns a compiled AI level after a valid completion', async () => {
+  const response = await callHandler(
+    { prompt: '感染检查', width: 135, height: 30 },
+    { getApiKey: () => 'runtime-secret', fetchImpl: async () => completion(JSON.stringify(VALID_BLUEPRINT)) },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.payload.source, 'ai');
+  assert.equal(response.payload.level.map.length, 30);
+  assert.equal(response.payload.level.map[0].length, 135);
+});
+
+test('maps upstream authentication and rate-limit failures', async () => {
+  for (const [status, code] of [[401, 'AI_AUTH_FAILED'], [403, 'AI_AUTH_FAILED'], [429, 'AI_RATE_LIMITED']]) {
+    const response = await callHandler(
+      { prompt: '感染检查', width: 135, height: 30 },
+      { getApiKey: () => 'runtime-secret', fetchImpl: async () => ({ ok: false, status }) },
+    );
+    assert.equal(response.status, status === 429 ? 429 : 401);
+    assert.equal(response.payload.code, code);
+  }
+});
+
+test('maps an aborted upstream request to AI_TIMEOUT', async () => {
+  const response = await callHandler(
+    { prompt: '感染检查', width: 135, height: 30 },
+    {
+      getApiKey: () => 'runtime-secret',
+      fetchImpl: async (_url, options) => new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(new Error('aborted')));
+      }),
+    },
+  );
+  assert.equal(response.status, 504);
+  assert.equal(response.payload.code, 'AI_TIMEOUT');
+});
+
+test('rejects non-JSON and oversized AI completion content', async () => {
+  for (const content of ['not json', JSON.stringify(VALID_BLUEPRINT) + ' '.repeat(65537)]) {
+    const response = await callHandler(
+      { prompt: '感染检查', width: 135, height: 30 },
+      { getApiKey: () => 'runtime-secret', fetchImpl: async () => completion(content) },
+    );
+    assert.equal(response.status, 502);
+    assert.equal(response.payload.code, 'AI_INVALID_RESPONSE');
+  }
+});
+
+test('rejects generate request bodies above 16 KiB', async () => {
+  const response = await callHandler(`{"prompt":"${'x'.repeat(16385)}","width":135,"height":30}`, {
+    getApiKey: () => 'runtime-secret',
+  });
+  assert.equal(response.status, 413);
+  assert.equal(response.payload.code, 'INVALID_REQUEST');
 });

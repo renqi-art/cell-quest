@@ -152,6 +152,133 @@ function validateCompiledLevel(level) {
   return { ok: true, value: level };
 }
 
+const SYSTEM_PROMPT = [
+  '你是 Cell Quest 经典2D平台关卡设计师。',
+  '只输出一个 JSON 对象，不输出 Markdown。',
+  '字段必须且只能是 name, theme, cellType, difficulty, platformDensity, enemyDensity, itemDensity, regions。',
+  'cellType 只能为 1 或 3；difficulty 只能为 easy, normal, hard。',
+  '三个 density 必须为 0 到 1；regions 只能从 open, steps, arena, hazards 选择，最多 8 项。',
+  '不要输出地图、代码、HTML或脚本。',
+].join('\n');
+
+class AiMapError extends Error {
+  constructor(code, message, status) {
+    super(message);
+    this.code = code;
+    this.status = status;
+  }
+}
+
+async function requestMapBlueprint(request, { apiKey, fetchImpl = fetch } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetchImpl(
+      process.env.CELL_QUEST_AI_BASE_URL || 'https://api.deepseek.com/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: process.env.CELL_QUEST_AI_MODEL || 'deepseek-chat',
+          temperature: 0.7,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: `主题：${request.prompt}\n目标尺寸：${request.width}×${request.height}` },
+          ],
+        }),
+        signal: controller.signal,
+      },
+    );
+    if (response.status === 401 || response.status === 403) {
+      throw new AiMapError('AI_AUTH_FAILED', 'API Key 无效或无权限', 401);
+    }
+    if (response.status === 429) {
+      throw new AiMapError('AI_RATE_LIMITED', 'AI 服务请求过于频繁，请稍后重试', 429);
+    }
+    if (!response.ok) {
+      throw new AiMapError('AI_UPSTREAM_ERROR', 'AI 服务暂时不可用', 502);
+    }
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new AiMapError('AI_INVALID_RESPONSE', 'AI 返回格式无效', 502);
+    }
+    const content = payload?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 65536) {
+      throw new AiMapError('AI_INVALID_RESPONSE', 'AI 返回内容无效或过大', 502);
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      throw new AiMapError('AI_INVALID_RESPONSE', 'AI 返回的蓝图不是有效 JSON', 502);
+    }
+    const validated = validateMapBlueprint(parsed);
+    if (!validated.ok) throw new AiMapError('AI_INVALID_RESPONSE', validated.error, 502);
+    return validated.value;
+  } catch (error) {
+    if (error instanceof AiMapError) throw error;
+    if (controller.signal.aborted) throw new AiMapError('AI_TIMEOUT', 'AI 生成超时，请重试', 504);
+    throw new AiMapError('AI_UPSTREAM_ERROR', '无法连接 AI 服务', 502);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readGenerateBody(req) {
+  const type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') {
+    throw new AiMapError('INVALID_REQUEST', 'Content-Type 必须为 application/json', 415);
+  }
+  let body = '';
+  let bytes = 0;
+  for await (const chunk of req) {
+    bytes += Buffer.byteLength(chunk);
+    if (bytes > 16384) throw new AiMapError('INVALID_REQUEST', '请求体过大', 413);
+    body += chunk;
+  }
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new AiMapError('INVALID_REQUEST', '请求 JSON 无效', 400);
+  }
+}
+
+async function handleGenerateMapRequest(req, res, sendJson, options = {}) {
+  const getApiKey = options.getApiKey || require('./ai-runtime-config').getAiApiKey;
+  try {
+    const validated = validateMapRequest(await readGenerateBody(req));
+    if (!validated.ok) throw new AiMapError('INVALID_REQUEST', validated.error, 400);
+    const apiKey = getApiKey();
+    if (!apiKey) throw new AiMapError('AI_NOT_CONFIGURED', '请先配置 AI API Key', 409);
+    const blueprint = await requestMapBlueprint(validated.value, {
+      apiKey,
+      fetchImpl: options.fetchImpl || fetch,
+    });
+    const level = compileMap(
+      blueprint,
+      validated.value.width,
+      validated.value.height,
+      hashSeed(validated.value.prompt + JSON.stringify(blueprint)),
+    );
+    const finalLevel = validateCompiledLevel(level);
+    if (!finalLevel.ok) throw new AiMapError('AI_INVALID_RESPONSE', finalLevel.error, 502);
+    return sendJson(res, 200, {
+      ok: true,
+      source: 'ai',
+      level: finalLevel.value,
+      blueprint: { theme: blueprint.theme, difficulty: blueprint.difficulty },
+    });
+  } catch (error) {
+    const failure = error instanceof AiMapError
+      ? error
+      : new AiMapError('AI_UPSTREAM_ERROR', 'AI 地图生成失败', 502);
+    return sendJson(res, failure.status, { ok: false, code: failure.code, error: failure.message });
+  }
+}
+
 module.exports = {
   ALLOWED_TILES,
   hashSeed,
@@ -159,4 +286,6 @@ module.exports = {
   validateMapBlueprint,
   compileMap,
   validateCompiledLevel,
+  requestMapBlueprint,
+  handleGenerateMapRequest,
 };
