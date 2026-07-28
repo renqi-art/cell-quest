@@ -138,7 +138,7 @@ class Level {
     }
   }
 
-  solidTile(ch){ return ch==='#'||ch==='='||ch==='S'||ch==='B'||ch==='p'||ch==='_'; }
+  solidTile(ch){ return ch==='#'||ch==='='||ch==='S'||ch==='B'||ch==='p'||ch==='_'||ch==='H'; }
 
   // 碎裂平台：检查指定位置是否已崩解（已崩解则不实心）
   isCrumbleGone(col, row){
@@ -629,88 +629,41 @@ function setupInput(){
     }
   });
   // blur 时清除按键（防止粘键）
-  window.addEventListener('blur', ()=>{ Game.keys = {}; });
+  window.addEventListener('blur', ()=>{
+    Game.keys = {};
+    if(Game.mobile) Game.mobile.input.releaseAll();
+  });
 }
 
-// ===== 背景渲染 =====
+// ===== 移动端状态通知 =====
+function _notifyMobileState(){
+  if(!Game.mobile) return;
+  Game.mobile.viewport.onGameStateChange();
+  // 战斗中且未暂停 → 启用控制层，否则禁用
+  const inBattle = Game.state === 'playing' && !Game.paused && !Game.memoryCardOpen && !Game.tutorialPause;
+  Game.mobile.overlay.setDisabled(!inBattle);
+}
 function drawBackground(ctx, camX, bg){
-  const preset = getParallaxPreset(Game.levelIndex);
-
-  // 底层渐变
-  const grad = ctx.createLinearGradient(0,0,0,CH);
-  grad.addColorStop(0, bg[0]);
-  grad.addColorStop(1, bg[1]);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0,0,CW,CH);
-
-  // 远景层: 大圆点/细胞轮廓 (scroll 0.1x)
-  const far = preset.far;
-  const farX = Math.round(camX * 0.1) % CW;
-  ctx.save();
-  ctx.globalAlpha = far.alpha;
-  ctx.fillStyle = far.color;
-  for(let i = 0; i < 10; i++){
-    const x = ((i * 140 - farX) % (CW + 200) + CW + 200) % (CW + 200) - 80;
-    const y = 30 + (i % 4) * 100 + Math.sin(i * 1.7) * 20;
-    const r = far.pattern === 'dots' ? 25 + (i%3)*12 : far.pattern === 'bubbles' ? 20 + Math.abs(Math.sin(i))*15 : 30;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-  }
-  ctx.restore();
-
-  // 中景层: 波纹/网格/气泡 (scroll 0.25x)
-  const mid = preset.mid;
-  const midX = Math.round(camX * 0.25);
-  ctx.save();
-  ctx.globalAlpha = mid.alpha;
-  ctx.strokeStyle = mid.color;
-  ctx.lineWidth = 4;
-  if(mid.pattern === 'flow'){
-    for(let i = 0; i < 6; i++){
-      const y = 70 + i * 70;
-      ctx.beginPath();
-      for(let x = -60; x < CW+60; x += 6){
-        const wy = y + Math.sin((x+midX)*0.02 + i*0.8) * 22;
-        if(x === -60) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
-      }
-      ctx.stroke();
-    }
-  } else if(mid.pattern === 'bubbles'){
-    for(let i = 0; i < 20; i++){
-      const x = ((i * 100 - midX/2) % (CW + 150) + CW + 150) % (CW + 150) - 50;
-      const y = 30 + (i * 47) % 400;
-      ctx.beginPath(); ctx.arc(x, y, 8 + (i%4)*3, 0, Math.PI*2); ctx.fill();
+  const img = Game.bgImages[Game.levelIndex];
+  if(img && img.complete && img.naturalWidth > 0){
+    // 缩放图片使其填满画布高度
+    const scale = CH / img.naturalHeight;
+    const imgW = img.naturalWidth * scale;
+    const imgH = CH;
+    // 根据摄像机位置做视差偏移（0.2x）
+    const offsetX = -(camX * 0.2) % imgW;
+    // 平铺填满画布（从左到右依次绘制）
+    for(let x = offsetX - imgW; x < CW; x += imgW){
+      ctx.drawImage(img, x, 0, imgW, imgH);
     }
   } else {
-    for(let i = 0; i < 8; i++){
-      const y = 50 + i * 55;
-      ctx.beginPath();
-      for(let x = -40; x < CW+40; x += 9){
-        const wy = y + Math.sin((x+midX)*0.018 + i) * 16;
-        if(x === -40) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
-      }
-      ctx.stroke();
-    }
+    // 图片未加载：降级为渐变
+    const grad = ctx.createLinearGradient(0,0,0,CH);
+    grad.addColorStop(0, bg[0]);
+    grad.addColorStop(1, bg[1]);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,CW,CH);
   }
-  ctx.restore();
-
-  // 近景层: 小颗粒/血细胞 (scroll 0.5x)
-  const near = preset.near;
-  const nearX = Math.round(camX * 0.5) % CW;
-  ctx.save();
-  ctx.globalAlpha = near.alpha;
-  ctx.fillStyle = near.color;
-  for(let i = 0; i < 30; i++){
-    const x = ((i * 50 + 23 - nearX) % (CW + 100) + CW + 100) % (CW + 100) - 30;
-    const y = 20 + (i * 67) % 440;
-    ctx.beginPath();
-    if(near.pattern === 'cells'){
-      ctx.arc(x, y, 3 + (i%3), 0, Math.PI*2);
-    } else {
-      ctx.arc(x, y, 2.5, 0, Math.PI*2);
-    }
-    ctx.fill();
-  }
-  ctx.restore();
 }
 
 // ===== 相机 =====
@@ -752,7 +705,7 @@ function loop(time){
 let _updateFirstFrame = true;
 function update(){
   if(Game.state !== 'playing') return;
-  if(_updateFirstFrame){ console.log('[DEBUG] First update frame! player=(' + Game.player.x + ',' + Game.player.y + ') state=' + Game.state); _updateFirstFrame = false; }
+  if(_updateFirstFrame){ if(window.CELL_QUEST_DEBUG) console.log('[DEBUG] First update frame! player=(' + Game.player.x + ',' + Game.player.y + ') state=' + Game.state); _updateFirstFrame = false; }
 
   if(Game.memoryCardOpen){
     Game.prevKeys = {...Game.keys};
@@ -766,6 +719,15 @@ function update(){
   if(Game.paused){
     Game.prevKeys = {...Game.keys};
     return;
+  }
+
+  // 合并移动端触控输入到 Game.keys
+  // 注意：必须同时设 true 和 false，否则释放动作后按键会卡住
+  if(Game.mobile){
+    const actions = Game.mobile.input.getActions();
+    for(const [action, pressed] of Object.entries(actions)){
+      Game.keys[action] = pressed;
+    }
   }
 
   const p = Game.player;
@@ -1330,6 +1292,7 @@ function showNextTutorial(){
   if(tutorialQueue.length === 0) return;
   const tut = tutorialQueue.shift();
   Game.tutorialPause = true;
+  _notifyMobileState();
   $('bubble-speaker').textContent = tut.speaker.trim();
   $('bubble-speaker').style.color = tut.color;
   $('bubble-body').textContent = tut.body;
@@ -1343,6 +1306,7 @@ function dismissTutorial(){
     setTimeout(showNextTutorial, 100);
   } else {
     Game.tutorialPause = false;
+    _notifyMobileState();
   }
   // 清除 jump 键状态，防止关闭对话框的 Space/Enter 被消费为跳跃输入（空中卡住 bug）
   Game.keys.jump = false;
@@ -1361,6 +1325,7 @@ function skipAllTutorials(){
   $('dialogue-bubble').classList.remove('active');
   Game.tutorialPause = false;
   Game.tutorialsDone = true;
+  _notifyMobileState();
   try{ localStorage.setItem('cellQuest_tutorials_done', '1'); }catch(e){}
 }
 
@@ -1377,6 +1342,7 @@ function showKnowledgeCard(title, text){
   card.classList.remove('hidden');
   Game.memoryCardOpen = true;
   Game.memoryCardOpenTime = performance.now();
+  _notifyMobileState();
 }
 
 // 知识卡片位置触发（走到x坐标处触发，不限次数，每张卡独立）
@@ -1408,6 +1374,7 @@ function closeMemoryCard(){
     Game.levelStartTime += performance.now() - Game.memoryCardOpenTime;
   }
   Game.memoryCardOpen = false;
+  _notifyMobileState();
 }
 
 // ===== Toast =====
@@ -1451,6 +1418,7 @@ function showMenu(){
   $('complete-screen').classList.add('hidden');
   const fp = $('focus-prompt');
   if(fp) fp.classList.add('hidden');
+  _notifyMobileState();
 }
 
 // ===== v3: 排行榜昵称 =====
@@ -1803,6 +1771,7 @@ function showHub(){
   hubTab = 'builtin';
   document.querySelectorAll('.hub-tab').forEach(b=>b.classList.toggle('active', b.id === 'tab-builtin'));
   renderLevelGrid();
+  _notifyMobileState();
 }
 
 function updateHubEnergy(){
@@ -1961,6 +1930,7 @@ function togglePause(){
     Game.state = 'paused';
     Game.paused = true;
     $('pause-menu').classList.remove('hidden');
+    _notifyMobileState();
   } else if(Game.state === 'paused'){
     Game.state = 'playing';
     Game.paused = false;
@@ -1970,11 +1940,13 @@ function togglePause(){
     const fp = $('focus-prompt');
     if(fp) fp.classList.add('hidden');
     container.focus();
+    _notifyMobileState();
   }
 }
 
 function levelComplete(){
   Game.state = 'complete';
+  _notifyMobileState();
   Sfx.complete();
   const idx = Game.levelIndex;
   Game.completed[idx] = true;
@@ -2100,7 +2072,7 @@ function backToHub(){
 
 // ===== 关卡加载（通用入口函数） =====
 function LoadLevel(n, cellTypeOverride){
-  console.log('[DEBUG] LoadLevel n=' + n + ' cell=' + cellTypeOverride + ' state=' + Game.state);
+  if(window.CELL_QUEST_DEBUG) console.log('[DEBUG] LoadLevel n=' + n + ' cell=' + cellTypeOverride + ' state=' + Game.state);
   // Preview level: n is a string key
   if(typeof n === 'string' && _PREVIEW_LEVELS[n]){
     const mapData = _PREVIEW_LEVELS[n];
@@ -2160,6 +2132,9 @@ function LoadLevel(n, cellTypeOverride){
     Game.swordCooldown = 0;
     Game.allEnemiesDead = false;
 
+    // 编辑器预览已完整设置，跳过移动端战斗门槛
+    // （移动端战斗门槛仅在非预览路径中检查）
+
     closeAllOverlays();
     if(Game.started){ Game.state = 'playing'; endTime = 0; }
     else {
@@ -2169,6 +2144,7 @@ function LoadLevel(n, cellTypeOverride){
       hideFocusPrompt();
       if(!Game.loopStarted){ Game.loopStarted = true; Game.lastTime = performance.now(); requestAnimationFrame(loop); }
     }
+    _notifyMobileState();
     // Emit state-changed for Vue adapter
     if(window.CellQuestLegacy._emitStateChanged) window.CellQuestLegacy._emitStateChanged();
     return true;
@@ -2280,9 +2256,15 @@ function LoadLevel(n, cellTypeOverride){
   // v3: 应用自适应难度调整
   applyAdaptiveDifficulty();
 
-  console.log('[DEBUG] Setting Game.state=playing, player=(' + Game.player.x + ',' + Game.player.y + ') health=' + Game.player.health + ' levelRows=' + Game.level.height);
+  // 移动端战斗门槛检查
+  if(Game.mobile){
+    if(!Game.mobile.viewport.requestBattleStart()) return false;
+  }
+
+  if(window.CELL_QUEST_DEBUG) console.log('[DEBUG] Setting Game.state=playing, player=(' + Game.player.x + ',' + Game.player.y + ') health=' + Game.player.health + ' levelRows=' + Game.level.height);
   _updateFirstFrame = true;
   Game.state = 'playing';
+  _notifyMobileState();
   $('hub-screen').classList.add('hidden');
   $('complete-screen').classList.add('hidden');
   $('death-panel').classList.add('hidden');
@@ -2472,6 +2454,7 @@ function retryFromDeath(){
   $('hud').classList.add('active');
   Game.state = 'playing';
   Game.deathTimer = 0;
+  _notifyMobileState();
 
   updateHUD();
 
@@ -2487,12 +2470,22 @@ function quitFromDeath(){
 }
 
 // ===== 初始化 =====
+// ===== 背景图片预加载 =====
+function preloadBgImages(){
+  for(let i = 0; i < 6; i++){
+    const img = new Image();
+    img.src = 'images/backgrounds/bg' + (i + 1) + '.webp?v=1';
+    Game.bgImages[i] = img;
+  }
+}
+
 function init(){
   Game.canvas = $('canvas');
   Game.ctx = Game.canvas.getContext('2d');
   Game.ctx.imageSmoothingEnabled = false;
 
   loadSprites();
+  preloadBgImages();
 
   // v3: 迁移旧版单存档 → 多栏位
   migrateOldSave();

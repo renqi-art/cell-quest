@@ -48,6 +48,8 @@ class Player {
     this.leukocidinMarked = 0;
     // 脓液地块效果
     this.onPus = false;
+    // 弹簧冷却
+    this.springCooldown = 0;
     // 挥剑
     this.swordTimer = 0;
     this.swordCooldown = 0;
@@ -149,6 +151,7 @@ class Player {
       return; // 突进中跳过其他逻辑
     }
     if(this.dashCooldown > 0) this.dashCooldown--;
+    if(this.springCooldown > 0) this.springCooldown--;
 
     // ===== 挥剑计时 =====
     if(this.swordTimer > 0) this.swordTimer--;
@@ -342,6 +345,15 @@ class Player {
       drain *= Game.gapBloodMult; // 未止血创面倍率
       Game.globalEnergy -= drain;
       if(Game.globalEnergy < 0) Game.globalEnergy = 0;
+    }
+
+    // ===== 尖刺检测 =====
+    const overlapTiles = level.getOverlapTiles(this);
+    for (const t of overlapTiles) {
+      if (t.tile === '^') {
+        this.takeDamage(level);
+        break;
+      }
     }
 
     // ===== 脓液地块检测 =====
@@ -837,6 +849,20 @@ class Player {
           this.vy = 0;
         }
       }
+      // 弹簧 V：踩上弹跳 1.8x（含冷却防无限弹跳）
+      if(t.tile === 'V' && this.vy >= 0 && this.springCooldown <= 0){
+        this.y = t.row * TILE - this.h;
+        this.vy = JUMP_VEL * 1.8;
+        this.onGround = false;
+        this.springCooldown = 10;
+      }
+      // 心室泵 J：踩上弹跳 2.2x
+      if(t.tile === 'J' && this.vy >= 0 && this.springCooldown <= 0){
+        this.y = t.row * TILE - this.h;
+        this.vy = JUMP_VEL * 2.2;
+        this.onGround = false;
+        this.springCooldown = 10;
+      }
     }
     // 补充地面检测（脚底在瓦片边界时getOverlapTiles可能漏掉）
     if(!this.onGround&&this.vy>=0){const fr=Math.floor((this.y+this.h)/32);const fc1=Math.floor(this.x/32),fc2=Math.floor((this.x+this.w-1)/32);for(let c=fc1;c<=fc2;c++){if(level.solidAt(c,fr)){this.y=fr*32-this.h;this.vy=0;this.onGround=true;break;}}}
@@ -939,6 +965,7 @@ class Player {
     // 显示死亡面板
     Game.deathsThisRun++;    // v3: 自适应难度追踪
     Game.state = 'dead';
+    if(Game.mobile){ Game.mobile.input.releaseAll(); Game.mobile.overlay.setDisabled(true); }
     showDeathPanel();
   }
 
@@ -2464,7 +2491,7 @@ class Item {
       ctx.fillText('营', px+8, py+11);
     } else if(this.type === 'atp'){
           // ATP 使用图片
-          if(!this._logged){ console.log('DRAW ATP at', px, py); this._logged = true; }
+          if(!this._logged){ if(window.CELL_QUEST_DEBUG) console.log('DRAW ATP at', px, py); this._logged = true; }
           const atpImg = Game.atpImg;
           if(atpImg && atpImg.complete && atpImg.naturalWidth > 0){
             ctx.drawImage(atpImg, px + 2, py + 2, 20, 20);
