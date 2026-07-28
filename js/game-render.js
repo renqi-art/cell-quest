@@ -76,6 +76,23 @@ function render(){
   if(Game.boss) Game.boss.draw(ctx, camX);
   // v3: DC NPC 绘制
   for(const dc of Game.dcNPCs) dc.draw(ctx, camX);
+  // 吞噬体传送门
+  for(const ph of lvl.phagosomes){
+    const px = Math.round(ph.x) - Math.round(camX);
+    const pulse = 1 + Math.sin(Game.frame*0.06+ph.col)*0.15;
+    ctx.save();
+    ctx.globalAlpha = 0.5 + Math.sin(Game.frame*0.05+ph.col)*0.2;
+    ctx.fillStyle = C.phagosome;
+    ctx.fillRect(px+2, ph.y+2, TILE-4, TILE-4);
+    ctx.fillStyle = C.phagosomeGlow; ctx.globalAlpha = 0.3;
+    ctx.beginPath(); ctx.arc(px+TILE/2, ph.y+TILE/2, TILE*0.4*pulse, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = C.phagosomeRim; ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = C.phagosomeRim; ctx.lineWidth = 2;
+    ctx.strokeRect(px+2, ph.y+2, TILE-4, TILE-4);
+    ctx.restore();
+  }
+  // 抗体炮台
+  for(const t of lvl.turrets) t.draw(ctx, camX);
   for(const pr of Game.projectiles) pr.draw(ctx, camX);
   // v3: 绘制所有玩家
   for(const player of Game.players){

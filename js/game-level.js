@@ -23,8 +23,12 @@ class Level {
     this.pipeTimers = this.pipeSpawners.map(() => 0);
     this.pipeCooldowns = this.pipeSpawners.map(() => 0);
     this.pipeTriggered = this.pipeSpawners.map(() => false);
-    // 碎裂平台 (Cat Mario 式陷阱)
+    // 碎裂平台
     this.crumblePlatforms = [];
+    // 吞噬体传送点
+    this.phagosomes = [];
+    // 抗体炮台
+    this.turrets = [];
     this.load();
     this.loadFloatPlatforms(mapData);
   }
@@ -48,6 +52,9 @@ class Level {
         const ch = line[c] || ' ';
         switch(ch){
           case '#': case '=': case 'S': case 'B': case '^': case 'V': case 'J': case 'p':
+          case '~': case '%': case '+':
+            arr.push(ch); break;
+          case '>': case '<':
             arr.push(ch); break;
           case 'P':
             this.playerSpawn = {x:c*TILE, y:r*TILE};
@@ -114,6 +121,12 @@ class Level {
           case 'N':
             Game.dcNPCs.push(new DendriticCell(c*TILE, r*TILE, Game.dcNPCs.length));
             arr.push(' '); break;
+          case '@':
+            this.phagosomes.push({x:c*TILE, y:r*TILE, col:c, row:r, active:true, cooldown:0});
+            arr.push(' '); break;
+          case '!':
+            this.turrets.push(new AntibodyTurret(c*TILE, r*TILE));
+            arr.push(' '); break;
           default:
             arr.push(' ');
         }
@@ -122,7 +135,7 @@ class Level {
     }
   }
 
-  solidTile(ch){ return ch==='#'||ch==='='||ch==='S'||ch==='B'||ch==='p'||ch==='_'||ch==='H'; }
+  solidTile(ch){ return ch==='#'||ch==='='||ch==='S'||ch==='B'||ch==='p'||ch==='_'||ch==='H'||ch==='~'||ch==='>'||ch==='<'; }
 
   // 碎裂平台：检查指定位置是否已崩解（已崩解则不实心）
   isCrumbleGone(col, row){
@@ -159,6 +172,18 @@ class Level {
           cp.timer = 0;
         }
       }
+    }
+  }
+
+  updatePhagosomes(){
+    for(const ph of this.phagosomes){
+      if(ph.cooldown > 0) ph.cooldown--;
+    }
+  }
+
+  updateTurrets(player){
+    for(const t of this.turrets){
+      t.update(this, player);
     }
   }
 
@@ -326,124 +351,278 @@ class Level {
 
   drawTile(ctx, ch, x, y, col, row){
     switch(ch){
+      // ===== 地面 — 细胞组织纹理 =====
       case '#':
+        // 主体（细胞质纹理：微妙的圆点矩阵）
         ctx.fillStyle=C.ground; ctx.fillRect(x,y,TILE,TILE);
-        ctx.fillStyle=C.groundTop; ctx.fillRect(x,y,TILE,4);
+        // 顶边高光（细胞膜）
+        ctx.fillStyle=C.groundTop; ctx.fillRect(x,y,TILE,5);
+        // 核斑点（模拟细胞核与细胞器分布）
         ctx.fillStyle=C.groundDark;
-        ctx.fillRect(x+5,y+12,3,3); ctx.fillRect(x+20,y+18,3,3); ctx.fillRect(x+12,y+24,3,3);
+        ctx.fillRect(x+4,y+10,4,4); ctx.fillRect(x+22,y+16,4,4);
+        ctx.fillRect(x+13,y+22,3,3); ctx.fillRect(x+8,y+26,3,3);
+        // 膜褶皱（横向纹理线）
+        ctx.globalAlpha=0.12;
+        ctx.fillStyle='#000'; ctx.fillRect(x,y+14,TILE,1);
+        ctx.fillRect(x+2,y+20,28,1);
+        ctx.globalAlpha=1;
         break;
+      // ===== 平台 — 悬浮细胞膜 =====
       case '=':
         ctx.fillStyle=C.platform; ctx.fillRect(x,y,TILE,TILE);
-        ctx.fillStyle=C.platformTop; ctx.fillRect(x,y,TILE,4);
+        ctx.fillStyle=C.platformTop; ctx.fillRect(x,y,TILE,6);
+        // 底边阴影
+        ctx.fillStyle='rgba(0,0,0,0.25)';
+        ctx.fillRect(x,y+TILE-3,TILE,3);
+        // 微孔纹理
+        ctx.globalAlpha=0.15;
+        ctx.fillStyle='#000';
+        ctx.fillRect(x+6,y+10,3,3); ctx.fillRect(x+22,y+18,3,3);
+        ctx.globalAlpha=1;
         break;
+      // ===== 痂皮平台 — 粗糙纹理 + 裂纹 =====
       case 'S':
         ctx.fillStyle=C.scab; ctx.fillRect(x,y,TILE,TILE);
-        ctx.fillStyle=C.scabTop; ctx.fillRect(x,y,TILE,4);
+        ctx.fillStyle=C.scabTop; ctx.fillRect(x,y,TILE,5);
+        // 暗斑（痂皮特征）
         ctx.fillStyle=C.scabDark;
-        ctx.fillRect(x+6,y+10,4,4); ctx.fillRect(x+18,y+16,4,4);
-        ctx.fillRect(x+12,y+22,3,3);
+        ctx.fillRect(x+4,y+10,5,5); ctx.fillRect(x+20,y+17,4,4);
+        ctx.fillRect(x+10,y+23,4,3);
+        // 裂纹
+        ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(x+6,y+6); ctx.lineTo(x+14,y+16);
+        ctx.lineTo(x+10,y+28); ctx.stroke();
         break;
+      // ===== 失血区 — 动态血液 =====
       case 'B':
-        // 潮汐变色
         if(this.isTideSurge()){
           ctx.fillStyle=C.tideSurge;
         } else if(this.isTideWarn()){
-          const flash = Math.floor(Game.frame/4)%2===0;
-          ctx.fillStyle = flash ? C.tideWarn : C.bloodLoss;
+          ctx.fillStyle = (Math.floor(Game.frame/4)%2===0) ? C.tideWarn : C.bloodLoss;
         } else {
           ctx.fillStyle=C.bloodLoss;
         }
         ctx.fillRect(x,y,TILE,TILE);
-        // 顶部
         ctx.fillStyle = this.isTideSurge() ? '#ff4050' : C.bloodLossTop;
         ctx.fillRect(x,y,TILE,4);
-        // 滴血动画
+        // 血液滴落
         const drip=(Math.floor(Game.frame/20)+col)%4;
-        ctx.fillStyle=C.bloodLoss;
-        ctx.globalAlpha=0.6;
-        ctx.fillRect(x+2+drip*7, y+TILE-8, 2, 8);
+        ctx.fillStyle='rgba(180,20,30,0.7)';
+        ctx.fillRect(x+3+drip*7,y+TILE-10,3,10);
+        // 血泡
+        ctx.globalAlpha=0.35+Math.sin(Game.frame*0.05+col)*0.1;
+        ctx.beginPath(); ctx.arc(x+10+(col%3)*7,y+14,3,0,Math.PI*2);
+        ctx.fillStyle='#ff2040'; ctx.fill();
         ctx.globalAlpha=1;
-        // 潮涌时波纹
+        // 潮涌波纹
         if(this.isTideSurge()){
           ctx.save();
-          ctx.globalAlpha=0.3+Math.sin(Game.frame*0.1+col)*0.15;
+          ctx.globalAlpha=0.3+Math.sin(Game.frame*0.08+col)*0.15;
           ctx.fillStyle=C.tideWarn;
-          ctx.fillRect(x, y - 4 + Math.sin(Game.frame*0.08+col)*2, TILE, 4);
+          ctx.fillRect(x,y-4+Math.sin(Game.frame*0.08+col)*2,TILE,4);
           ctx.restore();
         }
         break;
+      // ===== 尖刺 — 金属锐刺 =====
       case '^':
-        ctx.fillStyle=C.spike;
-        for(let i=0;i<4;i++){
+        // 底色
+        ctx.fillStyle='#4a4a5a'; ctx.fillRect(x,y,TILE,TILE);
+        // 5 根尖刺（渐变高度 + 金属光泽）
+        for(let i=0;i<5;i++){
+          const spikeH = 14 + (i%2)*4;
+          const grad = ctx.createLinearGradient(x+i*6.4,y+TILE-spikeH,x+i*6.4,y+TILE);
+          grad.addColorStop(0,'#aaaabb');
+          grad.addColorStop(0.4,'#9999aa');
+          grad.addColorStop(1,'#555566');
+          ctx.fillStyle=grad;
           ctx.beginPath();
-          ctx.moveTo(x+i*8, y+TILE);
-          ctx.lineTo(x+i*8+4, y+4);
-          ctx.lineTo(x+i*8+8, y+TILE);
+          ctx.moveTo(x+i*6.4+1,y+TILE-spikeH);
+          ctx.lineTo(x+i*6.4+3.2,y+TILE);
+          ctx.lineTo(x+i*6.4+5.4,y+TILE-spikeH);
           ctx.closePath(); ctx.fill();
         }
         break;
+      // ===== 弹簧 — 机械弹跳垫 =====
       case 'V':
-        // 弹簧方块：绿色弹跳垫
-        ctx.fillStyle = '#2a6a4a';
-        ctx.fillRect(x, y, TILE, TILE);
-        ctx.fillStyle = '#4acd6a';
-        ctx.fillRect(x+2, y+TILE-8, TILE-4, 8);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('▲', x + TILE/2, y + TILE - 4);
-        ctx.fillText('SPRING', x + TILE/2, y + TILE/2);
+        // 底座
+        ctx.fillStyle='#1a4a2a'; ctx.fillRect(x,y,TILE,TILE);
+        // 弹簧线圈
+        const coilY = y+4+Math.sin(Game.frame*0.06+col)*1.5;
+        ctx.strokeStyle='#4acd6a'; ctx.lineWidth=2;
+        for(let i=0;i<5;i++){
+          ctx.beginPath(); ctx.arc(x+TILE/2,coilY+i*5,5,0,Math.PI);
+          ctx.stroke();
+        }
+        // 顶板
+        ctx.fillStyle='#3a8a4a'; ctx.fillRect(x+2,y+TILE-6,TILE-4,6);
+        ctx.fillStyle='#5ad06a'; ctx.fillRect(x+2,y+TILE-6,TILE-4,2);
+        // 箭头
+        ctx.fillStyle='#fff'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('⬆',x+TILE/2,y+TILE-8);
         break;
+      // ===== 血液泵 — 心室推流器 =====
       case 'J':
-        // 左心室泵跳板：红色弹跳垫
-        ctx.fillStyle = '#c04040';
-        ctx.fillRect(x, y, TILE, TILE);
-        ctx.fillStyle = '#ff6060';
-        ctx.fillRect(x+2, y+TILE-6, TILE-4, 6);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('PUMP', x + TILE/2, y + TILE/2);
+        // 泵体
+        ctx.fillStyle='#5a2020'; ctx.fillRect(x,y,TILE,TILE);
+        // 脉动环
+        const pulse = 1+Math.sin(Game.frame*0.08+col)*0.12;
+        ctx.fillStyle='#c04040';
+        ctx.beginPath(); ctx.arc(x+TILE/2,y+TILE/2,TILE*0.35*pulse,0,Math.PI*2); ctx.fill();
+        // 内环
+        ctx.fillStyle='#ff6060';
+        ctx.beginPath(); ctx.arc(x+TILE/2,y+TILE/2,TILE*0.18*pulse,0,Math.PI*2); ctx.fill();
+        // 箭头
+        ctx.fillStyle='#fff'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('⇧',x+TILE/2,y+TILE/2+4);
         break;
+      // ===== 管道 — 血管导管 =====
       case 'p':
-        // 血管管道：暗绿色圆柱
-        ctx.fillStyle = '#1a5c2a';
-        ctx.fillRect(x+2, y, TILE-4, TILE);
-        ctx.fillStyle = '#2a8c3a';
-        ctx.fillRect(x+2, y, TILE-4, 4);
-        ctx.fillRect(x+2, y, 6, TILE);
-        ctx.fillStyle = '#0d3d15';
-        ctx.fillRect(x+TILE-8, y, 6, TILE);
+        ctx.fillStyle='#0d2d12'; ctx.fillRect(x,y,TILE,TILE);
+        // 管体
+        ctx.fillStyle='#1a5c2a';
+        ctx.fillRect(x+3,y,TILE-6,TILE);
+        // 左边缘高光
+        ctx.fillStyle='#2a8c3a'; ctx.fillRect(x+3,y,4,TILE);
+        // 右边缘阴影
+        ctx.fillStyle='#0d3d15'; ctx.fillRect(x+TILE-7,y,4,TILE);
+        // 管道接头环
+        ctx.fillStyle='#3a9a3a';
+        ctx.fillRect(x+4,y+12,24,3);
+        ctx.fillRect(x+4,y+22,24,3);
         break;
+      // ===== 隐藏墙 — 半透明膜 =====
       case 'H':
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = C.hiddenWall;
-        ctx.fillRect(x, y, TILE, TILE);
-        ctx.globalAlpha = 0.15;
-        ctx.fillStyle = C.hiddenWallHint;
-        ctx.fillRect(x+4, y+4, TILE-8, TILE-8);
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha=0.3;
+        ctx.fillStyle=C.hiddenWall;
+        ctx.fillRect(x,y,TILE,TILE);
+        ctx.globalAlpha=0.12;
+        ctx.fillStyle=C.hiddenWallHint;
+        ctx.fillRect(x+3,y+3,TILE-6,TILE-6);
+        ctx.globalAlpha=1;
+        // 微弱边框提示
+        ctx.strokeStyle='rgba(120,80,160,0.2)'; ctx.lineWidth=1;
+        ctx.setLineDash([2,6]);
+        ctx.strokeRect(x+1,y+1,TILE-2,TILE-2);
+        ctx.setLineDash([]);
         break;
+      // ===== 碎裂平台 =====
       case '_':
-        // 碎裂平台：检查状态
-        { const cp = this.crumblePlatforms.find(p => p.col === col && p.row === row);
-          if(cp && cp.state === 'gone') break; // 已崩解不绘制
-          const shaking = cp && cp.state === 'shaking';
-          const shakeX = shaking ? Math.sin(cp.timer * 0.8) * 3 : 0;
+        { const cp = this.crumblePlatforms.find(p => p.col===col && p.row===row);
+          if(cp && cp.state==='gone') break;
+          const shaking = cp && cp.state==='shaking';
+          const shakeX = shaking ? Math.sin(cp.timer*0.8)*3 : 0;
           ctx.fillStyle = shaking ? C.crumbleShake : C.crumble;
-          ctx.fillRect(x + shakeX, y, TILE, TILE);
+          ctx.fillRect(x+shakeX,y,TILE,TILE);
+          // 表面纹理
           ctx.fillStyle = shaking ? '#ffcc66' : C.crumbleTop;
-          ctx.fillRect(x + shakeX, y, TILE, 4);
-          // 抖动时画裂纹
+          ctx.fillRect(x+shakeX,y,TILE,5);
+          // 正常状态：微小裂纹
+          if(!shaking){
+            ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=0.8;
+            ctx.beginPath(); ctx.moveTo(x+8,y+8); ctx.lineTo(x+14,y+16);
+            ctx.lineTo(x+22,y+12); ctx.stroke();
+          }
+          // 抖动状态：大裂纹 + 碎片
           if(shaking){
-            ctx.strokeStyle = '#000';
-            ctx.lineWidth = 1.5;
-            ctx.globalAlpha = 0.7;
-            ctx.beginPath();
-            ctx.moveTo(x+4, y+4); ctx.lineTo(x+10, y+20); ctx.lineTo(x+18, y+8);
-            ctx.lineTo(x+26, y+24);
-            ctx.stroke();
-            ctx.globalAlpha = 1;
+            ctx.strokeStyle='#000'; ctx.lineWidth=1.8; ctx.globalAlpha=0.8;
+            ctx.beginPath(); ctx.moveTo(x+3,y+3); ctx.lineTo(x+12,y+18);
+            ctx.lineTo(x+20,y+7); ctx.lineTo(x+28,y+22); ctx.stroke();
+            // 碎片粒子
+            ctx.fillStyle=C.crumbleShake;
+            ctx.fillRect(x+16+shakeX,y+24,3,3);
+            ctx.fillRect(x+24-shakeX,y+10,2,2);
+            ctx.globalAlpha=1;
           }
         }
+        break;
+      // ===== [新] 纤毛 ~ — 传送带 =====
+      case '~':
+        // 基底
+        ctx.fillStyle=C.cilia; ctx.fillRect(x,y,TILE,TILE);
+        ctx.fillStyle=C.ciliaDark; ctx.fillRect(x,y,TILE,3);
+        // 纤毛波浪动画
+        const wave = Math.sin(Game.frame*0.08+col*0.7)*2;
+        for(let i=0;i<6;i++){
+          const cx = x+3+i*5;
+          const cy = y+8+Math.sin(Game.frame*0.1+col*0.5+i*0.8)*3;
+          ctx.fillStyle=C.ciliaLight;
+          ctx.beginPath(); ctx.arc(cx,cy+wave,2.5,Math.PI,0); ctx.fill();
+          ctx.fillStyle=C.ciliaDark;
+          ctx.fillRect(cx-1,cy+wave,2,12);
+        }
+        // 方向箭头
+        ctx.fillStyle=C.ciliaArrow; ctx.globalAlpha=0.6+Math.sin(Game.frame*0.05)*0.2;
+        ctx.font='bold 10px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('▶▶',x+TILE/2,y+28);
+        ctx.globalAlpha=1;
+        break;
+      // ===== [新] 黏液网 % — 减速区 =====
+      case '%':
+        // 黏性基底
+        ctx.fillStyle=C.mucus; ctx.fillRect(x,y,TILE,TILE);
+        ctx.fillStyle=C.mucusDark; ctx.fillRect(x,y,TILE,2);
+        // 黏丝网
+        ctx.strokeStyle=C.mucusLight; ctx.lineWidth=1.2; ctx.globalAlpha=0.6;
+        for(let i=0;i<3;i++){
+          ctx.beginPath(); ctx.moveTo(x+3,y+6+i*8); ctx.lineTo(x+28,y+10+i*8);
+          ctx.quadraticCurveTo(x+16,y+2+i*8,x+8,y+16+i*8);
+          ctx.stroke();
+        }
+        // 气泡
+        ctx.fillStyle=C.mucusLight; ctx.globalAlpha=0.4;
+        ctx.beginPath(); ctx.arc(x+20,y+14,4,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x+8,y+22,3,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha=1;
+        // 减速标识
+        ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('🐌',x+TILE/2,y+22);
+        break;
+      // ===== [新] 趋化因子 + — 加速区 =====
+      case '+':
+        // 激活性基底（蓝白闪烁）
+        const glowPulse = 0.5+Math.sin(Game.frame*0.1+col)*0.2;
+        ctx.fillStyle=C.chemokine; ctx.fillRect(x,y,TILE,TILE);
+        // 发光粒子
+        ctx.fillStyle=C.chemokineGlow; ctx.globalAlpha=glowPulse*0.4;
+        ctx.fillRect(x+2,y+2,TILE-4,TILE-4);
+        ctx.globalAlpha=1;
+        // 闪烁星点
+        for(let i=0;i<6;i++){
+          const sx = x+4+(i*5+col*7)%28;
+          const sy = y+4+(i*9+row*3)%24;
+          const sa = 0.5+Math.sin(Game.frame*0.15+i*1.2)*0.4;
+          ctx.fillStyle=C.chemokineGlow; ctx.globalAlpha=sa;
+          ctx.fillRect(sx,sy,2,2);
+        }
+        ctx.globalAlpha=1;
+        // 加速箭头
+        ctx.fillStyle='#fff'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('⚡',x+TILE/2,y+20);
+        break;
+      // ===== [新] 血管瓣膜 > — 单向门（右通） =====
+      case '>':
+        ctx.fillStyle=C.valve; ctx.fillRect(x,y,TILE,TILE);
+        // 瓣膜叶片
+        ctx.fillStyle=C.valveArrow;
+        ctx.beginPath(); ctx.moveTo(x+22,y+6); ctx.lineTo(x+28,y+TILE/2);
+        ctx.lineTo(x+22,y+TILE-6); ctx.closePath(); ctx.fill();
+        // 铰链
+        ctx.fillStyle='rgba(255,255,255,0.3)';
+        ctx.fillRect(x+20,y+6,3,TILE-12);
+        // 箭头
+        ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('→',x+TILE/2-2,y+TILE/2+5);
+        break;
+      // ===== [新] 血管瓣膜 < — 单向门（左通） =====
+      case '<':
+        ctx.fillStyle=C.valve; ctx.fillRect(x,y,TILE,TILE);
+        ctx.fillStyle=C.valveArrow;
+        ctx.beginPath(); ctx.moveTo(x+10,y+6); ctx.lineTo(x+4,y+TILE/2);
+        ctx.lineTo(x+10,y+TILE-6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle='rgba(255,255,255,0.3)';
+        ctx.fillRect(x+9,y+6,3,TILE-12);
+        ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('←',x+TILE/2+2,y+TILE/2+5);
         break;
     }
   }

@@ -124,7 +124,10 @@ function update(){
   }
 
   // 子弹更新
-  for(const pr of Game.projectiles) pr.update(lvl, lvl.enemies);
+  for(const pr of Game.projectiles){
+    if(pr instanceof TurretProjectile) pr.update(lvl, p);
+    else pr.update(lvl, lvl.enemies);
+  }
   Game.projectiles = Game.projectiles.filter(pr=>pr.alive);
 
   // 临时平台更新
@@ -137,6 +140,10 @@ function update(){
 
   // 碎裂平台更新
   lvl.updateCrumblePlatforms();
+  // 吞噬体冷却更新
+  lvl.updatePhagosomes();
+  // 抗体炮台更新
+  lvl.updateTurrets(p);
 
   // 浮动平台更新
   for(const fp of Game.floatPlatforms) fp.update();
