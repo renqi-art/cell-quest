@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 服务配置</title>
+</head>
+<body>
+  <main class="settings-card">
+    <h1>AI 服务配置</h1>
+    <p data-testid="ai-config-status" role="status">正在检查配置…</p>
+    <label for="ai-api-key">API Key</label>
+    <input id="ai-api-key" data-testid="ai-api-key" type="password" autocomplete="off">
+    <div class="actions">
+      <button data-testid="save-ai-key" type="button">保存到服务端内存</button>
+      <button data-testid="clear-ai-key" type="button">清除运行时 Key</button>
+      <a data-testid="return-to-editor" href="/editor.html">返回地图编辑器</a>
+    </div>
+    <p>Key 只发送到本机服务端内存；服务重启后需重新配置。环境变量配置不会被清除。</p>
+  </main>
+  <script src="js/ai-settings.js" defer></script>
+</body>
+</html>

@@ -37,7 +37,7 @@ const mime = {
   '.wav': 'audio/wav',
 };
 
-const PUBLIC_FILES = new Set(['/index.html', '/editor.html', '/deck.html']);
+const PUBLIC_FILES = new Set(['/index.html', '/editor.html', '/deck.html', '/ai-settings.html']);
 const PUBLIC_PREFIXES = ['/js/', '/css/', '/images/', '/audio/'];
 const LEVEL_FILENAME = /^level\d+_[a-z0-9_-]+\.js$/i;
 
