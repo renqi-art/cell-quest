@@ -585,6 +585,14 @@ function deleteKnowledgeCard(idx){
 }
 
 // ── Export / Import ──
+function serializeLevelName(name){
+  const value = String(name);
+  let serialized = '"';
+  for(let index=0; index<value.length; index+=1){
+    serialized += '\\u' + value.charCodeAt(index).toString(16).padStart(4, '0');
+  }
+  return serialized + '"';
+}
 function parseEditorMetadata(text){
   const source = String(text);
   let name = null;
@@ -618,7 +626,7 @@ function exportMap(){
   const w = mapWidth;
   const lines = grid.map(row => `      "${row.join('')}",`);
   const extras = buildExtraStr();
-  const serializedName = JSON.stringify(name);
+  const serializedName = serializeLevelName(name);
   const code = `const LEVEL_X = {\n  name: ${serializedName},\n  width: ${w},\n  cellType: ${editorCellType},\n  winCondition: ${editorWinCondition === 'killAll' ? 'WIN_KILL_ALL' : 'WIN_COLLECT_ALL'},\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};`;
   document.getElementById('exportText').value = code;
   document.getElementById('exportModal').classList.add('show');
@@ -646,7 +654,7 @@ async function saveLevel(){
   }
   const lines = grid.map(row => `      "${row.join('')}",`);
   const extras = buildExtraStr();
-  const serializedName = JSON.stringify(name);
+  const serializedName = serializeLevelName(name);
   const code = `const LEVEL_${levelNum} = {\n  name: ${serializedName},\n  width: ${mapWidth},\n  cellType: ${editorCellType},\n  winCondition: ${editorWinCondition === 'killAll' ? 'WIN_KILL_ALL' : 'WIN_COLLECT_ALL'},\n  sky: [C.sky2, '#e8a0a0'],\n  map: [\n${lines.join('\n')}\n  ],\n  floatPlatforms: [],\n${extras}};\n`;
   try{
     const r = await fetch('/save', {
@@ -765,7 +773,10 @@ async function loadPresetList(){
       _customLevelCache = JSON.parse(raw);
       _customLevelCache.forEach((lvl, i) => {
         const name = lvl.name || '自定义关卡';
-        sel.innerHTML += `<option value="custom_${i}">📝 ${name}</option>`;
+        const option = document.createElement('option');
+        option.value = `custom_${i}`;
+        option.textContent = `📝 ${name}`;
+        sel.appendChild(option);
       });
     }
   }catch(e){}

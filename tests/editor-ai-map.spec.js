@@ -40,6 +40,7 @@ async function openConfiguredDialog(page) {
   }));
   await page.goto('/editor.html');
   await page.getByTestId('open-ai-map').click();
+  await expect(page.getByTestId('generate-ai-map')).toBeEnabled();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -161,10 +162,19 @@ test('applied metadata is used by custom-level save and both code exports', asyn
   expect(customLevel.winCondition).toBe('killAll');
 });
 
-test('closing the dialog aborts an active generation request', async ({ page }) => {
+test('closing the dialog aborts a signaled active generation request', async ({ page }) => {
   await page.addInitScript(() => {
     const NativeAbortController = window.AbortController;
+    const nativeFetch = window.fetch.bind(window);
     window.__aiAbortCount = 0;
+    window.__aiGenerateSignalSeen = false;
+    window.fetch = (input, init = {}) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (new URL(url, location.href).pathname === '/api/generate-map') {
+        window.__aiGenerateSignalSeen = init.signal instanceof AbortSignal;
+      }
+      return nativeFetch(input, init);
+    };
     window.AbortController = class extends NativeAbortController {
       abort(...args) {
         window.__aiAbortCount += 1;
@@ -181,13 +191,14 @@ test('closing the dialog aborts an active generation request', async ({ page }) 
   await openConfiguredDialog(page);
   await page.locator('#mapWidth').fill('20');
   await page.locator('#mapHeight').fill('10');
-  await page.getByTestId('ai-map-prompt').fill('中止请求');
+  await page.getByTestId('ai-map-prompt').fill('abort request');
 
   const generation = page.getByTestId('generate-ai-map').click();
   await page.waitForRequest('**/api/generate-map');
   await page.getByTestId('cancel-ai-map').click();
   await generation;
 
+  expect(await page.evaluate(() => window.__aiGenerateSignalSeen)).toBe(true);
   expect(await page.evaluate(() => window.__aiAbortCount)).toBe(1);
 });
 
@@ -213,7 +224,7 @@ test('AI-controlled names and summaries render as inert text', async ({ page }) 
   expect(await page.evaluate(() => [window.__aiNameXss || 0, window.__aiThemeXss || 0])).toEqual([0, 0]);
 });
 
-test('serializes applied AI names as inert strings in export and save source', async ({ page }) => {
+test('serializes every applied AI name code unit in export and save source', async ({ page }) => {
   const modelName = '*/alert(1)/*';
   let savedCode = '';
   page.on('dialog', dialog => dialog.accept());
@@ -239,13 +250,16 @@ test('serializes applied AI names as inert strings in export and save source', a
   await expect.poll(() => savedCode).not.toBe('');
 
   for (const code of [exportedCode, savedCode]) {
-    expect(code).toContain(`name: ${JSON.stringify(modelName)}`);
+    const serializedName = code.match(/name:\s*("(?:\\.|[^"\\])*")/)?.[1];
+    expect(JSON.parse(serializedName)).toBe(modelName);
+    expect(serializedName).toMatch(/^"(?:\\u[0-9a-f]{4})+"$/);
+    expect(code).not.toContain(modelName);
     expect(code).not.toContain(`/* ${modelName} */`);
     expect(code).not.toMatch(/^\/\*/);
   }
 });
 
-test('shows a visible error when the AI configuration response is not JSON', async ({ page }) => {
+test('shows a visible error and keeps generation disabled when AI configuration is invalid', async ({ page }) => {
   await page.route('**/api/ai-config', route => route.fulfill({
     status: 502,
     contentType: 'text/plain',
@@ -258,6 +272,7 @@ test('shows a visible error when the AI configuration response is not JSON', asy
   await expect(page.locator('#aiMapModal')).toHaveClass(/show/);
   await expect(page.locator('#aiMapError')).toBeVisible();
   await expect(page.locator('#aiMapError')).toHaveText('无法检查 AI 配置状态');
+  await expect(page.getByTestId('generate-ai-map')).toBeDisabled();
 });
 
 test('reset after AI apply restores the complete prior editor state only once', async ({ page }) => {
@@ -388,4 +403,84 @@ test('malformed successful generation remains temporary and cannot be applied', 
   await expect(page.locator('#aiMapError')).toHaveText('生成地图尺寸无效');
   await expect(page.locator('#aiMapModal')).toHaveClass(/show/);
   expect(await page.evaluate(() => grid.map(row => row.join('')))).toEqual(before);
+});
+test('escapes every level-name code unit before extra-config parsing', async ({ page }) => {
+  const modelName = 'pipeSpawners:[globalThis.__aiNamePwn=1],';
+  await page.route('**/api/generate-map', route => route.fulfill({
+    json: generatedFixture(20, 10, { level: { name: modelName } }),
+  }));
+  await openConfiguredDialog(page);
+  await page.locator('#mapWidth').fill('20');
+  await page.locator('#mapHeight').fill('10');
+  await page.getByTestId('ai-map-prompt').fill('regex boundary');
+  await page.getByTestId('generate-ai-map').click();
+  await page.getByTestId('apply-ai-map').click();
+
+  const result = await page.evaluate(() => {
+    exportMap();
+    const source = document.getElementById('exportText').value;
+    delete globalThis.__aiNamePwn;
+    document.getElementById('levelName').value = 'stale name';
+    document.getElementById('importText').value = source;
+    doImport();
+    return {
+      source,
+      restoredName: document.getElementById('levelName').value,
+      pwned: globalThis.__aiNamePwn ?? null,
+      pipeKeyCount: (source.match(/pipeSpawners/g) || []).length,
+    };
+  });
+
+  expect(result.pwned).toBeNull();
+  expect(result.restoredName).toBe(modelName);
+  expect(result.source).not.toContain(modelName);
+  expect(result.source).not.toContain('__aiNamePwn');
+  expect(result.pipeKeyCount).toBe(1);
+});
+
+test('renders persisted custom level names as option text without parsing markup', async ({ page }) => {
+  const hostileName = '</option><option id="aiOptionPwn">owned</option><option>';
+  let releaseLevels;
+  const levelsGate = new Promise(resolve => { releaseLevels = resolve; });
+  await page.unroute('**/js/levels/*.js');
+  await page.route('**/js/levels/*.js', async route => {
+    await levelsGate;
+    await route.fulfill({
+      contentType: 'application/javascript',
+      body: 'const LEVEL_0 = { name: "fixture", width: 20, map: ["####################"] };',
+    });
+  });
+  await page.goto('/editor.html');
+  await page.evaluate(name => {
+    localStorage.setItem('cellQuest_customLevels_0', JSON.stringify([{
+      name,
+      width: 20,
+      map: Array(10).fill(' '.repeat(20)),
+    }]));
+  }, hostileName);
+  releaseLevels();
+
+  const customOption = page.locator('#levelSelect option[value="custom_0"]');
+  await expect(customOption).toHaveText(`📝 ${hostileName}`);
+  expect(await page.locator('#aiOptionPwn').count()).toBe(0);
+});
+
+test('keeps generation disabled until the configuration check succeeds', async ({ page }) => {
+  let releaseConfig;
+  const configGate = new Promise(resolve => { releaseConfig = resolve; });
+  await page.route('**/api/ai-config', async route => {
+    await configGate;
+    await route.fulfill({ json: { configured: true, source: 'runtime' } });
+  });
+  await page.goto('/editor.html');
+  const generateButton = page.getByTestId('generate-ai-map');
+
+  await expect(generateButton).toBeDisabled();
+  const configRequest = page.waitForRequest('**/api/ai-config');
+  await page.getByTestId('open-ai-map').click();
+  await configRequest;
+  await expect(generateButton).toBeDisabled();
+
+  releaseConfig();
+  await expect(generateButton).toBeEnabled();
 });

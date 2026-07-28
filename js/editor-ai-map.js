@@ -35,6 +35,7 @@
   const resultNode = modal.querySelector('#aiMapResult');
   const applyButton = modal.querySelector('[data-testid="apply-ai-map"]');
   const generateButton = modal.querySelector('[data-testid="generate-ai-map"]');
+  generateButton.disabled = true;
 
   function showError(message) {
     errorNode.textContent = message;
@@ -108,6 +109,7 @@
   }
 
   async function openDialog() {
+    generateButton.disabled = true;
     pendingLevel = null;
     errorNode.textContent = '';
     resultNode.hidden = true;
@@ -123,6 +125,7 @@
         location.href = '/ai-settings.html?return=%2Feditor.html';
         return;
       }
+      generateButton.disabled = false;
       promptNode.focus();
     } catch {
       showError('无法检查 AI 配置状态');
