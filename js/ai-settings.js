@@ -4,7 +4,20 @@ const saveButton = document.querySelector('[data-testid="save-ai-key"]');
 const clearButton = document.querySelector('[data-testid="clear-ai-key"]');
 const returnLink = document.querySelector('[data-testid="return-to-editor"]');
 const candidate = new URLSearchParams(location.search).get('return') || '/editor.html';
-returnLink.href = candidate.startsWith('/') && !candidate.startsWith('//') ? candidate : '/editor.html';
+
+function getReturnPath(value) {
+  if (value.includes('\\') || value.startsWith('//')) return '/editor.html';
+  try {
+    const url = new URL(value, location.origin);
+    return url.origin === location.origin
+      ? url.pathname + url.search + url.hash
+      : '/editor.html';
+  } catch {
+    return '/editor.html';
+  }
+}
+
+returnLink.href = getReturnPath(candidate);
 
 function renderStatus(configured, source) {
   statusNode.textContent = configured
