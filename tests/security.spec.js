@@ -342,7 +342,20 @@ test('classic editor loads actual built-in and exported extra config', async ({ 
   const result = await page.evaluate(async () => {
     const source = await fetch('/js/levels/level5_boss.js').then(response => response.text());
     doImportRaw(source);
+    editorPipeSpawners[0] = { ...editorPipeSpawners[0], dir: 'up_jump', vy: -9 };
+    editorTutorials[0] = { ...editorTutorials[0], speaker: '免疫导师', color: '#abc123' };
+    renderPalette();
     const builtIn = {
+      pipeSpawners: editorPipeSpawners.map(item => ({ ...item })),
+      tutorials: editorTutorials.map(item => ({ ...item })),
+      knowledgeCards: editorKnowledgeCards.map(item => ({ ...item })),
+    };
+
+    editPipeSpawner(0);
+    savePipeSpawner();
+    editKnowledgeCard(0);
+    saveKnowledgeCard();
+    const afterEdit = {
       pipeSpawners: editorPipeSpawners.map(item => ({ ...item })),
       tutorials: editorTutorials.map(item => ({ ...item })),
       knowledgeCards: editorKnowledgeCards.map(item => ({ ...item })),
@@ -358,6 +371,7 @@ test('classic editor loads actual built-in and exported extra config', async ({ 
 
     return {
       builtIn,
+      afterEdit,
       exported: {
         pipeSpawners: editorPipeSpawners,
         tutorials: editorTutorials,
@@ -377,5 +391,6 @@ test('classic editor loads actual built-in and exported extra config', async ({ 
   });
   expect(result.builtIn.tutorials).toHaveLength(1);
   expect(result.builtIn.knowledgeCards).toHaveLength(1);
+  expect(result.afterEdit).toEqual(result.builtIn);
   expect(result.exported).toEqual(result.builtIn);
 });

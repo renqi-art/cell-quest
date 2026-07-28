@@ -484,7 +484,7 @@ function renderPipeSpawnerList(){
         <option value="strep" ${ps.type==='strep'?'selected':''}>链球菌 strep</option>
         <option value="staphLarge" ${ps.type==='staphLarge'?'selected':''}>大型葡萄球菌</option>
       </select>
-      <label>方向</label><select id="psDir"><option value="up" ${ps.dir==='up'?'selected':''}>上</option><option value="down" ${ps.dir==='down'?'selected':''}>下</option></select>
+<label>方向</label><select id="psDir"><option value="up" ${ps.dir==='up'?'selected':''}>上</option><option value="down" ${ps.dir==='down'?'selected':''}>下</option><option value="up_jump" ${ps.dir==='up_jump'?'selected':''}>向上跳跃</option></select>
       <label>冷却帧 (cooldown, timer用)</label><input type="number" id="psCooldown" value="${escapeEditorHtml(ps.cooldown||'')}" min="0" placeholder="180">
       <label>接近范围格子 (range, proximity用)</label><input type="number" id="psRange" value="${escapeEditorHtml(ps.range||'')}" min="1" placeholder="4">
       <label>间隔帧 (interval, timer用)</label><input type="number" id="psInterval" value="${escapeEditorHtml(ps.interval||'')}" min="1" placeholder="300">
@@ -526,13 +526,18 @@ function cancelPipeSpawner(){
   draw();
 }
 function savePipeSpawner(){
+  const previous = editorPipeSpawners[editingPsIdx] || {};
   const ps = {
+    ...previous,
     col: parseInt(document.getElementById('psCol').value) || 0,
     row: parseInt(document.getElementById('psRow').value) || 0,
     trigger: document.getElementById('psTrigger').value,
     type: document.getElementById('psType').value,
     dir: document.getElementById('psDir').value,
   };
+  delete ps.cooldown;
+  delete ps.range;
+  delete ps.interval;
   const cd = parseInt(document.getElementById('psCooldown').value);
   if(cd > 0) ps.cooldown = cd;
   const rng = parseInt(document.getElementById('psRange').value);
@@ -565,6 +570,7 @@ function renderKnowledgeCardList(){
         <option value="wbc" ${kc.key==='wbc'?'selected':''}>白细胞 WBC</option>
         <option value="rbc" ${kc.key==='rbc'?'selected':''}>红细胞 RBC</option>
         <option value="plt" ${kc.key==='plt'?'selected':''}>血小板 PLT</option>
+        ${!['wbc','rbc','plt'].includes(kc.key) ? '<option value="' + escapeEditorHtml(kc.key) + '" selected>' + escapeEditorHtml(kc.key) + '</option>' : ''}
       </select>
       <label>标题</label><input type="text" id="kcTitle" value="${escapeEditorHtml(kc.title||'')}" placeholder="卡片标题">
       <label>正文（\\n 换行）</label><textarea id="kcText" placeholder="卡片正文内容...">${escapeEditorHtml(kc.text||'')}</textarea>
