@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { handleDirectorRequest } = require('./server/director');
 const { handleGenerateCaseRequest } = require('./server/case-generator');
+const { getAiConfigStatus, handleGetAiConfig, handleSetAiConfig } = require('./server/ai-runtime-config');
 
 const ROOT = __dirname;
 const LEVEL_DIR = path.join(ROOT, 'js', 'levels');
@@ -197,7 +198,7 @@ const server = http.createServer(async (req, res) => {
       ok: true,
       service: 'cell-quest',
       version: VERSION,
-      aiConfigured: Boolean(process.env.CELL_QUEST_AI_API_KEY),
+      aiConfigured: getAiConfigStatus().configured,
     });
     return;
   }
@@ -232,6 +233,16 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && requestPath === '/reset') {
     await handleReset(req, res);
+    return;
+  }
+
+  if (req.method === 'GET' && requestPath === '/api/ai-config') {
+    handleGetAiConfig(res, sendJson);
+    return;
+  }
+
+  if (req.method === 'POST' && requestPath === '/api/ai-config') {
+    await handleSetAiConfig(req, res, sendJson);
     return;
   }
 
