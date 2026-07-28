@@ -2658,3 +2658,45 @@ function openEditor() { window.open('editor.html', '_blank') }
 window.cellQuest_triggerComplete = levelComplete;
 
 window.addEventListener('load', init);
+
+// ===== Cross-tab sync: auto-refresh levels when editor saves =====
+window.addEventListener('storage', function(e) {
+  if (e.key === 'cellQuest_customLevels_0') {
+    refreshCustomLevels();
+    if (Game.state === 'hub') renderLevelGrid();
+  }
+});
+
+// Refresh builtin level data from server (for after editor saves to file)
+async function refreshBuiltinLevels() {
+  const files = ['level0_blood','level1_wbc','level2_alveoli','level3_vessel','level4_lymph','level5_boss'];
+  let changed = false;
+  for (let i = 0; i < files.length; i++) {
+    try {
+      const r = await fetch('js/levels/' + files[i] + '.js?_t=' + Date.now());
+      const code = await r.text();
+      // Extract object literal: const LEVEL_0 = {...};
+      const match = code.match(/const\s+LEVEL_\d+\s*=\s*(\{[\s\S]*?\});/);
+      if (match) {
+        const oldJSON = JSON.stringify(_BUILTIN_LEVELS[i]);
+        // new Function has global scope access — pass constants explicitly for safety
+        var newData = (new Function('C', 'WIN_COLLECT_ALL', 'WIN_KILL_ALL', 'return ' + match[1]))(C, WIN_COLLECT_ALL, WIN_KILL_ALL);
+        if (oldJSON !== JSON.stringify(newData)) {
+          // Update in-place (LEVEL_MAPS shares same object ref)
+          Object.keys(_BUILTIN_LEVELS[i]).forEach(function(k) { delete _BUILTIN_LEVELS[i][k]; });
+          Object.assign(_BUILTIN_LEVELS[i], newData);
+          changed = true;
+        }
+      }
+    } catch(e) { /* skip on error */ }
+  }
+  if (changed && Game.state === 'hub') renderLevelGrid();
+}
+
+// When user switches back to this tab, refresh all levels
+document.addEventListener('visibilitychange', function() {
+  if (!document.hidden) {
+    refreshCustomLevels();
+    refreshBuiltinLevels();
+  }
+});

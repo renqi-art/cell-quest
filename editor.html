@@ -658,10 +658,10 @@ function doSaveToGame(){
     icon: selectedIcon, desc: '由玩家在地图编辑器中创建',
   };
   try{
-    const raw = localStorage.getItem('cellQuest_customLevels');
+    const raw = localStorage.getItem('cellQuest_customLevels_0');
     const levels = raw ? JSON.parse(raw) : [];
     levels.push(levelData);
-    localStorage.setItem('cellQuest_customLevels', JSON.stringify(levels));
+    localStorage.setItem('cellQuest_customLevels_0', JSON.stringify(levels));
     document.getElementById('iconPickerModal').classList.remove('show');
     alert(`✅ "${name}" 已保存为自定义关卡！\n刷新游戏主页即可在关卡选择中看到。`);
   }catch(e){
@@ -710,7 +710,7 @@ async function loadPresetList(){
   // 加载自定义关卡
   _customLevelCache = [];
   try{
-    const raw = localStorage.getItem('cellQuest_customLevels');
+    const raw = localStorage.getItem('cellQuest_customLevels_0');
     if(raw){
       _customLevelCache = JSON.parse(raw);
       _customLevelCache.forEach((lvl, i) => {
@@ -772,7 +772,7 @@ function saveCustomPreset(ci){
   lvl.tutorials = editorTutorials;
   lvl.knowledgeCards = editorKnowledgeCards;
   try{
-    localStorage.setItem('cellQuest_customLevels', JSON.stringify(_customLevelCache));
+    localStorage.setItem('cellQuest_customLevels_0', JSON.stringify(_customLevelCache));
     alert(`✅ 自定义关卡「${lvl.name}」已更新！`);
   }catch(e){
     alert('❌ 保存失败: ' + e.message);
@@ -785,7 +785,7 @@ function deleteCustomPreset(ci){
   if(!confirm(`确定删除「${name}」？\n此操作不可撤销。`)) return;
   _customLevelCache.splice(ci, 1);
   try{
-    localStorage.setItem('cellQuest_customLevels', JSON.stringify(_customLevelCache));
+    localStorage.setItem('cellQuest_customLevels_0', JSON.stringify(_customLevelCache));
     currentCustomIdx = -1;
     document.getElementById('customActions').style.display = 'none';
     alert(`✅「${name}」已删除`);
