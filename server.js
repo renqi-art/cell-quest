@@ -29,6 +29,7 @@ const mime = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.json': 'application/json; charset=utf-8',
@@ -267,11 +268,23 @@ const server = http.createServer(async (req, res) => {
 
   try {
     const data = fs.readFileSync(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    // 智能缓存策略：带版本号 = 强缓存，图片 = 长期缓存，HTML = 协商缓存
+    const rawUrl = String(req.url || '');
+    const hasVersion = rawUrl.includes('?v=') || rawUrl.includes('?_nc=');
+    let cacheControl;
+    if (ext === '.html') {
+      cacheControl = 'no-cache';
+    } else if (hasVersion) {
+      cacheControl = 'public, max-age=31536000, immutable';
+    } else if (ext === '.png' || ext === '.jpg' || ext === '.jpeg' || ext === '.webp' || ext === '.gif' || ext === '.svg' || ext === '.ico' || ext === '.woff2' || ext === '.mp3' || ext === '.wav') {
+      cacheControl = 'public, max-age=604800';
+    } else {
+      cacheControl = 'public, max-age=3600';
+    }
     const headers = {
-      'Content-Type': mime[path.extname(filePath).toLowerCase()],
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
+      'Content-Type': mime[ext],
+      'Cache-Control': cacheControl,
       ...SECURITY_HEADERS,
     };
     res.writeHead(200, headers);
@@ -283,6 +296,15 @@ const server = http.createServer(async (req, res) => {
 });
 
 if (require.main === module) {
+  process.on('uncaughtException', (err) => {
+    console.error('[FATAL] Uncaught exception:', err.message);
+    console.error(err.stack);
+    process.exitCode = 1;
+  });
+  process.on('unhandledRejection', (reason) => {
+    console.error('[FATAL] Unhandled rejection:', reason);
+    process.exitCode = 1;
+  });
   server.listen(PORT, HOST, () => console.log('Server: http://' + HOST + ':' + PORT));
 }
 

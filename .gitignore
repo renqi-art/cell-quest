@@ -31,5 +31,6 @@ test-results/
 playwright-report/
 
 # Generated release artifacts
+dist/
 release/
 DEPLOY.md

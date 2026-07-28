@@ -121,9 +121,13 @@ npm run test:server  # 本地服务器安全边界
 
 ## 技术栈
 
-*   **渲染引擎**: 原生 HTML5 Canvas API
-*   **逻辑语言**: JavaScript (ES6+)
-*   **后端服务**: Node.js (用于本地资源加载)
+*   **前端框架**: Vue 3.5 (Composition API)
+*   **游戏引擎**: Phaser 3
+*   **构建工具**: Vite 8 + TypeScript
+*   **状态管理**: Pinia 4
+*   **动画库**: Motion (Framer Motion)
+*   **后端服务**: Node.js (本地资源加载 + 关卡保存 + AI 地图生成代理)
+*   **传统模式**: 原生 HTML5 Canvas API + JavaScript (ES6+) 兼容层
 
 ## 许可
 
