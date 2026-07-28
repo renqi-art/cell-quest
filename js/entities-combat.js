@@ -958,6 +958,93 @@ class Particle {
 // ===== 伤害数字 =====
 class DamageNumber{constructor(x,y,v,c='#ffdd44'){this.x=x;this.y=y;this.value=v;this.color=c;this.life=35;this.maxLife=35;this.vy=-1.5;}update(){this.y+=this.vy;this.life--;}draw(ctx,cX){const a=Math.min(1,this.life/15);ctx.save();ctx.globalAlpha=a;ctx.fillStyle=this.color;ctx.font='bold 13px monospace';ctx.textAlign='center';ctx.fillText(String(this.value),Math.round(this.x-cX),Math.round(this.y));ctx.restore();}}
 
+// ===== 抗体炮台 =====
+class AntibodyTurret {
+  constructor(x, y){
+    this.x = x; this.y = y;
+    this.w = TILE; this.h = TILE;
+    this.fireTimer = 0;
+    this.fireInterval = 120;
+    this.aimAngle = 0;
+    this.alive = true;
+  }
+
+  update(level, player){
+    if(!this.alive) return;
+    const dx = player.x + player.w/2 - (this.x + this.w/2);
+    const dy = player.y + player.h/2 - (this.y + this.h/2);
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    this.aimAngle = Math.atan2(dy, dx);
+    if(dist > CW * 1.5) return;
+    this.fireTimer++;
+    if(this.fireTimer >= this.fireInterval){
+      this.fireTimer = 0;
+      const speed = 3;
+      const px = this.x + this.w/2 + Math.cos(this.aimAngle) * 16;
+      const py = this.y + this.h/2 + Math.sin(this.aimAngle) * 16;
+      Game.projectiles.push(new TurretProjectile(px, py, Math.cos(this.aimAngle)*speed, Math.sin(this.aimAngle)*speed));
+      Sfx.hit();
+    }
+  }
+
+  draw(ctx, camX){
+    const px = Math.round(this.x) - Math.round(camX);
+    const py = Math.round(this.y);
+    ctx.fillStyle = C.turret;
+    ctx.fillRect(px+2, py+8, TILE-4, TILE-8);
+    ctx.save();
+    ctx.translate(px+TILE/2, py+TILE/2);
+    ctx.rotate(this.aimAngle);
+    ctx.fillStyle = C.turretBarrel;
+    ctx.fillRect(0, -4, 16, 8);
+    ctx.fillStyle = C.turretGlow;
+    ctx.fillRect(14, -2, 4, 4);
+    ctx.restore();
+    ctx.strokeStyle = C.turretGlow; ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.5 + Math.sin(Game.frame*0.05)*0.2;
+    ctx.beginPath(); ctx.arc(px+TILE/2, py+TILE/2, 10, 0, Math.PI*2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ===== 炮台弹丸 =====
+class TurretProjectile {
+  constructor(x, y, vx, vy){
+    this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+    this.w = 6; this.h = 6;
+    this.alive = true;
+    this.life = 180;
+  }
+
+  update(level, player){
+    if(!this.alive) return;
+    this.x += this.vx; this.y += this.vy;
+    this.life--;
+    if(this.life <= 0){ this.alive = false; return; }
+    if(level.solidAtPX(this.x, this.y, this.w, this.h)){
+      this.alive = false;
+      spawnParticles(this.x, this.y, C.turretGlow, 6, 2);
+      return;
+    }
+    if(rectOverlap(this, player)){
+      player.takeDamage(level);
+      this.alive = false;
+      spawnParticles(this.x, this.y, '#ff4444', 8, 3);
+    }
+  }
+
+  draw(ctx, camX){
+    if(!this.alive) return;
+    const px = Math.round(this.x) - Math.round(camX);
+    ctx.fillStyle = C.turretGlow;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath(); ctx.arc(px, Math.round(this.y), 4, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(px, Math.round(this.y), 2, 0, Math.PI*2); ctx.fill();
+  }
+}
+
 function rewardKill(enemy,level,dmg){if(dmg)Game.damageNumbers.push(new DamageNumber(enemy.x+enemy.w/2,enemy.y-6,'-'+dmg,enemy.type==='staph'?'#ffd700':C.strep));const xpT=enemy.isMini?'staphMini':(enemy.isLarge?'staphLarge':enemy.type);level.items.push(new Item(enemy.x+enemy.w/2-8,enemy.y+enemy.h/2-8,'xp',XP_PER_KILL[xpT]||10));tryDropEquip(enemy,level);}
 function tryDropEquip(enemy,level){const dk=enemy.isMini?null:(enemy.type==='boss'?'boss':(enemy.isLarge?'staphLarge':enemy.type));if(!dk)return;const p=EQUIPMENT_DROPS[dk];if(!p)return;if(Math.random()<(dk==='boss'?1:(enemy.isLarge?0.18:0.06))){const eid=p[Math.floor(Math.random()*p.length)];level.items.push(new Item(enemy.x+enemy.w/2-8,enemy.y+enemy.h/2-8,'equipment',eid));const eq=findEquip(eid);if(eq)spawnParticles(enemy.x+enemy.w/2,enemy.y,eq.color,10,2);}}
 function rewardBossKill(boss,dmg){if(dmg)Game.damageNumbers.push(new DamageNumber(boss.x+boss.w/2,boss.y-10,'-'+dmg,C.bossBar));Game.level.items.push(new Item(boss.x+boss.w/2-8,boss.y+boss.h/2-8,'xp',XP_PER_KILL.boss));tryDropEquip({type:'boss'},Game.level);}

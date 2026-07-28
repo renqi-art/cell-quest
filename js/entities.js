@@ -218,6 +218,10 @@ class Player {
     if(this.crouching && this.onGround) speedMul *= CROUCH_SPEED;
     // 脓液地块减速
     if(this.onPus) speedMul *= PUS_SLOW_MULT;
+    // 黏液网减速
+    if(this.onMucus) speedMul *= 0.4;
+    // 趋化因子加速
+    if(this.onChemokine) speedMul *= 1.5;
 
     // v3: 奔跑模式 — 双击方向键触发(300ms内)
     if(this.onGround && !this.crouching){
@@ -829,6 +833,16 @@ class Player {
   collideX(level){
     const tiles = level.getOverlapTiles(this);
     for(const t of tiles){
+      // 血管瓣膜 >：仅允许右行（阻挡左行）
+      if(t.tile === '>' && this.vx < 0){
+        this.x = (t.col + 1) * TILE; this.vx = 0;
+        continue;
+      }
+      // 血管瓣膜 <：仅允许左行（阻挡右行）
+      if(t.tile === '<' && this.vx > 0){
+        this.x = t.col * TILE - this.w; this.vx = 0;
+        continue;
+      }
       if(level.solidTile(t.tile)){
         if(this.vx > 0) this.x = t.col * TILE - this.w;
         else if(this.vx < 0) this.x = (t.col + 1) * TILE;
@@ -863,7 +877,47 @@ class Player {
         this.onGround = false;
         this.springCooldown = 10;
       }
+      // 纤毛 ~：传送带推动
+      if(t.tile === '~' && this.vy >= 0){
+        this.vx += 0.25;
+        if(this.vx > MOVE_MAX * 1.5) this.vx = MOVE_MAX * 1.5;
+      }
     }
+    // 黏液网 % 减速检测
+    this.onMucus = false;
+    for(const t of tiles){
+      if(t.tile === '%'){ this.onMucus = true; break; }
+    }
+    // 趋化因子 + 加速检测
+    this.onChemokine = false;
+    for(const t of tiles){
+      if(t.tile === '+'){ this.onChemokine = true; break; }
+    }
+    // 吞噬体 @ 传送检测
+    if(level.phagosomes && level.phagosomes.length >= 2){
+      for(const t of tiles){
+        if(t.tile === '@'){
+          const src = level.phagosomes.find(p => p.col===t.col && p.row===t.row && p.active && p.cooldown<=0);
+          if(src){
+            // 传送到最远的另一个吞噬体
+            let best = null, bestDist = 0;
+            for(const dst of level.phagosomes){
+              if(dst===src || !dst.active || dst.cooldown>0) continue;
+              const dx2 = dst.col-src.col, dy2 = dst.row-src.row;
+              const d = dx2*dx2+dy2*dy2;
+              if(d > bestDist){ bestDist=d; best=dst; }
+            }
+            if(best){
+              this.x = best.x + TILE/2 - this.w/2;
+              this.y = best.y - this.h;
+              this.vy = 0;
+              src.cooldown = 60; best.cooldown = 60;
+              spawnParticles(this.x+this.w/2, this.y+this.h/2, C.phagosomeGlow, 16, 4);
+              break;
+            }
+          }
+        }
+      }
     // 补充地面检测（脚底在瓦片边界时getOverlapTiles可能漏掉）
     if(!this.onGround&&this.vy>=0){const fr=Math.floor((this.y+this.h)/32);const fc1=Math.floor(this.x/32),fc2=Math.floor((this.x+this.w-1)/32);for(let c=fc1;c<=fc2;c++){if(level.solidAt(c,fr)){this.y=fr*32-this.h;this.vy=0;this.onGround=true;break;}}}
     // ? 方块顶击检测
@@ -2977,3 +3031,4 @@ class DendriticCell {
     ctx.fillText('DC#' + this.id, cx, py + this.h + 14);
   }
 }
+
