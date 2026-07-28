@@ -172,6 +172,32 @@ test('rejects non-JSON and oversized AI completion content', async () => {
   }
 });
 
+test('preserves a UTF-8 prompt split across request chunks', async () => {
+  const prompt = '血液感染检查';
+  const payload = Buffer.from(JSON.stringify({ prompt, width: 135, height: 30 }));
+  const splitAt = payload.indexOf(Buffer.from('血')) + 1;
+  const req = {
+    headers: { 'content-type': 'application/json' },
+    async *[Symbol.asyncIterator]() {
+      yield payload.subarray(0, splitAt);
+      yield payload.subarray(splitAt);
+    },
+  };
+  let response;
+  let upstream;
+  await handleGenerateMapRequest(req, {}, (_res, status, body) => {
+    response = { status, body };
+  }, {
+    getApiKey: () => 'runtime-secret',
+    fetchImpl: async (_url, options) => {
+      upstream = JSON.parse(options.body);
+      return completion(JSON.stringify(VALID_BLUEPRINT));
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(upstream.messages.at(-1).content.includes(prompt), true);
+});
 test('rejects generate request bodies above 16 KiB', async () => {
   const response = await callHandler(`{"prompt":"${'x'.repeat(16385)}","width":135,"height":30}`, {
     getApiKey: () => 'runtime-secret',

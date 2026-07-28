@@ -232,15 +232,16 @@ async function readGenerateBody(req) {
   if (type !== 'application/json') {
     throw new AiMapError('INVALID_REQUEST', 'Content-Type 必须为 application/json', 415);
   }
-  let body = '';
+  const chunks = [];
   let bytes = 0;
   for await (const chunk of req) {
-    bytes += Buffer.byteLength(chunk);
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes += buffer.length;
     if (bytes > 16384) throw new AiMapError('INVALID_REQUEST', '请求体过大', 413);
-    body += chunk;
+    chunks.push(buffer);
   }
   try {
-    return JSON.parse(body);
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {
     throw new AiMapError('INVALID_REQUEST', '请求 JSON 无效', 400);
   }
