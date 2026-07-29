@@ -134,6 +134,9 @@ function update(){
   for(const tp of Game.tempPlatforms) tp.update();
   Game.tempPlatforms = Game.tempPlatforms.filter(tp=>!tp.expired);
 
+  // 角色技能每帧结算：氧气光环 / 凝血治疗 / 血凝壁垒
+  tickCharacterSkills(lvl);
+
   // 脓液地块更新
   for(const pt of Game.pusTiles) pt.update();
   Game.pusTiles = Game.pusTiles.filter(pt=>!pt.expired);

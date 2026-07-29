@@ -69,6 +69,7 @@ function render(){
 
   lvl.draw(ctx, camX);
   for(const tp of Game.tempPlatforms) tp.draw(ctx, camX);
+  for(const cw of Game.clotWalls) cw.draw(ctx, camX);
   for(const pt of Game.pusTiles) pt.draw(ctx, camX);
   for(const fp of Game.floatPlatforms) fp.draw(ctx, camX);
   for(const it of lvl.items) it.draw(ctx, camX);

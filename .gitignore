@@ -34,3 +34,8 @@ playwright-report/
 dist/
 release/
 DEPLOY.md
+
+# Local temp / build artifacts
+dist/
+.tmp_audio_gen/
+tiled_demo_shot.png

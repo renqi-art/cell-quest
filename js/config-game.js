@@ -15,7 +15,7 @@ const Game = {
   currentSlot: 0,           // v3: 当前存档栏位 (0-4)
   playerName: '',            // v3: 排行榜昵称
   // 出战队伍：玩家选择 2 名角色，对局内按 Q 切换
-  party: [1, 3],             // 默认 [白细胞, 红细胞]
+  party: [1, 2, 3],          // 默认 [白细胞, 血小板, 红细胞]（便于在局内 Q 切换体验三套技能）
   partyIndex: 0,             // 当前激活的角色在 party 中的索引
   debugMode: false,          // 调试模式：解锁全部关卡，方便并行配置
   // 运行时
@@ -26,6 +26,7 @@ const Game = {
   camera: { x:0, y:0, shake:0 },
   particles: [],
   tempPlatforms: [],
+  clotWalls: [],
   projectiles: [],
   // 统计
   stats: { kills:0, items:0, deaths:0, foundMemory:false },
@@ -158,8 +159,28 @@ const Sfx = {
     [523,659,784,1047].forEach((f,i)=>setTimeout(()=>this.beep(f,.15,'triangle',.07), i*120));
   },
 
+  // ===== 角色走路脚步声（移植自本地旧 config.js，独立 HTMLAudioElement，不依赖 Web Audio ctx）=====
+  // 不受 BGM 静音开关 / M 键控制；使用上传的脚步音频文件 audio/sfx_footstep.mp3
+  _footEl: null,
+  footstep(){
+    try{
+      if(!this._footEl){
+        this._footEl = new Audio('audio/sfx_footstep.mp3');
+        this._footEl.volume = 0.4;
+        this._footEl.preload = 'auto';
+      }
+      this._footEl.currentTime = 0;
+      const p = this._footEl.play();
+      if(p && p.catch) p.catch(()=>{});
+    }catch(e){}
+  },
+
   // ===== 分层音效系统（新增扩展，不影响 jump / doubleJump 等既有逻辑）=====
   muted: false,
+  // 文件型 BGM（用户上传的 mp3）播放状态
+  _bgmFileEl: null,
+  _bgmFileMode: null,
+  _bgmFileVol: 0.5,
   _tiersReady: false,
   _now(){ return this.ctx ? this.ctx.currentTime : 0; },
   _initTiers(){
@@ -183,6 +204,7 @@ const Sfx = {
   toggleMute(){
     this.muted = !this.muted;
     if(this.muted) this.suspendAll(); else this.resume();
+    this._applyFileBgmMute();
     return this.muted;
   },
 
@@ -273,6 +295,46 @@ const Sfx = {
     this._bgmOn = false;
     if(this._bgmTimer){ clearTimeout(this._bgmTimer); this._bgmTimer = null; }
     if(this._bgmNodes){ this._bgmNodes.forEach(n => { try{ n.stop && n.stop(); }catch(e){} }); this._bgmNodes = null; }
+  },
+
+  // 文件型 BGM：真正循环播放用户上传的 mp3（audio/bgm_loop.mp3 等）
+  // 与上面的合成 BGM（startBgm）互不干扰、互不覆盖；用于实际游玩入口（老版 js 引擎）。
+  startFileBgm(mode){
+    mode = mode || 'menu';
+    // 同模式且正在播放则跳过，避免每帧重建
+    if(this._bgmFileMode === mode && this._bgmFileEl && !this._bgmFileEl.paused) return;
+    this.stopFileBgm();
+    this._bgmFileMode = mode;
+    const MAP = { menu: 'audio/menu_bgm.mp3', level: 'audio/level_bgm.mp3' };
+    const src = MAP[mode] || 'audio/bgm_loop.mp3';
+    const el = new Audio(src);
+    el.loop = true;
+    el.volume = this.muted ? 0 : this._bgmFileVol;
+    el.preload = 'auto';
+    this._bgmFileEl = el;
+    const p = el.play();
+    if(p && typeof p.catch === 'function'){
+      // 浏览器自动播放策略拦截：首次用户手势（点击/按键）时补播
+      p.catch(()=>{
+        const resume = ()=>{
+          try{ el.play().catch(()=>{}); }catch(e){}
+          window.removeEventListener('pointerdown', resume);
+          window.removeEventListener('keydown', resume);
+        };
+        window.addEventListener('pointerdown', resume, { once:true });
+        window.addEventListener('keydown', resume, { once:true });
+      });
+    }
+  },
+  stopFileBgm(){
+    if(this._bgmFileEl){
+      try{ this._bgmFileEl.pause(); this._bgmFileEl.src = ''; }catch(e){}
+      this._bgmFileEl = null;
+    }
+    this._bgmFileMode = null;
+  },
+  _applyFileBgmMute(){
+    if(this._bgmFileEl) this._bgmFileEl.volume = this.muted ? 0 : this._bgmFileVol;
   },
 
   // 2) 血量过低警报：循环心跳 + 急促呼吸（音量最突出，持续提醒）

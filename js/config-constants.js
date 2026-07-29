@@ -194,6 +194,43 @@ const PDASH_MULT      = 1.3;    // 攻击力×130%
 const PDASH_KNOCKBACK = 64;     // 击退2米
 const PDASH_INVUL     = 30;     // 0.5秒不可选中
 
+// ===== 红细胞 RBC 技能（支援增益·无直接伤害）=====
+// 被动【废气回流】：受击释放 CO₂ 雾气范围场，范围内敌人减速
+const RBC_CO2_RANGE  = 120;   // CO₂ 雾气半径(px)
+const RBC_CO2_SLOW   = 0.45;  // 敌人移速倍率(×0.45)
+const RBC_CO2_DUR    = 240;   // 减速持续帧(4秒)
+const RBC_CO2_CD     = 180;   // 被动触发冷却(3秒)
+// 主动【氧气馈赠】：红色氧气光环，友方加速+持续回血
+const OXY_GIFT_RANGE = 140;   // 光环半径(px)
+const OXY_GIFT_DUR   = 360;   // 光环持续帧(6秒)
+const OXY_GIFT_CD    = 540;   // 冷却帧(9秒)
+const OXY_GIFT_HEAL  = 1;     // 每 30 帧回血
+const OXY_GIFT_SPEED = 1.35;  // 友方移速倍率
+
+// ===== 白细胞 WBC（中性粒细胞）技能（近战突击输出）=====
+// 主动1【吞噬冲击】：高速突进，路径伤害+吞噬小型病原体
+const PHAGO_CHARGE_SPEED  = 8;
+const PHAGO_CHARGE_FRAMES = 12;
+const PHAGO_CHARGE_CD     = 300;  // 冷却帧(5秒)
+const PHAGO_CHARGE_DMG    = 3;
+// 主动2【免疫屏障】：白色护盾抵挡，破碎时净化冲击波击退
+const IMMUNE_BARRIER_DUR  = 300;  // 护盾持续帧(5秒)
+const IMMUNE_BARRIER_CD   = 600;  // 冷却帧(10秒)
+const IMMUNE_BARRIER_R    = 115;  // 破碎冲击波半径(px)
+const IMMUNE_BARRIER_DMG  = 2;
+const IMMUNE_BARRIER_KB   = 7;    // 击退力度
+
+// ===== 血小板 PLT 技能（治疗·地形封锁）=====
+// 主动1【凝血缝合】：投掷凝血碎片，友方持续回血
+const COAG_SUTURE_CD = 360;   // 冷却帧(6秒)
+const COAG_HEAL_DUR  = 300;   // 持续回血帧(5秒)
+const COAG_HEAL_RATE = 1;     // 每 30 帧回血
+// 主动2【血凝壁垒】：实体凝血墙，敌人无法通行，限时消失
+const CLOT_BARRIER_CD = 480;  // 冷却帧(8秒)
+const CLOT_WALL_W     = TILE;     // 墙宽(1格)
+const CLOT_WALL_H     = TILE * 2; // 墙高(2格)
+const CLOT_WALL_DUR   = 420;  // 存在帧(7秒)
+
 // ===== XP 经验与等级 =====
 const XP_BASE=100,XP_GROWTH=1.5,MAX_LEVEL=30,SKILL_POINTS_PER_LEVEL=1;
 const XP_PER_KILL={staph:10,staphLarge:30,staphMini:5,strep:20,boss:200,salmonella:15};

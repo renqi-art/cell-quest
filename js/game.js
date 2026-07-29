@@ -342,6 +342,7 @@ function LoadLevel(n, cellTypeOverride){
     Game.player.checkpointX = Game.level.playerSpawn.x;
     Game.player.checkpointY = Game.level.playerSpawn.y;
     Game.tempPlatforms = [];
+    Game.clotWalls = [];
     Game.projectiles = [];
     Game.camera = {x:0, y:0, shake:0};
     Game.stats = {kills:0, items:0, deaths:0, foundMemory:false};
@@ -380,6 +381,7 @@ function LoadLevel(n, cellTypeOverride){
       if(!Game.loopStarted){ Game.loopStarted = true; Game.lastTime = performance.now(); requestAnimationFrame(loop); }
     }
     _notifyMobileState();
+    Sfx.startFileBgm('level');
     // Emit state-changed for Vue adapter
     if(window.CellQuestLegacy._emitStateChanged) window.CellQuestLegacy._emitStateChanged();
     return true;
@@ -433,6 +435,7 @@ function LoadLevel(n, cellTypeOverride){
   Game.player.checkpointX = Game.level.playerSpawn.x;
   Game.player.checkpointY = Game.level.playerSpawn.y;
   Game.tempPlatforms = [];
+  Game.clotWalls = [];
   Game.projectiles = [];
   Game.camera = {x:0, y:0, shake:0};
   Game.stats = {kills:0, items:0, deaths:0, foundMemory:false};
@@ -499,6 +502,7 @@ function LoadLevel(n, cellTypeOverride){
   if(window.CELL_QUEST_DEBUG) console.log('[DEBUG] Setting Game.state=playing, player=(' + Game.player.x + ',' + Game.player.y + ') health=' + Game.player.health + ' levelRows=' + Game.level.height);
   _updateFirstFrame = true;
   Game.state = 'playing';
+  Sfx.startFileBgm('level');
   _notifyMobileState();
   $('hub-screen').classList.add('hidden');
   $('complete-screen').classList.add('hidden');

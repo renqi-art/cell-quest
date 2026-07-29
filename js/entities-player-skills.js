@@ -310,6 +310,187 @@ Player.prototype.bactericidalDash = function(level) {
     updateHUD();
   }
 
+  /* ====================================================================
+   * 三细胞专属技能（严格匹配生物学设定）
+   * 音频：复用项目运行时音效系统 Sfx（不改动 BGM/音量/悬浮按钮音频代码）
+   * ==================================================================== */
+
+  // ===== 红细胞 RBC · 被动【废气回流】 =====
+  // 自身受到伤害时释放二氧化碳(CO₂)废气雾气范围场，范围内敌人移动速度下降。
+  // 生物学依据：红细胞把组织代谢产生的二氧化碳废气带走。
+  Player.prototype.co2Reflow = function(level){
+    const cx = this.x + this.w/2, cy = this.y + this.h/2;
+    Sfx.pus(); // 复用柔和音效（废气逸出）
+    showToast('废气回流！CO₂ 雾气减速敌人');
+    // CO₂ 雾气粒子（灰绿色废气）
+    for(let i = 0; i < 26; i++){
+      const a = Math.random() * Math.PI * 2, r = Math.random() * RBC_CO2_RANGE;
+      spawnParticles(cx + Math.cos(a) * r, cy + Math.sin(a) * r, '#9fb8a0', 2, 0.8);
+    }
+    // 范围内敌人施加减速
+    for(const e of level.enemies){
+      if(!e.alive) continue;
+      const ex = e.x + e.w/2, ey = e.y + e.h/2;
+      if(Math.hypot(ex - cx, ey - cy) <= RBC_CO2_RANGE){
+        e.slowTimer = RBC_CO2_DUR;
+        e.slowMult = RBC_CO2_SLOW;
+      }
+    }
+  };
+
+  // ===== 红细胞 RBC · 主动【氧气馈赠】 =====
+  // 展开红色氧气光环，光环内友方移速提升并持续小幅回血；有冷却；红色光晕粒子。
+  // 生物学依据：红细胞输送氧气维持细胞生命。
+  Player.prototype.oxygenGift = function(level){
+    if(this.oxyGiftCooldown > 0){ showToast('氧气馈赠冷却中'); return; }
+    this.oxyGiftCooldown = OXY_GIFT_CD;
+    this.oxyGiftTimer = OXY_GIFT_DUR;
+    Sfx.oxyField(); // 复用氧气相关音效
+    showToast('氧气馈赠！展开红色氧气光环');
+    updateHUD();
+  };
+
+  // ===== 白细胞 WBC（中性粒细胞）· 主动1【吞噬冲击】 =====
+  // 向前高速突进，对路径敌人造成伤害；小型病原体直接吞噬清除；白色拖尾粒子；冷却。
+  // 生物学依据：中性粒细胞变形游走、吞噬细菌。
+  Player.prototype.phagoCharge = function(level){
+    if(this.phagoChargeCooldown > 0){ showToast('吞噬冲击冷却中'); return; }
+    this.phagoChargeCooldown = PHAGO_CHARGE_CD;
+    this.phagoChargeTimer = PHAGO_CHARGE_FRAMES;
+    this.phagoChargeDir = this.facing;
+    Sfx.dash();
+    showToast('吞噬冲击！');
+    updateHUD();
+  };
+
+  // ===== 白细胞 WBC（中性粒细胞）· 主动2【免疫屏障】 =====
+  // 生成白色临时护盾抵挡伤害；护盾到期(破碎)时爆发净化冲击波击退周围敌人；白色闪光；冷却。
+  // 生物学依据：中性粒细胞构建人体第一道免疫防线，裂解释放杀菌物质。
+  Player.prototype.immuneBarrier = function(level){
+    if(this.barrierCooldown > 0){ showToast('免疫屏障冷却中'); return; }
+    this.barrierCooldown = IMMUNE_BARRIER_CD;
+    this.barrierTimer = IMMUNE_BARRIER_DUR;
+    Sfx.bridge(); // 复用护盾类音效
+    showToast('免疫屏障！白色护盾展开');
+    updateHUD();
+  };
+
+  // 免疫屏障破碎：净化冲击波（范围伤害 + 击退）
+  Player.prototype.barrierBurst = function(level){
+    const cx = this.x + this.w/2, cy = this.y + this.h/2;
+    Sfx.hit();
+    spawnParticles(cx, cy, '#ffffff', 24, 4); // 白色闪光
+    showToast('屏障破碎！净化冲击波');
+    for(const e of level.enemies){
+      if(!e.alive) continue;
+      const ex = e.x + e.w/2, ey = e.y + e.h/2;
+      if(Math.hypot(ex - cx, ey - cy) <= IMMUNE_BARRIER_R){
+        e.hp -= IMMUNE_BARRIER_DMG;
+        e.vx = (ex > cx ? 1 : -1) * IMMUNE_BARRIER_KB; // 击退
+        e.knockbackTimer = 20;
+        spawnParticles(ex, ey, '#ffffff', 8, 2);
+        if(e.hp <= 0){ e.alive = false; if(e.isLarge) e.split(level); Game.stats.kills++; spawnPusIfNeeded(e); }
+      }
+    }
+    if(Game.boss && Game.boss.alive){
+      const b = Game.boss, bx = b.x + b.w/2, by = b.y + b.h/2;
+      if(Math.hypot(bx - cx, by - cy) <= IMMUNE_BARRIER_R * 1.3){
+        b.hp -= IMMUNE_BARRIER_DMG; b.flashTimer = 8;
+        spawnParticles(bx, by, '#ffffff', 14, 3);
+      }
+    }
+    updateHUD();
+  };
+
+  // ===== 血小板 PLT · 主动1【凝血缝合】 =====
+  // 抛出凝血碎片，给选中友方目标持续恢复血量；橘红色碎片粒子；冷却。
+  // 生物学依据：血小板聚集黏附，修补血管伤口止血。
+  Player.prototype.coagSuture = function(level){
+    if(this.coagCooldown > 0){ showToast('凝血缝合冷却中'); return; }
+    this.coagCooldown = COAG_SUTURE_CD;
+    Sfx.pickup(); // 复用拾取/治疗类音效
+    // 选中友方目标：优先其他存活玩家，否则自身
+    let target = this;
+    let bestD = Infinity;
+    for(const ally of Game.players){
+      if(!ally || ally === this || ally.health <= 0) continue;
+      const d = Math.abs(ally.x - this.x) + Math.abs(ally.y - this.y);
+      if(d < bestD){ bestD = d; target = ally; }
+    }
+    target.coagHealTimer = COAG_HEAL_DUR;
+    // 橘红色凝血碎片飞向目标
+    for(let i = 0; i < 12; i++){
+      spawnParticles(
+        this.x + this.w/2 + (Math.random() - 0.5) * 12,
+        this.y + (Math.random() - 0.5) * 12, '#ff7a3d', 2, 2);
+    }
+    showToast(target === this ? '凝血缝合！自身持续回血' : '凝血缝合！友方持续回血');
+    updateHUD();
+  };
+
+  // ===== 血小板 PLT · 主动2【血凝壁垒】 =====
+  // 在地面生成实体血凝障碍墙，敌人无法通行，用于封锁战场区域；墙体具存在时限，到期消失；凝血块状视觉；冷却。
+  // 生物学依据：血小板聚集形成血凝块封堵血管破损。
+  Player.prototype.clotBarrier = function(level){
+    if(this.clotCooldown > 0){ showToast('血凝壁垒冷却中'); return; }
+    if(!this.onGround){ showToast('需在地面施放'); return; }
+    this.clotCooldown = CLOT_BARRIER_CD;
+    Sfx.bridge();
+    // 在角色前方地面生成凝血墙
+    const col = Math.floor((this.x + this.w/2 + this.facing * TILE * 1.2) / TILE);
+    // 从角色脚部所在行向下寻找第一块实心地面，把墙放在其上方
+    let row = Math.floor((this.y + this.h - 1) / TILE);
+    while(row < level.height && !level.solidAt(col, row)) row++;
+    if(row >= level.height){ showToast('无法放置：前方没有地面'); return; }
+    const wx = col * TILE;
+    const wy = row * TILE - CLOT_WALL_H;
+    Game.clotWalls.push(new ClotWall(wx, wy));
+    spawnParticles(wx + CLOT_WALL_W / 2, wy + CLOT_WALL_H / 2, C.platelet, 14, 2);
+    showToast('血凝壁垒！凝血墙封锁区域');
+    updateHUD();
+  };
+
+  // ===== 全局每帧结算：氧气光环 / 凝血治疗 / 血凝壁垒 =====
+  // 在 game-update.js 的 update() 中调用。
+  function tickCharacterSkills(lvl){
+    // 氧气馈赠：光环内友方加速 + 持续回血
+    for(const caster of Game.players){
+      if(!caster || caster.oxyGiftTimer <= 0) continue;
+      caster.oxyGiftTimer--;
+      const cx = caster.x + caster.w/2, cy = caster.y + caster.h/2;
+      if(Game.frame % 4 === 0){
+        const a = Math.random() * Math.PI * 2;
+        spawnParticles(cx + Math.cos(a) * OXY_GIFT_RANGE * 0.7, cy + Math.sin(a) * OXY_GIFT_RANGE * 0.7, C.rbc, 2, 1);
+      }
+      for(const ally of Game.players){
+        if(!ally || ally.health <= 0) continue;
+        const ax = ally.x + ally.w/2, ay = ally.y + ally.h/2;
+        if(Math.hypot(ax - cx, ay - cy) <= OXY_GIFT_RANGE){
+          ally.buffSpeedTimer = 12;        // 维持加速增益
+          ally.buffSpeedMul = OXY_GIFT_SPEED;
+          if(Game.frame % 30 === 0 && ally.health < ally.maxHealth){
+            ally.health = Math.min(ally.maxHealth, ally.health + OXY_GIFT_HEAL);
+            spawnParticles(ax, ay, C.heal, 4, 1);
+          }
+        }
+      }
+    }
+    // 凝血缝合：目标持续回血
+    for(const p of Game.players){
+      if(!p || p.coagHealTimer <= 0) continue;
+      p.coagHealTimer--;
+      if(Game.frame % 30 === 0 && p.health < p.maxHealth){
+        p.health = Math.min(p.maxHealth, p.health + COAG_HEAL_RATE);
+        spawnParticles(p.x + p.w/2, p.y, '#ff7a3d', 4, 1); // 橘红色凝血碎片
+      }
+    }
+    // 血凝壁垒：存在计时与到期清除
+    if(Game.clotWalls){
+      for(const cw of Game.clotWalls) cw.update();
+      Game.clotWalls = Game.clotWalls.filter(cw => !cw.expired);
+    }
+  }
+
   // 瞬突终点冲击波
 
 Player.prototype.pdashShockwave = function(level) {

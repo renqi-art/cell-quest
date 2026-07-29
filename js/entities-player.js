@@ -66,6 +66,23 @@ class Player {
     this.pdashTimer = 0;              // 瞬突持续帧
     this.pdashDir = 0;
     this.invul = 0;                   // 不可选中（与 invincible 区分）
+    // ===== RBC 红细胞技能（支援增益）=====
+    this.co2Cooldown = 0;             // 被动【废气回流】触发冷却
+    this.oxyGiftTimer = 0;            // 主动【氧气馈赠】光环剩余帧
+    this.oxyGiftCooldown = 0;         // 主动冷却
+    // ===== WBC 中性粒细胞技能（近战突击）=====
+    this.phagoChargeTimer = 0;        // 吞噬冲击突进剩余帧
+    this.phagoChargeDir = 0;
+    this.phagoChargeCooldown = 0;
+    this.barrierTimer = 0;            // 免疫屏障护盾剩余帧
+    this.barrierCooldown = 0;
+    // ===== PLT 血小板技能（治疗·地形）=====
+    this.coagCooldown = 0;            // 凝血缝合冷却
+    this.coagHealTimer = 0;           // 作为治疗目标时的持续回血剩余帧
+    this.clotCooldown = 0;            // 血凝壁垒冷却
+    // ===== 通用增益 =====
+    this.buffSpeedTimer = 0;          // 友方加速增益剩余帧
+    this.buffSpeedMul = 1;
   }
 
   get cell(){ return CELLS[this.cellType]; }
@@ -154,6 +171,41 @@ class Player {
       return; // 突进中跳过其他逻辑
     }
     if(this.dashCooldown > 0) this.dashCooldown--;
+
+    // ===== 吞噬冲击（WBC 中性粒细胞）突进状态 =====
+    if(this.phagoChargeTimer > 0){
+      this.phagoChargeTimer--;
+      this.vx = this.phagoChargeDir * PHAGO_CHARGE_SPEED;
+      this.vy = 0; // 突进时不受重力
+      this.x += this.vx;
+      this.collideX(level);
+      // 白色拖尾粒子
+      spawnParticles(this.x + this.w/2, this.y + this.h/2, '#ffffff', 4, 1.5);
+      // 路径伤害 + 吞噬小型病原体
+      for(const e of level.enemies){
+        if(!e.alive) continue;
+        if(rectOverlap(this, e)){
+          if(!e.isLarge && (e.type === 'staph' || e.type === 'strep' || e.type === 'salmonella' || e.isMini)){
+            e.hp = 0; e.alive = false;
+            spawnParticles(e.x + e.w/2, e.y + e.h/2, C.wbc, 14, 3);
+            Game.stats.kills++;
+            spawnPusIfNeeded(e);
+          } else {
+            e.hp -= PHAGO_CHARGE_DMG;
+            spawnParticles(e.x + e.w/2, e.y + e.h/2, C.wbc, 8, 2);
+            if(e.hp <= 0){ e.alive = false; if(e.isLarge) e.split(level); Game.stats.kills++; spawnPusIfNeeded(e); }
+          }
+        }
+      }
+      if(Game.boss && Game.boss.alive && rectOverlap(this, Game.boss)){
+        Game.boss.hp -= PHAGO_CHARGE_DMG; Game.boss.flashTimer = 8;
+        spawnParticles(Game.boss.x + Game.boss.w/2, Game.boss.y + Game.boss.h/2, C.wbc, 12, 3);
+      }
+      if(this.phagoChargeTimer <= 0) this.vx *= 0.3;
+      if(this.playerIndex === 1) Game.prevKeysP2 = {...Game.keysP2};
+      else Game.prevKeys = {...Game.keys};
+      return;
+    }
     if(this.springCooldown > 0) this.springCooldown--;
 
     // ===== 挥剑计时 =====
@@ -164,6 +216,17 @@ class Player {
     if(this.biteCooldown > 0) this.biteCooldown--;
     if(this.spitCooldown > 0) this.spitCooldown--;
     if(this.lanceCooldown > 0) this.lanceCooldown--;
+    // ===== 新角色技能冷却计时 =====
+    if(this.phagoChargeCooldown > 0) this.phagoChargeCooldown--;
+    if(this.oxyGiftCooldown > 0) this.oxyGiftCooldown--;
+    if(this.coagCooldown > 0) this.coagCooldown--;
+    if(this.clotCooldown > 0) this.clotCooldown--;
+    if(this.co2Cooldown > 0) this.co2Cooldown--;
+    // 免疫屏障：持续结束后爆发净化冲击波
+    if(this.barrierTimer > 0){
+      this.barrierTimer--;
+      if(this.barrierTimer === 0) this.barrierBurst(level);
+    }
     if(this.pdashCooldown > 0){
       this.pdashCooldown--;
       if(this.pdashCooldown === 0 && this.pdashCharges < PDASH_CHARGES){
@@ -212,6 +275,8 @@ class Player {
 
     // ===== 水平移动 =====
     let speedMul = cell.speedMul;
+    // 友方增益（氧气馈赠光环提供的移速提升）
+    if(this.buffSpeedTimer > 0){ this.buffSpeedTimer--; speedMul *= this.buffSpeedMul; }
     // v3: 记忆细胞移速加成
     speedMul *= (1 + getMemoryBonus(Game.memoryCells).speedPct / 100);
     if(Game.globalEnergy < LOW_ENERGY) speedMul *= LOW_SPEED_MULT;
@@ -396,20 +461,22 @@ class Player {
       if(Game.globalEnergy < 0) Game.globalEnergy = 0;
     }
 
-    // ===== 技能：突进 / 搭桥 / 挥剑 =====
+    // ===== 技能：突进 / 搭桥 / 挥剑 / 氧气馈赠 =====
     if(k.dash && !pk.dash && this.cellType === 1){
       this.useDash(level);
     }
     if(k.skill && !pk.skill){
-      if(this.cellType === 1) this.swordAttack(level);
-      else if(this.cellType === 2) this.useBridge(level);
+      if(this.cellType === 1) this.swordAttack(level);       // 白细胞：挥剑（基础攻击）
+      else if(this.cellType === 2) this.useBridge(level);    // 血小板：凝血搭桥（基础能力）
+      else if(this.cellType === 3) this.oxygenGift(level);   // 红细胞：氧气馈赠（主动技能）
     }
-    // ===== WBC 新主动技能 1/2/3/4 =====
-    if(this.cellType === 1){
-      if(k.skill1 && !pk.skill1) this.phagocyticBite(level);
-      if(k.skill2 && !pk.skill2) this.oxidativeBurst(level);
-      if(k.skill3 && !pk.skill3) this.elastaseLance(level);
-      if(k.skill4 && !pk.skill4) this.bactericidalDash(level);
+    // ===== 角色专属主动技能（按细胞类型分发到 1/2 键）=====
+    if(this.cellType === 1){               // 白细胞（中性粒细胞）
+      if(k.skill1 && !pk.skill1) this.phagoCharge(level);    // 主动1 吞噬冲击
+      if(k.skill2 && !pk.skill2) this.immuneBarrier(level);  // 主动2 免疫屏障
+    } else if(this.cellType === 2){        // 血小板
+      if(k.skill1 && !pk.skill1) this.coagSuture(level);     // 主动1 凝血缝合
+      if(k.skill2 && !pk.skill2) this.clotBarrier(level);    // 主动2 血凝壁垒
     }
   }
 
@@ -617,7 +684,21 @@ class Player {
       updateHUD();
       return;
     }
+    // 免疫屏障（WBC）：屏障持续期间完全免伤，结束自动爆发净化冲击波
+    if(this.barrierTimer > 0){
+      this.invincible = 30;
+      spawnParticles(this.x + this.w/2, this.y + this.h/2, '#ffffff', 12, 2);
+      Sfx.hit();
+      showToast('免疫屏障抵消！');
+      updateHUD();
+      return;
+    }
     this.health -= 5;
+    // RBC 被动【废气回流】：受击释放 CO₂ 雾气范围场，范围内敌人减速
+    if(this.cellType === 3 && this.co2Cooldown <= 0){
+      this.co2Cooldown = RBC_CO2_CD;
+      this.co2Reflow(level);
+    }
     Game.damageNumbers.push(new DamageNumber(this.x+this.w/2,this.y-6,'-5','#ff4444'));
     this.invincible = INVINCIBLE_FRAMES;
     Game.camera.shake = 8;

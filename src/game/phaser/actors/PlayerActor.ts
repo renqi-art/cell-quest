@@ -16,6 +16,7 @@ import {
   CLASSIC_SIMULATION_HZ,
   CLASSIC_TILE_SIZE,
 } from '../config/classic-physics'
+import { audio } from '@/game/audio/AudioManager'
 
 export class PlayerActor {
   readonly shape: Phaser.GameObjects.Rectangle
@@ -69,6 +70,10 @@ export class PlayerActor {
     const result = this.motor.applyDamage(this.motorState, amount)
     if (result.state === this.motorState) return false
     this.motorState = result.state
+    // 致死→播放死亡音效；非致死→播放受伤音效
+    // applyDamage 是全部伤害的单一入口（敌方/Boss/陷阱/坠落），故在此统一触发
+    if (result.events.some(e => e.type === 'died')) audio.play('death')
+    else audio.play('hurt')
     return true
   }
 

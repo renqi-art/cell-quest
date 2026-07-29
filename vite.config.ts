@@ -67,6 +67,7 @@ export default defineConfig({
         game: resolve(root, 'index.html'),
         editor: resolve(root, 'editor.html'),
         deck: resolve(root, 'deck.html'),
+        tiledDemo: resolve(root, 'tiled-demo.html'),
         aiSettings: resolve(root, 'ai-settings.html'),
       },
     },

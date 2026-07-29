@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import type { GameEngineEvents } from '@/game/bridge/GameEngineEvents'
 import type { CellType, LoadLevelOptions, PlayerAction } from '@/shared/types/game'
+import type { PlayerInputFrame } from '@/shared/classic/simulation/player-types'
 import type { ParsedClassicLevel } from '@/shared/classic/types'
 import { FixedStepClock } from '@/shared/classic/simulation/FixedStepClock'
 import { PlayerActor } from '../actors/PlayerActor'
@@ -19,6 +20,7 @@ import { TideSystem } from '../systems/TideSystem'
 import { SpawnSystem } from '../systems/SpawnSystem'
 import { ClassicInputRouter, swapPlayerRoles } from '../systems/ClassicInputRouter'
 import { CameraSystem } from '../systems/CameraSystem'
+import { audio } from '@/game/audio/AudioManager'
 import { applyItem, createClassicItemState, tickClassicItemState, type ClassicItemState } from '@/shared/classic/simulation/ItemRules'
 import { ClassicRunStats } from '@/shared/classic/simulation/ClassicRunStats'
 import { canCompleteClassicLevel } from '@/shared/classic/simulation/CompletionRules'
@@ -29,6 +31,9 @@ import {
   CLASSIC_SIMULATION_HZ,
   CLASSIC_TILE_SIZE,
 } from '../config/classic-physics'
+
+/** 脚步声触发间隔（ms）：调大以降低触发频率，消除连续播放造成的爆音刺耳 */
+const FOOTSTEP_INTERVAL_MS = 480
 
 export const CLASSIC_SCENE_KEY = 'classic-runtime'
 
@@ -60,6 +65,7 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
     private readonly bossByShape = new Map<Phaser.GameObjects.GameObject, BossActor>()
     private readonly npcByShape = new Map<Phaser.GameObjects.GameObject, NpcActor>()
     private readonly skillWasDown = new Map<1 | 2, boolean>()
+    private readonly footstepState = new Map<1 | 2, { walking: boolean; nextAt: number }>()
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
     private wasd!: Record<'W' | 'A' | 'S' | 'D' | 'Q' | 'E', Phaser.Input.Keyboard.Key>
     private p1Dash!: Phaser.Input.Keyboard.Key
@@ -282,11 +288,17 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
         this.emitHud()
       }
       for (const player of this.players) {
-        player.step(this.inputRouter.frame(player.playerIndex), {
+        const frame = this.inputRouter.frame(player.playerIndex)
+        const events = player.step(frame, {
           grounded: player.body.blocked.down,
           headClear: !player.body.blocked.up,
           horizontalBlocked: player.body.blocked.left || player.body.blocked.right,
         })
+        for (const ev of events) {
+          if (ev.type === 'jumped') audio.play('jump')
+          else if (ev.type === 'dashed') audio.play('skill')
+        }
+        this.updateFootsteps(player, frame)
         const skillDown = this.inputRouter.isDown(player.playerIndex, 'skill')
         if (skillDown && !this.skillWasDown.get(player.playerIndex)) this.attack(player)
         this.skillWasDown.set(player.playerIndex, skillDown)
@@ -306,6 +318,46 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
       this.playerCells = swapPlayerRoles(this.playerCells)
       this.game.canvas.dataset.playerRoles = `${this.cellTypeFor(1)},${this.cellTypeFor(2)}`
       this.emitHud()
+    }
+
+    /**
+     * 走路脚步声：角色处于地面且水平移动时循环触发；静止 / 起跳 / 腾空立即停止。
+     * 复用现有音效体系（audio.playFootstep，音量 0.4），节流避免密集爆音；
+     * 属游戏特效音效，不受 BGM 静音按钮控制，且不会触发 BGM 下压。
+     */
+    private updateFootsteps(player: PlayerActor, frame: PlayerInputFrame): void {
+      const grounded = player.body.blocked.down
+      // 走路判定：在地面 且 按住左/右方向（移动意图）。
+      // 不依赖物理速度数值，避免 Phaser 物理步与模拟步时序导致的漏判。
+      const moving = frame.left || frame.right
+      const walking = grounded && moving
+
+      let st = this.footstepState.get(player.playerIndex)
+      if (!st) {
+        st = { walking: false, nextAt: 0 }
+        this.footstepState.set(player.playerIndex, st)
+      }
+
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      if (walking) {
+        if (!st.walking) {
+          st.walking = true
+          // 起步立即来一脚，并设定后续节奏间隔
+          st.nextAt = now + FOOTSTEP_INTERVAL_MS
+          audio.playFootstep()
+          console.log(`角色行走播放脚步声 (P${player.playerIndex})`)
+        } else if (now >= st.nextAt) {
+          st.nextAt = now + FOOTSTEP_INTERVAL_MS
+          audio.playFootstep()
+        }
+      } else {
+        if (st.walking) {
+          st.walking = false
+          console.log(`角色停止终止脚步声 (P${player.playerIndex})`)
+        }
+        // 不在走路：重置计时，下次起步立刻触发
+        st.nextAt = 0
+      }
     }
 
     private keyboardActionDown(player: 1 | 2, action: PlayerAction): boolean {
@@ -362,6 +414,7 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
     }
 
     private attack(player: PlayerActor): void {
+      audio.play('attack')
       const state = player.snapshot()
       const cellType = this.cellTypeFor(player.playerIndex)
       if (cellType === 2) {
@@ -493,6 +546,7 @@ export function createClassicScene(context: ClassicSceneContext): typeof Phaser.
         return
       }
       if (!actor.collect()) return
+      audio.play('pickup')
       this.itemState = application.state
       this.runStats = this.runStats.record({ type: 'item' })
       if (actor.item.kind === 'shield') player.grantShield(application.state.shieldTicks)

@@ -311,6 +311,21 @@ class Player {
     }
     if(this.onGround) this.coyote = COYOTE_FRAMES;
 
+    // ===== 走路脚步声（独立音效，不受 BGM 静音控制）=====
+    this._footTimer = (this._footTimer === undefined ? 0 : this._footTimer) - 1;
+    const _walking = this.onGround && (k.left || k.right) && Math.abs(this.vx) > 0.3;
+    if(_walking){
+      this._footWalking = true;
+      if(this._footTimer <= 0){
+        Sfx.footstep();
+        this._footTimer = 29; // 约 480ms @60fps，限频避免爆音
+        console.log('角色行走播放脚步声');
+      }
+    } else {
+      this._footTimer = 0;
+      if(this._footWalking){ this._footWalking = false; console.log('角色停止终止脚步声'); }
+    }
+
     // ===== 掉落虚空死亡 =====
     const dl = level.height * TILE + 60;
     if(this.y > dl){
@@ -918,6 +933,7 @@ class Player {
           }
         }
       }
+    }
     // 补充地面检测（脚底在瓦片边界时getOverlapTiles可能漏掉）
     if(!this.onGround&&this.vy>=0){const fr=Math.floor((this.y+this.h)/32);const fc1=Math.floor(this.x/32),fc2=Math.floor((this.x+this.w-1)/32);for(let c=fc1;c<=fc2;c++){if(level.solidAt(c,fr)){this.y=fr*32-this.h;this.vy=0;this.onGround=true;break;}}}
     // ? 方块顶击检测
@@ -1510,6 +1526,9 @@ class Enemy {
     this.defPen = 0;         // 破甲比例
     this.defPenTimer = 0;
     this.knockbackTimer = 0; // 击退强制 vx 帧数
+    // ===== RBC 被动【废气回流】减速状态 =====
+    this.slowTimer = 0;      // 减速剩余帧
+    this.slowMult = 1;       // 减速倍率（<1 为减速）
 
     if(type === 'staph'){
       if(isLarge){
@@ -1536,6 +1555,11 @@ class Enemy {
       this.chargeDir = 0;
     }
     this.maxHp = this.hp;
+  }
+
+  // RBC 被动 CO₂ 雾场减速倍率
+  slowFactor(){
+    return this.slowTimer > 0 ? this.slowMult : 1;
   }
 
   makeMini(){
@@ -1598,6 +1622,7 @@ class Enemy {
     if(this.defPenTimer > 0) this.defPenTimer--;
     else this.defPen = 0;
     if(this.knockbackTimer > 0) this.knockbackTimer--;
+    if(this.slowTimer > 0) this.slowTimer--;
 
     if(this.type === 'staph' || this.type === 'salmonella'){
       // 葡萄球菌 / 沙门氏菌：仅在落地后巡逻
@@ -1605,7 +1630,7 @@ class Enemy {
         this.vx = 0;
       } else {
         const baseSpeed = this.isLarge ? 0.3 : (this.isMini ? 0.6 : 0.4);
-        this.vx = this.dir * baseSpeed;
+        this.vx = this.dir * baseSpeed * this.slowFactor();
         this.x += this.vx;
         const frontCol = Math.floor((this.dir > 0 ? this.x + this.w : this.x) / TILE);
         const checkRow = Math.floor((this.y + this.h + 2) / TILE);
@@ -1629,7 +1654,7 @@ class Enemy {
 
       if(this.state === 'idle'){
         // 非追踪游荡
-        this.vx = this.dir * 0.3;
+        this.vx = this.dir * 0.3 * this.slowFactor();
         this.x += this.vx;
         // 碰墙转向
         if(level.solidAt(Math.floor((this.dir > 0 ? this.x + this.w : this.x) / TILE), Math.floor(this.y / TILE))){
@@ -1652,7 +1677,7 @@ class Enemy {
         }
       } else if(this.state === 'dash'){
         // 高速直线冲刺
-        this.vx = this.chargeDir * CHARGE_SPEED;
+        this.vx = this.chargeDir * CHARGE_SPEED * this.slowFactor();
         this.x += this.vx;
         // 撞到实心方块则停止冲刺
         const dashCol = Math.floor((this.chargeDir > 0 ? this.x + this.w - 1 : this.x) / TILE);
@@ -1694,6 +1719,30 @@ class Enemy {
           this.y = t.row * TILE - this.h;
           this.vy = 0; this.onGround = true;
         }
+      }
+    }
+
+    // ===== PLT 血凝壁垒阻挡：敌人无法穿过 =====
+    for(const cw of Game.clotWalls){
+      if(cw.expired) continue;
+      if(rectOverlap(this, cw)){
+        // 按重叠中心把敌人水平推出墙体，并强制转向
+        const enemyCx = this.x + this.w / 2;
+        const wallCx = cw.x + cw.w / 2;
+        if(enemyCx < wallCx){
+          this.x = cw.x - this.w;
+          this.dir = -1;
+        } else {
+          this.x = cw.x + cw.w;
+          this.dir = 1;
+        }
+        // 链球菌冲刺撞墙：终止冲刺
+        if(this.type === 'strep' && this.state === 'dash'){
+          this.state = 'cooldown';
+          this.stateTimer = CHARGE_COOLDOWN;
+          spawnParticles(this.x + this.w/2, this.y + this.h/2, C.platelet, 6, 2);
+        }
+        this.vx = 0;
       }
     }
 
@@ -2681,6 +2730,69 @@ class TempPlatform {
     ctx.fillRect(px+6, py+10, 3, 3);
     ctx.fillRect(px+18, py+14, 3, 3);
     ctx.fillRect(px+12, py+20, 2, 2);
+    ctx.restore();
+  }
+}
+
+// ===== PLT 主动技能【血凝壁垒】：地面凝血墙，敌人无法穿过，持续一段时间后消散 =====
+class ClotWall {
+  constructor(x, y){
+    this.x = x; this.y = y;
+    this.w = CLOT_WALL_W;
+    this.h = CLOT_WALL_H;
+    this.life = CLOT_WALL_DUR;
+    this.maxLife = this.life;
+    this.expired = false;
+    this.appearT = 0;
+  }
+  update(){
+    this.appearT++;
+    this.life--;
+    if(this.life <= 0){
+      this.expired = true;
+      // 消散粒子
+      spawnParticles(this.x + this.w/2, this.y + this.h/2, C.platelet, 14, 3);
+    }
+  }
+  draw(ctx, camX){
+    const px = Math.round(this.x) - Math.round(camX);
+    const py = Math.round(this.y);
+    // 剩余时间不足 90 帧时闪烁提示
+    const a = this.life > 90 ? 1 : (Math.floor(this.life / 6) % 2 === 0 ? 1 : 0.35);
+    // 生成时从下往上"凝结"生长
+    const grow = Math.min(1, this.appearT / 12);
+    const gh = Math.round(this.h * grow);
+    const gy = py + this.h - gh;
+    ctx.save();
+    ctx.globalAlpha = a;
+    // 主体凝血块
+    ctx.fillStyle = C.scab;
+    ctx.fillRect(px, gy, this.w, gh);
+    // 顶部高亮
+    ctx.fillStyle = C.scabTop;
+    ctx.fillRect(px, gy, this.w, 4);
+    // 两侧暗边
+    ctx.fillStyle = C.scabDark;
+    ctx.fillRect(px, gy, 3, gh);
+    ctx.fillRect(px + this.w - 3, gy, 3, gh);
+    // 血小板碎片纹理
+    ctx.fillStyle = C.platelet;
+    ctx.globalAlpha = a * 0.6;
+    ctx.fillRect(px + 6,  gy + 8,  4, 4);
+    ctx.fillRect(px + 18, gy + 18, 3, 3);
+    ctx.fillRect(px + 10, gy + 30, 4, 4);
+    ctx.fillRect(px + 20, gy + 42, 3, 3);
+    ctx.fillRect(px + 7,  gy + 52, 3, 3);
+    // 纤维蛋白丝
+    ctx.strokeStyle = C.scabTop;
+    ctx.globalAlpha = a * 0.4;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px + 4, gy + 6);
+    ctx.lineTo(px + this.w - 6, gy + 24);
+    ctx.moveTo(px + this.w - 4, gy + 34);
+    ctx.lineTo(px + 5, gy + 50);
+    ctx.stroke();
     ctx.restore();
   }
 }

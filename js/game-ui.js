@@ -44,6 +44,7 @@ function showMenu(){
   const fp = $('focus-prompt');
   if(fp) fp.classList.add('hidden');
   _notifyMobileState();
+  Sfx.startFileBgm('menu');
 }
 
 // ===== v3: 排行榜昵称 =====
@@ -397,6 +398,7 @@ function showHub(){
   document.querySelectorAll('.hub-tab').forEach(b=>b.classList.toggle('active', b.id === 'tab-builtin'));
   renderLevelGrid();
   _notifyMobileState();
+  Sfx.startFileBgm('menu');
 }
 
 function updateHubEnergy(){
