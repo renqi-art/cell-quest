@@ -5,6 +5,7 @@ const LEVEL_5 = {
   cellType: 1,
   winCondition: WIN_KILL_ALL,
   sky: ['#2a0a0a','#6a0a0a'],
+  groundTex: 'platform_tile_level6_boss_512x290.png',  // Boss关主题：暗青绿石+暖橙秋色+紫魔法（按 bg6 采样）
   map: [
       "                                                                                ",
       "                                                                                ",

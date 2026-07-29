@@ -8,6 +8,28 @@ function loadSprites(){
   Game.bgImg = new Image();
   Game.bgImg.src = 'images/game-bg.webp?v=1';
 
+  // 关卡平台贴图缓存（按路径懒加载：关卡数据声明的 groundTex 路径 → 这里预加载）
+  // 路径相对于 images/ 目录。每个关卡可以挂自己的贴图文件，互不影响。
+  Game.texCache = {};
+  Game.getTex = function(relPath){
+    if (!relPath) return null;
+    if (!Game.texCache[relPath]) {
+      const img = new Image();
+      img.src = 'images/' + relPath;
+      Game.texCache[relPath] = img;
+    }
+    return Game.texCache[relPath];
+  };
+  // 预热：把所有关卡数据里可能用到的 groundTex 都提前加载好（避免进入关卡时白屏）
+  // 注：levels.js 在 sprites.js 之前加载，LEVEL_MAPS 已初始化（const 但 scripts 共用全局作用域）
+  if (typeof LEVEL_MAPS !== 'undefined' && LEVEL_MAPS.length) {
+    for (const lvl of LEVEL_MAPS) {
+      if (lvl && lvl.groundTex) Game.getTex(lvl.groundTex);
+    }
+  }
+  // 兼容旧代码（仍保留 Game.groundTex 指针指向第一关的贴图，备用）
+  Game.groundTex = Game.getTex('platform_tile_level1_periodic_organic_512x290.png');
+
   // ATP 能量图像
   Game.atpImg = new Image();
   Game.atpImg.src = 'images/atp.webp?v=1';

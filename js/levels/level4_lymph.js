@@ -5,6 +5,7 @@ const LEVEL_4 = {
   cellType: 3,
   winCondition: WIN_COLLECT_ALL,
   sky: [C.sky2, '#e8a0a0'],
+  groundTex: 'platform_tile_level5_ice_cone_512x290.png',  // 蓝紫倒锥形悬浮冰山（顶面平整+向下收窄+冰锥+裂痕）
   map: [
       "                                                                                ",
       "                                                                                ",

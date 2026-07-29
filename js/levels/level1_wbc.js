@@ -4,6 +4,7 @@ const LEVEL_1 = {
   cellType: 3,
   winCondition: WIN_COLLECT_ALL,
   sky: [C.sky2, '#e8a0a0'],
+  groundTex: 'platform_tile_level2_stone_brick_512x290.png',   // 第二关平台贴图（落日暖光石砖 + 青苔 + 藤蔓，横向无缝）
   map: [
       "                                                                                                                                       ",
       "                                                                                                                                       ",

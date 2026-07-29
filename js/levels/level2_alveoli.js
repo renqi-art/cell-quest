@@ -5,6 +5,8 @@ const LEVEL_2 = {
   cellType: 3,
   winCondition: WIN_COLLECT_ALL,
   sky: [C.sky2, '#e8a0a0'],
+  groundTex: 'platform_tile_level3_ruin_blue_512x290.png',
+  groundTexTop: 56,        // 冷蓝森林贴图的"平整顶面"所在行（srcY 起点）：y=56..88 是一条完整、连续、横向贯通的亮色顶面带；depth=0 采样此带，depth≥1 进入石砖立面。不改砖块大小/布局/碰撞/轮廓。
   map: [
       "                                                                                          ",
       "                                                                                          ",

@@ -350,9 +350,30 @@ class Level {
   }
 
   drawTile(ctx, ch, x, y, col, row){
+    // ===== 通用贴图渲染 helper（= / S / # / B 共用，横向无缝 + 同色块顶面定位） =====
+    // 仅当本关 groundTex 已声明且贴图已加载成功时返回 true；否则返回 false 让调用方走原美术兜底。
+    const drawTexBlock = () => {
+      const texPath = (this.mapData && this.mapData.groundTex) ? this.mapData.groundTex : null;
+      const tex = (Game.getTex && texPath) ? Game.getTex(texPath) : null;
+      if (!tex || !tex.complete || tex.naturalWidth === 0) return false;
+      let sr = row;
+      while (sr > 0 && this.grid[sr - 1] && this.grid[sr - 1][col] === ch) sr--;
+      const depth = row - sr;                                  // 0 = 块顶面（站立/踩踏面）
+      const TILE_SRC = 32;
+      // 顶面所在行：不同贴图的顶面位置不同（冷蓝森林贴图顶面在 ~24，第一关粉色贴图顶面在 80）。
+      // 关卡可在 mapData.groundTexTop 覆写；默认 80 保持原有兼容。不影响砖块大小/布局/碰撞/轮廓。
+      const TOP_SRC  = (this.mapData && this.mapData.groundTexTop != null) ? this.mapData.groundTexTop : 80;
+      let srcX = (col * TILE_SRC) % tex.naturalWidth;          // 横向：整张 tile 宽 = 16 个 32，循环无缝
+      let srcY = TOP_SRC + depth * TILE_SRC;
+      if (srcY + TILE_SRC > tex.naturalHeight) srcY = tex.naturalHeight - TILE_SRC;
+      ctx.drawImage(tex, srcX, srcY, TILE_SRC, TILE_SRC, x, y, TILE, TILE);
+      return true;
+    };
     switch(ch){
       // ===== 地面 — 细胞组织纹理 =====
-      case '#':
+      case '#': {
+        // 仅当本关卡数据声明了 groundTex 时才使用新地面贴图（第一关）
+        if (drawTexBlock()) break;
         // 主体（细胞质纹理：微妙的圆点矩阵）
         ctx.fillStyle=C.ground; ctx.fillRect(x,y,TILE,TILE);
         // 顶边高光（细胞膜）
@@ -367,8 +388,11 @@ class Level {
         ctx.fillRect(x+2,y+20,28,1);
         ctx.globalAlpha=1;
         break;
+      }
       // ===== 平台 — 悬浮细胞膜 =====
-      case '=':
+      case '=': {
+        // 优先用本关 groundTex（粉暖像素平台贴图）
+        if (drawTexBlock()) break;
         ctx.fillStyle=C.platform; ctx.fillRect(x,y,TILE,TILE);
         ctx.fillStyle=C.platformTop; ctx.fillRect(x,y,TILE,6);
         // 底边阴影
@@ -380,8 +404,11 @@ class Level {
         ctx.fillRect(x+6,y+10,3,3); ctx.fillRect(x+22,y+18,3,3);
         ctx.globalAlpha=1;
         break;
+      }
       // ===== 痂皮平台 — 粗糙纹理 + 裂纹 =====
-      case 'S':
+      case 'S': {
+        // 优先用本关 groundTex（粉暖像素平台贴图）
+        if (drawTexBlock()) break;
         ctx.fillStyle=C.scab; ctx.fillRect(x,y,TILE,TILE);
         ctx.fillStyle=C.scabTop; ctx.fillRect(x,y,TILE,5);
         // 暗斑（痂皮特征）
@@ -393,8 +420,13 @@ class Level {
         ctx.beginPath(); ctx.moveTo(x+6,y+6); ctx.lineTo(x+14,y+16);
         ctx.lineTo(x+10,y+28); ctx.stroke();
         break;
+      }
       // ===== 失血区 — 动态血液 =====
       case 'B':
+        // 按用户要求：把红色砖块的美术贴图替换为粉暖像素平台贴图
+        // 注：B 是游戏内的失血区 hazard，碰撞与扣血逻辑由其他代码独立判定（按 tile char 'B'），不受此处纯美术替换影响
+        if (drawTexBlock()) break;
+        // 贴图未就绪时临时走原红色美术（避免出现透明洞）
         if(this.isTideSurge()){
           ctx.fillStyle=C.tideSurge;
         } else if(this.isTideWarn()){
@@ -405,23 +437,6 @@ class Level {
         ctx.fillRect(x,y,TILE,TILE);
         ctx.fillStyle = this.isTideSurge() ? '#ff4050' : C.bloodLossTop;
         ctx.fillRect(x,y,TILE,4);
-        // 血液滴落
-        const drip=(Math.floor(Game.frame/20)+col)%4;
-        ctx.fillStyle='rgba(180,20,30,0.7)';
-        ctx.fillRect(x+3+drip*7,y+TILE-10,3,10);
-        // 血泡
-        ctx.globalAlpha=0.35+Math.sin(Game.frame*0.05+col)*0.1;
-        ctx.beginPath(); ctx.arc(x+10+(col%3)*7,y+14,3,0,Math.PI*2);
-        ctx.fillStyle='#ff2040'; ctx.fill();
-        ctx.globalAlpha=1;
-        // 潮涌波纹
-        if(this.isTideSurge()){
-          ctx.save();
-          ctx.globalAlpha=0.3+Math.sin(Game.frame*0.08+col)*0.15;
-          ctx.fillStyle=C.tideWarn;
-          ctx.fillRect(x,y-4+Math.sin(Game.frame*0.08+col)*2,TILE,4);
-          ctx.restore();
-        }
         break;
       // ===== 尖刺 — 金属锐刺 =====
       case '^':

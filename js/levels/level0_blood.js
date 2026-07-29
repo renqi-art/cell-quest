@@ -4,6 +4,7 @@ const LEVEL_0 = {
   cellType: 3,
   winCondition: WIN_COLLECT_ALL,
   sky: [C.sky2, '#e8a0a0'],
+  groundTex: 'platform_tile_level1_periodic_organic_512x290.png',   // 第一关地面平台贴图（粉暖渐变石块，横向无缝）
   map: [
       "                                                                                                                                       ",
       "                                                                                                                                       ",
