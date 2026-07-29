@@ -137,6 +137,13 @@ body{
   pointer-events:auto; /* HUD默认pointer-events:none,需要显式恢复 */
 }
 #home-btn:hover{opacity:1;transform:scale(1.15);filter:drop-shadow(0 0 4px #fff);}
+#music-btn{
+  cursor:pointer;font-size:16px;transition:all .2s ease;opacity:.7;
+  user-select:none;-webkit-user-select:none;
+  pointer-events:auto; /* HUD默认pointer-events:none,需要显式恢复 */
+}
+#music-btn:hover{opacity:1;transform:scale(1.15);filter:drop-shadow(0 0 4px #fff);}
+#music-btn.off{opacity:.45;filter:grayscale(1);}
 #timer{font-family:monospace;color:#7ac;font-weight:600;}
 #memory-icon{
   font-size:16px;opacity:.3;transition:all .3s ease;

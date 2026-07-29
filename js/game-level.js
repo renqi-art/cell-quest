@@ -2,6 +2,43 @@
  * game-level.js — Level class (map loading, tiles, spawners, crumble)
  * ==================================================================== */
 
+// ===== 贴图平台底色采样（修复 PIL 生成瑕疵导致的贴图底部/局部透明） =====
+// 采样贴图"站立面带"中所有不透明像素的 RGB 均值，作为该贴图的平台底色。
+// 目的：drawTexBlock 在贴上纹理 crop 之前先 fillRect 该底色，使贴图中因生成
+// 瑕疵而透明的像素（如底部 clamp 区被采样、局部孔洞）显示底色而非穿透背景。
+// 仅用于渲染合成；不动 map、坐标、碰撞、地形布局、玩法、背景、角色、UI。
+function computeGroundBaseColor(tex, top){
+  try {
+    const off = document.createElement('canvas');
+    off.width = tex.naturalWidth;
+    off.height = tex.naturalHeight;
+    const oc = off.getContext('2d');
+    oc.drawImage(tex, 0, 0);
+    const W = tex.naturalWidth, H = tex.naturalHeight;
+    const y0 = Math.max(0, Math.min(top, H));
+    const y1 = Math.max(y0, Math.min(top + 32, H));
+    let r = 0, g = 0, b = 0, n = 0;
+    if (y1 > y0){
+      const data = oc.getImageData(0, y0, W, y1 - y0).data;
+      for (let i = 0; i < data.length; i += 4){
+        if (data[i + 3] > 0){ r += data[i]; g += data[i + 1]; b += data[i + 2]; n++; }
+      }
+    }
+    if (n === 0){
+      // 顶面带全透明（异常贴图）→ 退化到整图均值
+      const data2 = oc.getImageData(0, 0, W, H).data;
+      for (let i = 0; i < data2.length; i += 4){
+        if (data2[i + 3] > 0){ r += data2[i]; g += data2[i + 1]; b += data2[i + 2]; n++; }
+      }
+    }
+    if (n === 0) return null;
+    return 'rgb(' + (r / n | 0) + ',' + (g / n | 0) + ',' + (b / n | 0) + ')';
+  } catch (e){
+    // 跨域/taint 等异常 → 安全降级：不填底色，保持原渲染
+    return null;
+  }
+}
+
 // ===== Level 类 =====
 class Level {
   constructor(mapData){
@@ -31,6 +68,7 @@ class Level {
     this.turrets = [];
     this.load();
     this.loadFloatPlatforms(mapData);
+    this.placeDefaultFinish();
   }
 
   loadFloatPlatforms(mapData){
@@ -40,6 +78,28 @@ class Level {
         Game.floatPlatforms.push(new FloatingPlatform(fp.x, fp.y, fp.range, fp.speed, fp.phase));
       }
     }
+  }
+
+  // 自动放置终点传送门：地图未显式放 'F' 瓦片时，在"最右侧可站立地面"上方放置。
+  // 不修改任何地图数组，仅在引擎层计算，保证所有关卡统一拥有发光传送门终点。
+  placeDefaultFinish(){
+    if(this.finish) return;
+    const H = this.grid.length;
+    let bestCol = -1, bestRow = -1;
+    for(let c = this.width - 1; c >= 2; c--){
+      for(let r = H - 1; r >= 1; r--){
+        if(this.solidAt(c, r) && !this.solidAt(c, r - 1)){
+          bestCol = c; bestRow = r - 1; // 站在该地面正上方的空格
+          break;
+        }
+      }
+      if(bestCol >= 0) break;
+    }
+    if(bestCol < 0){ // 兜底：地图无地面时放在右侧 85% 处
+      bestCol = Math.max(2, Math.floor(this.width * 0.85));
+      bestRow = Math.max(1, H - 3);
+    }
+    this.finish = { x: bestCol * TILE, y: bestRow * TILE, col: bestCol, row: bestRow };
   }
 
   load(){
@@ -356,16 +416,30 @@ class Level {
       const texPath = (this.mapData && this.mapData.groundTex) ? this.mapData.groundTex : null;
       const tex = (Game.getTex && texPath) ? Game.getTex(texPath) : null;
       if (!tex || !tex.complete || tex.naturalWidth === 0) return false;
-      let sr = row;
-      while (sr > 0 && this.grid[sr - 1] && this.grid[sr - 1][col] === ch) sr--;
-      const depth = row - sr;                                  // 0 = 块顶面（站立/踩踏面）
-      const TILE_SRC = 32;
       // 顶面所在行：不同贴图的顶面位置不同（冷蓝森林贴图顶面在 ~24，第一关粉色贴图顶面在 80）。
       // 关卡可在 mapData.groundTexTop 覆写；默认 80 保持原有兼容。不影响砖块大小/布局/碰撞/轮廓。
       const TOP_SRC  = (this.mapData && this.mapData.groundTexTop != null) ? this.mapData.groundTexTop : 80;
+      const TILE_SRC = 32;
+      // 取本关贴图的平台底色（按贴图缓存）：用于在贴纹理 crop 之前先铺底，
+      // 避免贴图中因 PIL 生成瑕疵而透明的像素穿透背景 → 修复"瓦片看不见、处于隐藏状态"的 bug。
+      // 仅改变渲染合成，不影响地图、坐标、碰撞、地形布局、玩法、背景、角色、UI。
+      if (!Game._groundBaseColor) Game._groundBaseColor = {};
+      let baseColor = Game._groundBaseColor[texPath];
+      if (baseColor === undefined){
+        baseColor = computeGroundBaseColor(tex, TOP_SRC);
+        Game._groundBaseColor[texPath] = baseColor;
+      }
+      let sr = row;
+      while (sr > 0 && this.grid[sr - 1] && this.grid[sr - 1][col] === ch) sr--;
+      const depth = row - sr;                                  // 0 = 块顶面（站立/踩踏面）
       let srcX = (col * TILE_SRC) % tex.naturalWidth;          // 横向：整张 tile 宽 = 16 个 32，循环无缝
       let srcY = TOP_SRC + depth * TILE_SRC;
       if (srcY + TILE_SRC > tex.naturalHeight) srcY = tex.naturalHeight - TILE_SRC;
+      // 先用与贴图同色调的底色铺底，再贴纹理 crop；透明处露出底色而非背景，杜绝隐藏。
+      if (baseColor){
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(x, y, TILE, TILE);
+      }
       ctx.drawImage(tex, srcX, srcY, TILE_SRC, TILE_SRC, x, y, TILE, TILE);
       return true;
     };
@@ -656,53 +730,50 @@ class Level {
   }
 
   drawGate(ctx, camX){
-    const x = Math.round(this.finish.x) - Math.round(camX);
-    const y = this.finish.y;
-    const t = Game.frame * 0.06;
-    // v3: 终点门始终开放（抵达即通关，杀怪/收集为评分标准）
-    const winMet = true;
-    
+    if(!this.finish) return;
+    const cx = Math.round(this.finish.x) - Math.round(camX) + TILE/2;
+    const cy = this.finish.y + TILE/2;
+    const t = Game.frame * 0.05;
     ctx.save();
-    if(winMet){
-      // 门打开：金色光柱 + 门板向两侧滑开
-      const openAmt = Math.min(1, (Game.frame % 120) / 30); // 渐开动画
-      // 光柱
-      const grad = ctx.createLinearGradient(x+TILE/2, y-60, x+TILE/2, y+TILE);
-      grad.addColorStop(0, 'rgba(255,215,0,0)');
-      grad.addColorStop(0.5, C.gateGlow);
-      grad.addColorStop(1, 'rgba(255,215,0,0.7)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(x, y-60, TILE, TILE+60);
-      // 左门板
-      ctx.fillStyle = C.gateOpen;
-      ctx.fillRect(x + 2 - openAmt * TILE/2, y, TILE/2 - 2, TILE);
-      // 右门板
-      ctx.fillRect(x + TILE/2 + openAmt * TILE/2, y, TILE/2 - 2, TILE);
-      // 顶部门楣
-      ctx.fillStyle = C.gateOpen;
-      ctx.fillRect(x+2, y-4, TILE-4, 8);
-      // 脉冲光环
-      ctx.globalAlpha = 0.3 + Math.sin(t*2)*0.15;
-      ctx.strokeStyle = C.gateOpen;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x+1, y, TILE-2, TILE);
-      ctx.globalAlpha = 1;
-    } else {
-      // 门锁着：深色门 + 锁图标
-      ctx.fillStyle = C.gateLocked;
-      ctx.fillRect(x+2, y, TILE-4, TILE);
-      ctx.fillStyle = '#6a4a0a';
-      ctx.fillRect(x+4, y+2, TILE-8, TILE-4);
-      // 锁
-      ctx.fillStyle = '#ffd700';
-      ctx.font = 'bold 14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('🔒', x+TILE/2, y+TILE/2+5);
-      // v3: 评分提示
-      ctx.fillStyle = '#ffd700';
-      ctx.font = '9px sans-serif';
-      const hint = '抵达通关·击杀+收集双评分';
-      ctx.fillText(hint, x+TILE/2, y-6);
+    // 外发光
+    const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, TILE*1.7);
+    glow.addColorStop(0, 'rgba(120,220,255,0.55)');
+    glow.addColorStop(0.45, 'rgba(150,90,255,0.32)');
+    glow.addColorStop(1, 'rgba(150,90,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(cx - TILE*1.7, cy - TILE*1.7, TILE*3.4, TILE*3.4);
+    // 光柱
+    const beam = ctx.createLinearGradient(cx, cy - TILE*1.7, cx, cy + TILE*1.7);
+    beam.addColorStop(0, 'rgba(180,240,255,0)');
+    beam.addColorStop(0.5, 'rgba(180,240,255,0.5)');
+    beam.addColorStop(1, 'rgba(180,240,255,0.12)');
+    ctx.fillStyle = beam;
+    ctx.fillRect(cx - TILE*0.35, cy - TILE*1.7, TILE*0.7, TILE*3.4);
+    // 旋转光环
+    for(let i=0;i<3;i++){
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(t*(i%2?-1:1)*(0.5+i*0.3));
+      ctx.strokeStyle = i===0?'rgba(255,255,255,0.9)': i===1?'rgba(120,220,255,0.8)':'rgba(185,120,255,0.7)';
+      ctx.lineWidth = 2 + i;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, TILE*0.55 + i*4, TILE*0.32 + i*3, 0, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // 核心漩涡
+    const core = ctx.createRadialGradient(cx, cy, 1, cx, cy, TILE*0.5);
+    core.addColorStop(0, 'rgba(255,255,255,0.95)');
+    core.addColorStop(0.5, 'rgba(150,220,255,0.8)');
+    core.addColorStop(1, 'rgba(140,90,255,0)');
+    ctx.fillStyle = core;
+    ctx.beginPath(); ctx.arc(cx, cy, TILE*0.5, 0, Math.PI*2); ctx.fill();
+    // 星点
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.6 + 0.4*Math.sin(t*3)) + ')';
+    for(let i=0;i<6;i++){
+      const a = t*2 + i*Math.PI/3;
+      const rr = TILE*(0.5 + 0.15*Math.sin(t*2+i));
+      ctx.beginPath(); ctx.arc(cx+Math.cos(a)*rr, cy+Math.sin(a)*rr*0.6, 1.6, 0, Math.PI*2); ctx.fill();
     }
     ctx.restore();
   }

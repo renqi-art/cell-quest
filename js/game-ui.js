@@ -36,6 +36,7 @@ function closeCharDetail(){
 // ===== 状态转换 =====
 function showMenu(){
   Game.state = 'menu';
+  if(window.stopConfetti) window.stopConfetti();
   $('main-menu').classList.remove('hidden');
   $('hub-screen').classList.add('hidden');
   $('hud').classList.remove('active');

@@ -70,6 +70,10 @@ function setupInput(){
     if((e.key==='p'||e.key==='P') && (Game.state==='playing'||Game.state==='paused')){
       togglePause();
     }
+    // M 键：背景音乐自由开关（仅控制 BGM，不影响音效）
+    if((e.key==='m'||e.key==='M') && !e.repeat){
+      if(typeof toggleMusic === 'function'){ toggleMusic(); e.preventDefault(); }
+    }
     // 教程对话：Space/Enter 继续（忽略按键重复）
     if(Game.tutorialPause && !e.repeat && (e.key===' '||e.key==='Enter')){
       dismissTutorial();

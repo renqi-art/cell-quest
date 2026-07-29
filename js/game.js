@@ -280,10 +280,54 @@ function levelComplete(){
   $('death-panel').classList.add('hidden');
   $('complete-screen').classList.remove('hidden');
   $('hud').classList.remove('active');
+  // 通关庆祝彩带喷发特效
+  if(window.stopConfetti) window.stopConfetti();
+  if(window.startConfetti) window.startConfetti(2600);
+}
+
+// ===== 再来一局：重载当前关卡 =====
+function replayLevel(){
+  if(window.stopConfetti) window.stopConfetti();
+  if(Game.levelIndex < 0){ backToHub(); return; } // 预览关卡无重玩入口
+  const cell = Game.player ? Game.player.cellType : undefined;
+  LoadLevel(Game.levelIndex + 1, cell); // levelIndex 为 0-based, LoadLevel 接收 1-based
+}
+
+// ===== 下一局：加载下一关，末关则返回大厅 =====
+function nextLevel(){
+  if(window.stopConfetti) window.stopConfetti();
+  if(Game.levelIndex < 0){ backToHub(); return; } // 预览关卡
+  const configs = buildLevelConfigs();
+  const nextIdx = Game.levelIndex + 1;
+  if(nextIdx < configs.length){
+    LoadLevel(nextIdx + 1); // 下一关（已在通关时解锁）
+  } else {
+    showToast('🎉 已通关全部关卡！');
+    backToHub();
+  }
+}
+
+// ===== 背景音乐自由开关（仅控制 BGM，不影响任何音效）=====
+function updateMusicButton(){
+  const on = Sfx.bgmEnabled;
+  const mb = $('music-btn');
+  if(mb){ mb.textContent = on ? '🎵' : '🔇'; mb.classList.toggle('off', !on); mb.title = on ? '背景音乐：开 (M)' : '背景音乐：关 (M)'; }
+  const mp = $('btn-music-pause');
+  if(mp) mp.textContent = on ? '🎵 背景音乐：开' : '🔇 背景音乐：关';
+  const mm = $('btn-music-menu');
+  if(mm) mm.textContent = on ? '🎵 背景音乐：开' : '🔇 背景音乐：关';
+  const mh = $('btn-music-hub');
+  if(mh) mh.textContent = on ? '🎵 背景音乐：开' : '🔇 背景音乐：关';
+}
+function toggleMusic(){
+  const on = Sfx.toggleBgm();
+  updateMusicButton();
+  showToast(on ? '🎵 背景音乐：开' : '🔇 背景音乐：关');
 }
 
 function backToHub(){
   Game.state = 'hub';
+  if(window.stopConfetti) window.stopConfetti();
   Game.paused = false;
   Game.tutorialPause = false;
   Game.memoryCardOpen = false;
@@ -762,9 +806,9 @@ function init(){
   bindClick('btn-char-back', ()=>{ closeCharDetail(); });
   bindClick('btn-resume', ()=>{ togglePause(); });
   bindClick('btn-quit', ()=>{ backToHub(); });
-  bindClick('btn-next-level', ()=>{ backToHub(); });
-  bindClick('btn-complete-menu', ()=>{ showMenu(); });
-  bindClick('btn-complete-home', ()=>{ showMenu(); });
+  bindClick('btn-next-level', ()=>{ nextLevel(); });
+  bindClick('btn-complete-menu', ()=>{ replayLevel(); });
+  bindClick('btn-complete-home', ()=>{ backToHub(); });
   // 死亡面板按钮
   bindClick('btn-retry', ()=>{ retryFromDeath(); });
   bindClick('btn-death-quit', ()=>{ quitFromDeath(); });
@@ -782,6 +826,14 @@ function init(){
   bindClick('btn-confirm-no', e=>{e.stopPropagation();hideConfirm();});
   $('confirm-dialog').addEventListener('click',e=>{if(e.target===$('confirm-dialog'))hideConfirm();});
   bindClick('home-btn', e=>{e.stopPropagation();if(Game.state!=='playing'&&Game.state!=='paused')return;showConfirm('确定要离开当前关卡吗？\n进度将不会保存。',()=>{backToHub();});});
+
+  // 背景音乐自由开关（HUD 与暂停菜单共用同一逻辑）
+  Sfx.initBgmState();
+  updateMusicButton();
+  bindClick('music-btn', ()=>{ toggleMusic(); });
+  bindClick('btn-music-pause', ()=>{ toggleMusic(); });
+  bindClick('btn-music-menu', ()=>{ toggleMusic(); });
+  bindClick('btn-music-hub', ()=>{ toggleMusic(); });
 
   // v3: AI 生成关卡按钮
   bindClick('btn-hub-ai', ()=>{ showAIGeneratePanel(); });

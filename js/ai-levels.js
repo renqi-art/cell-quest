@@ -225,13 +225,7 @@ const AILevelGenerator = {
       this._placeOnPlatform(map, 'a', template.width, template.height);
     }
 
-    // 6. AI 放置?方块
-    const qBlockCount = Math.floor(this._rng() * 3 + 1); // 1-3个
-    for(let i = 0; i < qBlockCount; i++){
-      this._placeOnPlatform(map, '?', template.width, template.height);
-    }
-
-    // 7. 确保出生点在开始位置
+    // 6. 确保出生点在开始位置
     const spawnRow = template.height - 3;
     const spawnCol = 3;
     if(map[spawnRow] && map[spawnRow][spawnCol] === ' '){

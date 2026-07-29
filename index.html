@@ -46,6 +46,7 @@
         <span id="home-btn" title="返回关卡选择">🏠</span>
         <span id="timer">00:00.00</span>
         <span id="memory-icon" title="记忆细胞">🧬</span>
+        <span id="music-btn" title="背景音乐开关 (M)">🎵</span>
       </div>
     </div>
     <div id="hud-bottom">
@@ -135,12 +136,14 @@
       <h3>CELL QUEST</h3>
       <p>探索未知的细胞世界，揭开生命的终极奥秘。</p>
       <div id="main-menu-actions" class="main-menu-actions" aria-label="主菜单"></div>
+      <button class="btn" id="btn-music-menu" style="margin-top:16px;">🎵 背景音乐：开</button>
     </div>
   </div>
 
   <!-- ===== Hub / Level Select ===== -->
   <div id="hub-screen" class="overlay hidden">
     <button class="btn btn-back-hub" id="btn-menu-back-top">🏠 返回主菜单</button>
+    <button class="btn btn-back-hub" id="btn-music-hub" style="left:auto;right:14px;">🎵 背景音乐：开</button>
     <div class="hub-header">
       <h2>选择关卡</h2>
     </div>
@@ -179,6 +182,7 @@
     <h2>暂停</h2>
     <div class="btn-row" style="flex-direction:column;">
       <button class="btn primary" id="btn-resume">继续游戏</button>
+      <button class="btn" id="btn-music-pause">🎵 背景音乐：开</button>
       <button class="btn" id="btn-quit">关卡选择</button>
     </div>
   </div>
@@ -200,14 +204,15 @@
     </div>
     <div class="complete-stars" id="complete-stars" aria-label="通关星级"></div>
     <div class="btn-row">
-      <button class="btn primary" id="btn-next-level">⚔️ 下一局</button>
-      <button class="btn" id="btn-complete-menu">🔄 再来一局</button>
       <button class="btn" id="btn-complete-home">🏠 返回主页</button>
+      <button class="btn" id="btn-complete-menu">🔄 再来一局</button>
+      <button class="btn primary" id="btn-next-level">⚔️ 下一局</button>
     </div>
   </div>
 
   <!-- ===== 通关庆祝特效层（彩带+横幅） ===== -->
   <div id="win-fx" class="hidden"></div>
+  <canvas id="confetti-canvas" style="position:fixed;inset:0;z-index:110;pointer-events:none;display:none;"></canvas>
 
   <!-- ===== 第2关专属加载页（动态创建，此处预留容器锚点） ===== -->
   <!-- 第2关侧边固定对话（场景互动提示） -->
@@ -289,6 +294,7 @@
 <script src="js/game-update.js?v=1"></script>
 <script src="js/game-render.js?v=1"></script>
 <script src="js/game-ui.js?v=1"></script>
+<script src="js/confetti.js?v=1"></script>
 <script src="js/game.js?_nc=27"></script>
 	<div id="vue-game-root"></div>
 	<script type="module" src="/src/game/main.ts"></script>

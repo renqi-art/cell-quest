@@ -177,6 +177,8 @@ const Sfx = {
 
   // ===== 分层音效系统（新增扩展，不影响 jump / doubleJump 等既有逻辑）=====
   muted: false,
+  // 背景音乐独立开关（仅控制 BGM，不影响任何音效）；默认开，状态存于 localStorage
+  bgmEnabled: true,
   // 文件型 BGM（用户上传的 mp3）播放状态
   _bgmFileEl: null,
   _bgmFileMode: null,
@@ -208,10 +210,31 @@ const Sfx = {
     return this.muted;
   },
 
+  // ===== 背景音乐独立开关（仅控制 BGM，绝对不影响动作/拾取/警报等音效）=====
+  initBgmState(){
+    try{ this.bgmEnabled = localStorage.getItem('cellQuest_bgmOff') !== '1'; }catch(e){ this.bgmEnabled = true; }
+    return this.bgmEnabled;
+  },
+  setBgmEnabled(on){
+    this.bgmEnabled = !!on;
+    try{ localStorage.setItem('cellQuest_bgmOff', this.bgmEnabled ? '0' : '1'); }catch(e){}
+    if(!this.bgmEnabled){
+      this.stopFileBgm();
+      this.stopBgm();
+    } else {
+      // 按当前所在场景恢复对应 BGM（关卡进行中/暂停/结算/死亡 → level；菜单/大厅 → menu）
+      const inLevelCtx = (typeof Game !== 'undefined' && Game) &&
+        (Game.state === 'playing' || Game.state === 'paused' || Game.state === 'complete' || Game.state === 'dead');
+      this.startFileBgm(inLevelCtx ? 'level' : 'menu');
+    }
+  },
+  toggleBgm(){ this.setBgmEnabled(!this.bgmEnabled); return this.bgmEnabled; },
+
   // 1) 循环背景音乐（音量最低，仅作点缀）
   //    mode: 'menu'  = 舒缓（主菜单 / 选关界面）
   //          'level' = 稍活泼、有激情（正式关卡，带轻底鼓律动）
   startBgm(mode){
+    if(!this.bgmEnabled) return;
     mode = mode || this._bgmMode || 'menu';
     this._bgmMode = mode;
     this._initTiers();
@@ -300,6 +323,7 @@ const Sfx = {
   // 文件型 BGM：真正循环播放用户上传的 mp3（audio/bgm_loop.mp3 等）
   // 与上面的合成 BGM（startBgm）互不干扰、互不覆盖；用于实际游玩入口（老版 js 引擎）。
   startFileBgm(mode){
+    if(!this.bgmEnabled) return;
     mode = mode || 'menu';
     // 同模式且正在播放则跳过，避免每帧重建
     if(this._bgmFileMode === mode && this._bgmFileEl && !this._bgmFileEl.paused) return;
