@@ -6,6 +6,7 @@ const { handleDirectorRequest } = require('./server/director');
 const { handleGenerateCaseRequest } = require('./server/case-generator');
 const { getAiConfigStatus, handleGetAiConfig, handleSetAiConfig } = require('./server/ai-runtime-config');
 const { handleGenerateMapRequest } = require('./server/ai-map-generator');
+const { handleNpcDialogue } = require('./server/npc-dialogue');
 
 const ROOT = __dirname;
 const LEVEL_DIR = path.join(ROOT, 'js', 'levels');
@@ -230,6 +231,11 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && requestPath === '/api/director') {
     await handleDirectorRequest(req, res, sendJson);
+    return;
+  }
+
+  if (req.method === 'POST' && requestPath === '/api/npc/chat') {
+    await handleNpcDialogue(req, res, sendJson);
     return;
   }
 

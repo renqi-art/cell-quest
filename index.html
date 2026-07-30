@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>细胞远征 · Cell Quest</title>
-<link rel="stylesheet" href="css/style.css?v=131">
+<link rel="stylesheet" href="css/style.css?v=132">
 <link rel="stylesheet" href="css/main-menu-v4.css?v=3">
 <link rel="stylesheet" href="css/mobile-controls.css?v=2">
 </head>
@@ -163,6 +163,44 @@
       <button class="btn hub-btn" id="btn-hub-achs" style="border-color:#e040fb;color:#e040fb">🎖️ 成就</button>
       <button class="btn hub-btn" id="btn-hub-2p" style="border-color:#4fc3f7;color:#4fc3f7">👥 双人模式: OFF</button>
       <button class="btn hub-btn" id="btn-hub-editor" style="border-color:#ffd700;color:#ffd700" onclick="openEditor()">🗺️ 地图编辑器</button>
+      <button class="btn hub-btn" id="btn-hub-npc" style="border-color:#ab47bc;color:#ab47bc">🧬 树突状细胞</button>
+    </div>
+  </div>
+
+  <!-- ===== Hub NPC Chat (树突状细胞多轮对话) ===== -->
+  <div id="hub-npc-chat" class="overlay hidden">
+    <button class="btn hub-btn" id="btn-npc-close">返回关卡选择</button>
+    <div class="npc-chat-container">
+      <div class="npc-chat-header">
+        <div class="npc-chat-avatar">🧬</div>
+        <div class="npc-chat-title">
+          <h2>树突状细胞</h2>
+          <span>免疫系统侦察兵 · AI对话助手</span>
+        </div>
+      </div>
+      <div class="npc-chat-messages" id="npc-chat-messages">
+        <div class="npc-msg npc-msg-npc">
+          <div class="npc-msg-bubble">
+            你好，免疫战士！我是树突状细胞（DC），免疫系统的侦察兵和科普向导。<br><br>
+            👉 你可以问我免疫学知识：<b>"抗体是什么？"</b><br>
+            👉 也可以问关卡攻略：<b>"Boss怎么打？"</b><br>
+            👉 或者聊聊疾病机制：<b>"病毒和细菌有什么区别？"</b><br><br>
+            输入框下方有快捷问题，也可以直接打字提问！
+          </div>
+        </div>
+      </div>
+      <div class="npc-chat-quick" id="npc-chat-quick">
+        <button class="npc-quick-btn" data-q="抗体是怎么工作的？">🛡️ 抗体怎么工作？</button>
+        <button class="npc-quick-btn" data-q="白细胞和红细胞有什么区别？">🩸 白细胞vs红细胞</button>
+        <button class="npc-quick-btn" data-q="ATP是什么？怎么管理能量？">⚡ ATP能量管理</button>
+        <button class="npc-quick-btn" data-q="Boss战有什么技巧？">👾 Boss战技巧</button>
+        <button class="npc-quick-btn" data-q="细菌和病毒有什么区别？">🦠 细菌vs病毒</button>
+        <button class="npc-quick-btn" data-q="免疫系统有几道防线？">🏰 免疫系统防线</button>
+      </div>
+      <div class="npc-chat-input-row">
+        <input type="text" id="npc-chat-input" class="npc-chat-input" placeholder="输入你的问题..." maxlength="200">
+        <button class="btn" id="btn-npc-send" style="background:#ab47bc;color:#fff;border-color:#ab47bc;">发送</button>
+      </div>
     </div>
   </div>
 
@@ -280,7 +318,7 @@
 <script src="js/entities-player-skills.js?v=1"></script>
 <script src="js/entities-player-draw.js?v=5"></script>
 <script src="js/entities-combat.js?v=4"></script>
-<script src="js/entities-world.js?v=1"></script>
+<script src="js/entities-world.js?v=2"></script>
 <script src="js/levels/level0_blood.js?v=6"></script>
 <script src="js/levels/level1_wbc.js?v=9"></script>
 <script src="js/levels/level2_alveoli.js?v=6"></script>
@@ -300,6 +338,7 @@
 <script src="js/game-update.js?v=1"></script>
 <script src="js/game-render.js?v=1"></script>
 <script src="js/game-ui.js?v=1"></script>
+<script src="js/hub-npc.js?v=1"></script>
 <script src="js/confetti.js?v=1"></script>
 <script src="js/game.js?_nc=32"></script>
 	<div id="vue-game-root"></div>

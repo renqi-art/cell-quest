@@ -508,7 +508,7 @@ class DendriticCell {
       if(old) old.remove();
       const btn = document.createElement('button');
       btn.className = 'btn-small btn-dc-ai';
-      btn.textContent = '战术分析';
+      btn.textContent = 'AI战术分析';
       btn.style.cssText = 'background:#ab47bc;color:#fff;border-color:#ab47bc;margin-left:4px;font-size:11px;';
       btn.onclick = (e) => {
         e.stopPropagation();
@@ -524,6 +524,40 @@ class DendriticCell {
     const ctx = this._context;
     const hp = Math.round(ctx.hpPct * 100);
     const progress = Math.round(ctx.progress * 100);
+
+    bodyEl.textContent = '【战术分析】正在分析战场态势...';
+
+    try {
+      const resp = await fetch('/api/npc/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'combat',
+          context: {
+            hpPct: ctx.hpPct,
+            energy: ctx.energy,
+            kills: ctx.kills,
+            totalEnemies: ctx.totalEnemies,
+            progress: ctx.progress,
+            cellName: ctx.cellName,
+            levelName: ctx.levelName,
+            isBeforeBoss: Game.boss && Game.boss.alive && !Game.boss.encountered
+          }
+        })
+      });
+      const data = await resp.json();
+      if(data.ok && data.text){
+        bodyEl.textContent = '【' + (data.source === 'ai' ? 'AI战术分析' : '战术分析') + '】' + data.text;
+      } else {
+        this._localFallback(bodyEl, hp, progress);
+      }
+    } catch(e){
+      this._localFallback(bodyEl, hp, progress);
+    }
+  }
+
+  _localFallback(bodyEl, hp, progress){
+    const ctx = this._context;
     if(hp < 40){
       bodyEl.textContent = '【战术分析】先脱离危险区域，恢复后再推进。';
     }else if(ctx.energy < 25){
