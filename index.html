@@ -2,11 +2,11 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>细胞远征 · Cell Quest</title>
 <link rel="stylesheet" href="css/style.css?v=131">
 <link rel="stylesheet" href="css/main-menu-v4.css?v=3">
-<link rel="stylesheet" href="css/mobile-controls.css?v=1">
+<link rel="stylesheet" href="css/mobile-controls.css?v=2">
 </head>
 <body>
 <div id="game-container" tabindex="0">
@@ -142,7 +142,7 @@
 
   <!-- ===== NPC 先导片（点击「新的游戏」后全屏播放） ===== -->
   <div id="npc-intro" class="overlay hidden">
-    <video id="npc-intro-video" playsinline preload="auto"></video>
+    <video id="npc-intro-video" playsinline preload="metadata"></video>
     <button id="npc-intro-skip" class="btn">跳过 ⏭</button>
   </div>
 
@@ -274,7 +274,7 @@
 </div>
 
 <script src="js/config-constants.js?v=2"></script>
-<script src="js/config-game.js?v=3"></script>
+<script src="js/config-game.js?v=4"></script>
 <script src="js/config.js?v=98"></script>
 <script src="js/entities-player.js?v=5"></script>
 <script src="js/entities-player-skills.js?v=1"></script>
@@ -290,18 +290,18 @@
 <script src="js/sprites.js?_nc=8"></script>
 <script src="js/ai-levels.js?v=3"></script>
 <script src="js/main-menu.js?v=1"></script>
-<script src="js/mobile/capability.js?v=1"></script>
+<script src="js/mobile/capability.js?v=2"></script>
 <script src="js/mobile/input-controller.js?v=1"></script>
-<script src="js/mobile/controls-overlay.js?v=1"></script>
-<script src="js/mobile/viewport-coordinator.js?v=1"></script>
+<script src="js/mobile/controls-overlay.js?v=2"></script>
+<script src="js/mobile/viewport-coordinator.js?v=2"></script>
 <script src="js/mobile/index.js?v=1"></script>
 <script src="js/game-level.js?v=3"></script>
-<script src="js/game-input.js?v=1"></script>
+<script src="js/game-input.js?v=2"></script>
 <script src="js/game-update.js?v=1"></script>
 <script src="js/game-render.js?v=1"></script>
 <script src="js/game-ui.js?v=1"></script>
 <script src="js/confetti.js?v=1"></script>
-<script src="js/game.js?_nc=31"></script>
+<script src="js/game.js?_nc=32"></script>
 	<div id="vue-game-root"></div>
 </body>
 </html>

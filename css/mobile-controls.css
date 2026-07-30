@@ -17,8 +17,9 @@ body:has(#mobile-controls.touch-device) #hud-bottom kbd {
   display: none;
 }
 
-/* 移动端隐藏双人模式入口 */
-body:has(#mobile-controls.touch-device) #btn-hub-2p {
+/* 移动端仅支持单人游戏，隐藏桌面专属入口 */
+body:has(#mobile-controls.touch-device) #btn-hub-2p,
+body:has(#mobile-controls.touch-device) #btn-hub-editor {
   display: none !important;
 }
 
@@ -118,6 +119,55 @@ body:has(#mobile-controls.touch-device) #hud-p2 {
 
 #mobile-landscape-controls.active {
   display: block;
+}
+
+/* ---- 横屏快捷控制 ---- */
+#mobile-utility-controls {
+  position: absolute;
+  top: calc(64px + env(safe-area-inset-top, 0px));
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.mobile-utility-btn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: 10px;
+  background: rgba(10, 10, 24, .76);
+  color: #e8e8f0;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-utility-btn:active,
+.mobile-utility-btn.active {
+  background: rgba(100, 180, 255, .28);
+}
+
+#mobile-fullscreen-status {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: max-content;
+  max-width: 260px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(10, 10, 24, .86);
+  color: #b9dfff;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+#mobile-fullscreen-status:empty {
+  display: none;
 }
 
 /* ---- 摇杆区域 ---- */
@@ -222,8 +272,8 @@ body:has(#mobile-controls.touch-device) #hud-p2 {
 }
 
 .mb-sm {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   font-size: 12px;
 }
 
@@ -256,12 +306,122 @@ body:has(#mobile-controls.touch-device) #hud-p2 {
 /* ---- 小屏适配（宽度 < 600px 的横屏，缩小控件） ---- */
 @media (max-width: 700px) and (orientation: landscape) {
   .mb-lg { width: 54px; height: 54px; font-size: 16px; }
-  .mb-md { width: 42px; height: 42px; font-size: 13px; }
-  .mb-sm { width: 34px; height: 34px; font-size: 11px; }
+  .mb-md { width: 44px; height: 44px; font-size: 13px; }
+  .mb-sm { width: 44px; height: 44px; font-size: 11px; }
   #mobile-action-buttons { gap: 6px; right: 8px; bottom: 8px; }
   #mobile-joystick-zone { width: 120px; height: 120px; left: 10px; bottom: 10px; }
   #mobile-joystick-base { width: 84px; height: 84px; }
   #mobile-joystick-thumb { width: 36px; height: 36px; }
+  #mobile-utility-controls { top: calc(58px + env(safe-area-inset-top, 0px)); }
+}
+
+/* ---- 最新大厅、HUD 与剧情覆盖层适配 ---- */
+body:has(#mobile-controls.touch-device) .btn,
+body:has(#mobile-controls.touch-device) .btn-small {
+  min-height: 44px;
+}
+
+body:has(#mobile-controls.touch-device) #npc-intro-skip {
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+body:has(#mobile-controls.touch-device) :is(
+  #pause-menu,
+  #death-panel,
+  #complete-screen,
+  #memory-card,
+  #confirm-dialog
+) {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding:
+    max(16px, env(safe-area-inset-top, 0px))
+    max(16px, env(safe-area-inset-right, 0px))
+    max(16px, env(safe-area-inset-bottom, 0px))
+    max(16px, env(safe-area-inset-left, 0px));
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  body:has(#mobile-controls.touch-device) :is(#death-panel, #complete-screen) {
+    justify-content: flex-start;
+  }
+}
+
+body:has(#mobile-controls.touch-device) #hud-bottom {
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  bottom: auto;
+  left: 50%;
+  right: auto;
+  width: auto;
+  height: 48px;
+  padding: 2px 6px;
+  transform: translateX(-50%);
+  border: 0;
+  border-radius: 8px;
+  background: rgba(10, 10, 24, .55);
+}
+
+body:has(#mobile-controls.touch-device) #hud-bottom > :not(#skill-bar) {
+  display: none;
+}
+
+body:has(#mobile-controls.touch-device) #skill-bar {
+  gap: 4px;
+  margin: 0;
+}
+
+body:has(#mobile-controls.touch-device) #skill-bar .skill-slot {
+  width: 40px;
+  height: 40px;
+}
+
+body:has(#mobile-controls.touch-device) #hud-tl {
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  left: calc(8px + env(safe-area-inset-left, 0px));
+}
+
+body:has(#mobile-controls.touch-device) #hud-tr {
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  right: calc(8px + env(safe-area-inset-right, 0px));
+}
+
+@media (orientation: portrait) {
+  body:has(#mobile-controls.touch-device) #hub-screen {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  body:has(#mobile-controls.touch-device) #hub-screen .hub-header {
+    margin-top: 72px;
+  }
+
+  body:has(#mobile-controls.touch-device) #level-grid {
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100vw;
+    padding: 12px max(20px, env(safe-area-inset-left, 0px));
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body:has(#mobile-controls.touch-device) .level-card {
+    width: min(62vw, 190px);
+    margin: 0 8px;
+    scroll-snap-align: center;
+  }
+
+  body:has(#mobile-controls.touch-device) .hub-footer {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 12px;
+    margin-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  }
+
+  body:has(#mobile-controls.touch-device) #hub-screen .hub-btn {
+    flex: 1 1 calc(50% - 6px);
+  }
 }
 
 /* 大屏平板适配（宽度 > 900px），等比放大 */

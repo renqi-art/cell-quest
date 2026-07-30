@@ -352,6 +352,10 @@ function backToHub(){
 // ===== 关卡加载（通用入口函数） =====
 function LoadLevel(n, cellTypeOverride){
   if(window.CELL_QUEST_DEBUG) console.log('[DEBUG] LoadLevel n=' + n + ' cell=' + cellTypeOverride + ' state=' + Game.state);
+  // 移动端竖屏先拦截，避免在旋转前创建关卡、玩家或修改存档状态。
+  if(Game.mobile && !Game.mobile.viewport.requestBattleStart(
+    ()=>LoadLevel(n, cellTypeOverride)
+  )) return false;
   // Preview level: n is a string key
   if(typeof n === 'string' && _PREVIEW_LEVELS[n]){
     const mapData = _PREVIEW_LEVELS[n];
@@ -538,11 +542,6 @@ function LoadLevel(n, cellTypeOverride){
   applyMemoryBonuses();
   // v3: 应用自适应难度调整
   applyAdaptiveDifficulty();
-
-  // 移动端战斗门槛检查
-  if(Game.mobile){
-    if(!Game.mobile.viewport.requestBattleStart()) return false;
-  }
 
   if(window.CELL_QUEST_DEBUG) console.log('[DEBUG] Setting Game.state=playing, player=(' + Game.player.x + ',' + Game.player.y + ') health=' + Game.player.health + ' levelRows=' + Game.level.height);
   _updateFirstFrame = true;

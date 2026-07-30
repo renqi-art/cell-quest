@@ -248,3 +248,28 @@ Confirm:
 Append the executed command results to this plan under a `Verification Results` section.
 
 Commit message: `test(mobile): verify responsive single-player flow`
+
+---
+
+## Verification Results
+
+Executed on `codex/mobile-adaptation-v2` from latest `master` baseline `c8960a2`.
+
+Passed:
+
+- `node --check` for all five `js/mobile/*` scripts plus `js/game-input.js` and `js/game.js`.
+- `npm run typecheck`.
+- `npm run test:unit`: 61 files, 261 tests passed.
+- `npx playwright test tests/mobile-flow.spec.js`: 6 tests passed, covering portrait defer/resume, 667 × 375 touch controls, 844 × 390 HUD separation, fullscreen fallback, mobile-only flow constraints, system overlays, and desktop two-player compatibility.
+- `npm run build`.
+- `git diff --check`.
+
+Known baseline failures outside this change:
+
+- `npm run lint` reports three existing `src/` errors and 30 warnings. This branch does not modify `src/`.
+  - `src/game/bridge/LegacyGameEngineAdapter.ts`: `@typescript-eslint/no-this-alias`.
+  - `src/game/phaser/PhaserGameEngineAdapter.ts`: two unused declarations.
+- `tests/core-flow.spec.js` still targets the historical main-menu accessible name and historical editor wizard.
+- `tests/two-player.spec.js` assumes the hub appears immediately and does not skip the latest NPC intro video.
+
+The new desktop regression in `tests/mobile-flow.spec.js` follows the current intro flow and verifies that desktop two-player entry, P2 HUD, and keyboard pause remain available.

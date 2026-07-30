@@ -83,10 +83,7 @@ const MobileControlsOverlay = {
     this._disabled = disabled;
 
     if (disabled) {
-      MobileInputController.releaseAll();
-      this._joystickPointerId = null;
-      this._buttonPointers = {};
-      this._resetJoystickVisual();
+      this.forceReleaseAll();
     }
 
     if (this._container) {
@@ -117,6 +114,11 @@ const MobileControlsOverlay = {
 
   <!-- 横屏战斗控制层 -->
   <div id="mobile-landscape-controls">
+    <div id="mobile-utility-controls" aria-label="游戏快捷控制">
+      <button id="btn-mobile-pause" class="mobile-utility-btn" aria-label="暂停游戏">Ⅱ</button>
+      <button id="btn-mobile-fullscreen-landscape" class="mobile-utility-btn" aria-label="全屏游戏">⛶</button>
+      <span id="mobile-fullscreen-status" role="status" aria-live="polite"></span>
+    </div>
     <div id="mobile-joystick-zone">
       <div id="mobile-joystick-base" aria-label="移动摇杆">
         <div id="mobile-joystick-thumb"></div>
@@ -250,6 +252,7 @@ const MobileControlsOverlay = {
 
       btn.addEventListener('pointerdown', (e) => {
         if (this._disabled) return;
+        if (this._buttonPointers[def.action] != null) return;
         this._buttonPointers[def.action] = e.pointerId;
         btn.setPointerCapture(e.pointerId);
         MobileInputController.press(def.action);

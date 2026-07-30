@@ -118,6 +118,9 @@ const Game = {
   },
 };
 
+// Mobile and other decoupled runtime modules communicate through this stable global.
+window.Game = Game;
+
 // ===== WebAudio 音效 =====
 const Sfx = {
   ctx: null,

@@ -12,6 +12,8 @@
 const MobileViewportCoordinator = {
   /** 竖屏提示是否因"试图进入战斗"而触发 */
   _battleGateActive: false,
+  /** 竖屏进入战斗时暂存的单次续接回调 */
+  _pendingBattleStart: null,
 
   /** 竖屏提示 DOM */
   _portraitOverlay: null,
@@ -19,11 +21,18 @@ const MobileViewportCoordinator = {
   _landscapeControls: null,
   /** 全屏按钮 DOM */
   _fullscreenBtn: null,
+  _landscapeFullscreenBtn: null,
+  _pauseBtn: null,
+  _fullscreenStatus: null,
+  _fullscreenStatusTimer: 0,
 
   init() {
     this._portraitOverlay = document.getElementById('mobile-portrait-overlay');
     this._landscapeControls = document.getElementById('mobile-landscape-controls');
     this._fullscreenBtn = document.getElementById('btn-mobile-fullscreen');
+    this._landscapeFullscreenBtn = document.getElementById('btn-mobile-fullscreen-landscape');
+    this._pauseBtn = document.getElementById('btn-mobile-pause');
+    this._fullscreenStatus = document.getElementById('mobile-fullscreen-status');
 
     MobileCapability.refresh();
     this._updateCSSProps();
@@ -42,14 +51,16 @@ const MobileViewportCoordinator = {
    * 在进入战斗前调用。如果是竖屏，显示旋转提示并返回 false。
    * 如果是横屏，返回 true（可以进入战斗）。
    */
-  requestBattleStart() {
+  requestBattleStart(onReady) {
     MobileCapability.refresh();
     if (MobileCapability.isPortrait) {
       this._battleGateActive = true;
+      this._pendingBattleStart = typeof onReady === 'function' ? onReady : null;
       this._render();
       return false;
     }
     this._battleGateActive = false;
+    this._pendingBattleStart = null;
     this._render();
     return true;
   },
@@ -57,6 +68,7 @@ const MobileViewportCoordinator = {
   /** 清除战斗门槛（玩家从战斗返回大厅等） */
   clearBattleGate() {
     this._battleGateActive = false;
+    this._pendingBattleStart = null;
     this._render();
   },
 
@@ -92,24 +104,40 @@ const MobileViewportCoordinator = {
   /** 由外部在 resize/orientationchange 时调用 */
   onViewportChange() {
     MobileCapability.refresh();
+    if (MobileControlsOverlay && MobileControlsOverlay.forceReleaseAll) {
+      MobileControlsOverlay.forceReleaseAll();
+    }
     this._updateCSSProps();
     this._render();
+
+    if (!MobileCapability.isPortrait && this._pendingBattleStart) {
+      const resume = this._pendingBattleStart;
+      this._pendingBattleStart = null;
+      this._battleGateActive = false;
+      resume();
+    }
   },
 
   // ---- 全屏 ----
 
   _updateFullscreenButton(isFs) {
-    if (!this._fullscreenBtn) return;
-    this._fullscreenBtn.textContent = isFs ? '退出全屏' : '全屏游玩';
-    this._fullscreenBtn.classList.toggle('active', isFs);
+    if (this._fullscreenBtn) {
+      this._fullscreenBtn.textContent = isFs ? '退出全屏' : '全屏游玩';
+      this._fullscreenBtn.classList.toggle('active', isFs);
+    }
+    if (this._landscapeFullscreenBtn) {
+      this._landscapeFullscreenBtn.textContent = isFs ? '↙' : '⛶';
+      this._landscapeFullscreenBtn.setAttribute('aria-label', isFs ? '退出全屏' : '全屏游玩');
+      this._landscapeFullscreenBtn.classList.toggle('active', isFs);
+    }
   },
 
   async _requestFullscreen() {
     const container = document.getElementById('game-container');
     const ok = await MobileCapability.requestFullscreen(container);
     if (!ok) {
-      // 全屏失败：静默降级，游戏继续在普通浏览器模式运行
       this._updateFullscreenButton(false);
+      this._showFullscreenStatus('浏览器未允许全屏，已继续普通模式');
     }
   },
 
@@ -125,6 +153,15 @@ const MobileViewportCoordinator = {
     } else {
       this._requestFullscreen();
     }
+  },
+
+  _showFullscreenStatus(message) {
+    if (!this._fullscreenStatus) return;
+    this._fullscreenStatus.textContent = message;
+    clearTimeout(this._fullscreenStatusTimer);
+    this._fullscreenStatusTimer = setTimeout(() => {
+      if (this._fullscreenStatus) this._fullscreenStatus.textContent = '';
+    }, 2400);
   },
 
   // ---- CSS 自定义属性 ----
@@ -147,6 +184,14 @@ const MobileViewportCoordinator = {
   _bindEvents() {
     if (this._fullscreenBtn) {
       this._fullscreenBtn.addEventListener('click', () => this._onFullscreenClick());
+    }
+    if (this._landscapeFullscreenBtn) {
+      this._landscapeFullscreenBtn.addEventListener('click', () => this._onFullscreenClick());
+    }
+    if (this._pauseBtn) {
+      this._pauseBtn.addEventListener('click', () => {
+        if (typeof togglePause === 'function') togglePause();
+      });
     }
 
     // 方向变化

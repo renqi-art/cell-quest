@@ -32,12 +32,18 @@ function setupInput(){
   // 点击游戏区域获取焦点
   const container = $('game-container');
   const focusPrompt = $('focus-prompt');
-  container.addEventListener('click', ()=>{
+  container.addEventListener('click', (event)=>{
+    const interactive = event.target.closest && event.target.closest('button, input, select, textarea, a');
+    if(interactive){
+      if(focusPrompt) focusPrompt.classList.add('hidden');
+      return;
+    }
     container.focus();
     if(focusPrompt) focusPrompt.classList.add('hidden');
   });
   // 焦点丢失时显示提示（仅游戏中）
-  container.addEventListener('blur', ()=>{
+  container.addEventListener('blur', (event)=>{
+    if(event.relatedTarget && container.contains(event.relatedTarget)) return;
     if(Game.state === 'playing' && focusPrompt){
       focusPrompt.textContent = '点击此处继续游戏';
       focusPrompt.classList.remove('hidden');

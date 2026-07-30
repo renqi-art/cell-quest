@@ -30,17 +30,11 @@ const MobileCapability = {
 
   /** 刷新视口、方向、安全区数据 */
   refresh() {
-    this.viewportWidth = window.innerWidth;
-    this.viewportHeight = window.innerHeight;
+    const viewport = window.visualViewport;
+    this.viewportWidth = Math.round(viewport ? viewport.width : window.innerWidth);
+    this.viewportHeight = Math.round(viewport ? viewport.height : window.innerHeight);
     this.isPortrait = this.viewportHeight > this.viewportWidth;
     this.isLandscape = !this.isPortrait;
-
-    const style = getComputedStyle(document.documentElement);
-    const parse = (prop) => parseInt(style.getPropertyValue(prop)) || 0;
-    this.safeAreaTop = parse('env(safe-area-inset-top)');
-    this.safeAreaBottom = parse('env(safe-area-inset-bottom)');
-    this.safeAreaLeft = parse('env(safe-area-inset-left)');
-    this.safeAreaRight = parse('env(safe-area-inset-right)');
   },
 
   /** 是否应启用移动端控件 */
