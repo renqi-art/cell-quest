@@ -112,6 +112,11 @@ Player.prototype.draw = function(ctx, camX) {
         actionState = 'jump';
       } else if(this.crouching) {
         actionState = 'crouch';
+      } else if(this.sprinting && (k.left || k.right || Math.abs(this.vx) > 0.3)) {
+        // ★ 奔跑：双击方向键触发的奔跑模组，与走路完全不同
+        //    只要 sprinting 为真且角色仍在移动（按键或仍有速度），就稳定保持大步奔跑，
+        //    降低 vx 阈值避免起步/收尾微抖时闪回走路，全关卡表现一致。
+        actionState = 'run';
       } else if(k.left || k.right || Math.abs(this.vx) > 1.2) {
         actionState = 'walk';
       }
@@ -186,6 +191,25 @@ Player.prototype.draw = function(ctx, camX) {
         const dispH = TARGET_H;
         const dispW = Math.floor(dispH * (atkFW / atkFH));
         ctx.drawImage(atkSprite, 0, 0, atkFW, atkFH, Math.round(-dispW/2), Math.round(-dispH), dispW, dispH);
+        ctx.restore();
+      }
+      // ★ 奔跑（双击方向键触发）：参考 GIF 的跑酷奔跑模组，6 帧循环
+      //    与走路完全不同的步态：摆臂/大步/披风飘动；速度比走路更快（每 2 帧切一帧）
+      else if(actionState === 'run' && Game.wbcRunRight && Game.wbcRunRight.complete && Game.wbcRunRight.naturalWidth > 0){
+        const frames = Game.wbcSpriteFrames.run;
+        const fidx = Math.floor(this.animT / 2) % frames.length;
+        const col = frames[fidx];
+        const fw = Game.wbcRunFrameSize.w;
+        const fh = Game.wbcRunFrameSize.h;
+        const dispH = TARGET_H;
+        const dispW = Math.floor(dispH * (fw / fh));
+        ctx.save();
+        const ax = Math.floor(px + this.w / 2);
+        const ay = Math.floor(py + this.h);
+        ctx.translate(ax, ay);
+        if(this.facing === -1) ctx.scale(-1, 1);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(Game.wbcRunRight, col*fw, 0, fw, fh, Math.round(-dispW/2), Math.round(-dispH), dispW, dispH);
         ctx.restore();
       }
       // ★ 走路：6 帧 walk 精灵表循环
@@ -289,6 +313,27 @@ Player.prototype.draw = function(ctx, camX) {
         if(this.facing === 1) ctx.scale(-1, 1);
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(Game.rbcCrouch, 0, 0, cfw, cfh, Math.round(-cdispW/2), Math.round(-cdispH), cdispW, cdispH);
+        ctx.restore();
+      }
+      // ★ 奔跑（双击方向键触发）：参考红细胞奔跑 GIF 的跑酷模组，6 帧 [A,B,A,B,A,B] 循环
+      //    优先级在走路之前；与 WBC run 共享同一套状态机（sprinting），动画/步态与走路完全不同
+      else if(this.sprinting && this.onGround && ((this.playerIndex===1?Game.keysP2:Game.keys).left || (this.playerIndex===1?Game.keysP2:Game.keys).right || Math.abs(this.vx) > 0.3) && Game.rbcRunRight && Game.rbcRunRight.complete && Game.rbcRunRight.naturalWidth > 0){
+        const fw = Game.rbcRunFrameSize.w;
+        const fh = Game.rbcRunFrameSize.h;
+        const frames = Game.rbcRunSpriteFrames;
+        const fidx = Math.floor(this.animT / 2) % frames.length;  // 每 2 帧切一帧，比 walk(/4)更快
+        const col = frames[fidx];
+        const dispH = 80;
+        const dispW = Math.floor(dispH * (fw / fh));
+        ctx.save();
+        const ax = Math.floor(px + this.w / 2);
+        const ay = Math.floor(py + this.h);
+        ctx.translate(ax, ay);
+        // 与 WBC 奔跑分支完全同构：底图为右朝向，向左跑时水平翻转
+        if(this.facing === -1) ctx.scale(-1, 1);
+        ctx.imageSmoothingEnabled = false;
+        // 精灵表已 bbox 裁切 + 底对齐，直接画即可
+        ctx.drawImage(Game.rbcRunRight, col*fw, 0, fw, fh, Math.round(-dispW/2), Math.round(-dispH), dispW, dispH);
         ctx.restore();
       }
       // ★ 走路用 v1 6 帧 walk 精灵表循环（视频提取）

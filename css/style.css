@@ -144,6 +144,11 @@ body{
 }
 #music-btn:hover{opacity:1;transform:scale(1.15);filter:drop-shadow(0 0 4px #fff);}
 #music-btn.off{opacity:.45;filter:grayscale(1);}
+/* BGM 音量滑块（HUD 内与暂停面板共用） */
+.bgm-slider{ accent-color:#5ad; cursor:pointer; height:16px; pointer-events:auto; }
+#bgm-volume{ width:64px; vertical-align:middle; }
+.bgm-vol-row{ display:flex; align-items:center; gap:10px; justify-content:center; margin-top:12px; color:#cde; font-size:14px; }
+#bgm-volume-pause{ width:180px; }
 #timer{font-family:monospace;color:#7ac;font-weight:600;}
 #memory-icon{
   font-size:16px;opacity:.3;transition:all .3s ease;
@@ -652,7 +657,6 @@ body{
 #death-panel{z-index:45;background:rgba(10,10,18,.96);}
 #death-panel h1{font-size:28px;color:#ff4757;margin-bottom:4px;}
 #death-panel h3{font-size:18px;color:#ffd700;margin-bottom:4px;}
-#death-panel #death-msg{font-size:15px;color:#ccc;margin:8px 0;}
 .death-cells{display:flex;gap:14px;justify-content:center;align-items:center;margin:18px 0;}
 .death-cell-avatar{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 0 6px rgba(255,71,87,.5));transition:filter .3s ease,opacity .3s ease;}
 .death-cell-avatar.lost{filter:grayscale(1) brightness(.4) drop-shadow(0 0 4px rgba(80,80,100,.3));opacity:.5;}

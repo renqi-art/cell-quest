@@ -47,6 +47,7 @@
         <span id="timer">00:00.00</span>
         <span id="memory-icon" title="记忆细胞">🧬</span>
         <span id="music-btn" title="背景音乐开关 (M)">🎵</span>
+        <input type="range" id="bgm-volume" class="bgm-slider" min="0" max="100" value="50" title="背景音乐音量">
       </div>
     </div>
     <div id="hud-bottom">
@@ -87,13 +88,12 @@
   <div id="death-panel" class="overlay hidden">
     <h1>细胞凋亡</h1>
     <h3 id="death-cell-name">红细胞</h3>
-    <p id="death-msg">损失了 1 个细胞</p>
     <div class="death-cells" id="death-cells-display">
       <img class="death-cell-avatar" id="death-cell-avatar" src="images/avatar-rbc.webp" alt="">
-      <span class="death-cell-count" id="death-cells-count">1</span>
+      <span class="death-cell-count" id="death-cells-count">001已死亡</span>
     </div>
     <div class="btn-row" style="flex-direction:column;">
-      <button class="btn primary" id="btn-retry">继续挑战 (剩余细胞: <span id="death-cells-count-btn">2</span>)</button>
+      <button class="btn primary" id="btn-retry">继续挑战</button>
       <button class="btn" id="btn-death-quit">关卡选择</button>
       <button class="btn" id="btn-death-menu">🏠 返回首页</button>
     </div>
@@ -189,6 +189,7 @@
     <div class="btn-row" style="flex-direction:column;">
       <button class="btn primary" id="btn-resume">继续游戏</button>
       <button class="btn" id="btn-music-pause">🎵 背景音乐：开</button>
+      <div class="bgm-vol-row"><span>🔊 音量</span><input type="range" id="bgm-volume-pause" class="bgm-slider" min="0" max="100" value="50"></div>
       <button class="btn" id="btn-quit">关卡选择</button>
     </div>
   </div>
@@ -272,22 +273,22 @@
   </div>
 </div>
 
-<script src="js/config-constants.js?v=1"></script>
+<script src="js/config-constants.js?v=2"></script>
 <script src="js/config-game.js?v=2"></script>
 <script src="js/config.js?v=98"></script>
-<script src="js/entities-player.js?v=2"></script>
+<script src="js/entities-player.js?v=5"></script>
 <script src="js/entities-player-skills.js?v=1"></script>
-<script src="js/entities-player-draw.js?v=1"></script>
-<script src="js/entities-combat.js?v=1"></script>
+<script src="js/entities-player-draw.js?v=5"></script>
+<script src="js/entities-combat.js?v=4"></script>
 <script src="js/entities-world.js?v=1"></script>
 <script src="js/levels/level0_blood.js?v=6"></script>
 <script src="js/levels/level1_wbc.js?v=9"></script>
-<script src="js/levels/level2_alveoli.js?v=5"></script>
+<script src="js/levels/level2_alveoli.js?v=6"></script>
 <script src="js/levels/level3_vessel.js?v=5"></script>
 <script src="js/levels/level4_lymph.js?v=5"></script>
 <script src="js/levels/level5_boss.js?v=5"></script>
 <script src="js/levels.js?v=81"></script>
-<script src="js/sprites.js?_nc=4"></script>
+<script src="js/sprites.js?_nc=8"></script>
 <script src="js/ai-levels.js?v=3"></script>
 <script src="js/main-menu.js?v=1"></script>
 <script src="js/mobile/capability.js?v=1"></script>
@@ -295,7 +296,7 @@
 <script src="js/mobile/controls-overlay.js?v=1"></script>
 <script src="js/mobile/viewport-coordinator.js?v=1"></script>
 <script src="js/mobile/index.js?v=1"></script>
-<script src="js/game-level.js?v=1"></script>
+<script src="js/game-level.js?v=3"></script>
 <script src="js/game-input.js?v=1"></script>
 <script src="js/game-update.js?v=1"></script>
 <script src="js/game-render.js?v=1"></script>

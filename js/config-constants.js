@@ -33,7 +33,7 @@ const LOW_SPEED_MULT = 0.55;  // 低能量速度倍率
 const SHIELD_DURATION= 600;   // 10秒
 const OXYGEN_DURATION= 600;
 const COMPLEMENT_AMMO= 5;
-const BLOOD_LOSS_DRAIN = 0.4; // 每步扣除能量
+const BLOOD_LOSS_DRAIN = 0.2; // 每步扣除能量（已减半，踩血地块更耐用；红细胞仍额外×0.4）
 const INVINCIBLE_FRAMES = 90; // 1.5秒无敌
 
 // ===== 炎症潮汐 =====
@@ -82,18 +82,18 @@ const AOE_DURATION= 180; // 3秒
 
 // ===== 四段生理剧情 =====
 const BLEEDING_PHASE_FRAMES = 480;  // 8秒开局出血期
-const BLEEDING_DRAIN = 0.02;        // 出血期每帧扣能量（已放慢）
+const BLEEDING_DRAIN = 0.01;        // 出血期每帧扣能量（已放慢→再减半，开局能量更耐用）
 const GAP_BLOOD_MULT = 2;           // 非血小板过缺口失血倍率
 const INFLAMMATION_X = 39 * TILE;   // 炎症区起始x坐标
 
 // ===== 脓液地块 =====
 const PUS_DURATION = 360;           // 6秒留存
 const PUS_SLOW_MULT = 0.7;          // 脓液减速倍率
-const PUS_DRAIN = 0.1;              // 脓液每帧扣能量
+const PUS_DRAIN = 0.05;             // 脓液每帧扣能量（已减半，红细胞踩脓液更持久）
 
 // ===== 红细胞氧气压制领域 =====
 const OXY_FIELD_TRIGGER = 120;      // 2秒触发
-const OXY_FIELD_DRAIN = 0.08;       // 每帧消耗能量维持领域
+const OXY_FIELD_DRAIN = 0.04;       // 每帧消耗能量维持领域（已减半，红细胞氧气领域更持久）
 const OXY_FIELD_TIDE_REDUCTION = 0.5; // 潮汐效果减半
 const OXY_FIELD_STOMP_BONUS = 1;    // 白细胞踩踏额外伤害
 const OXY_FIELD_PUS_FADE = 2;       // 脓液加速消退倍率
@@ -112,7 +112,7 @@ const DRINK_ENERGY  = 0;   // 饮料不再提供能量
 const NUTRITION_ENERGY = 0; // 营养包不再提供能量（仅作收集计数）
 
 // ===== ATP 能源系统 =====
-const PASSIVE_DRAIN = 0.005;   // 基础代谢消耗/帧（已放慢，能量可在正常游玩时长内维持）
+const PASSIVE_DRAIN = 0.0025;  // 基础代谢消耗/帧（已放慢→再减半，能量时长翻倍，全关卡全细胞更耐用）
 const RBC_OXY_REGEN = 0.06;    // RBC 氧气领域回能/帧
 const KILL_ATP_SMALL = 15;     // 普通敌人击杀 +ATP
 const KILL_ATP_LARGE = 30;     // 大型敌人击杀 +ATP
