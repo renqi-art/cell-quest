@@ -23,6 +23,7 @@ const Game = {
   prevKeys: {},
   canvas: null, ctx: null,
   level: null, player: null,
+  bosses: [],            // 多 Boss：每关可投放多个，彼此独立（HP/技能/形象）
   camera: { x:0, y:0, shake:0 },
   particles: [],
   tempPlatforms: [],
@@ -135,8 +136,10 @@ const Sfx = {
     o.connect(g); g.connect(this.ctx.destination);
     o.start(); o.stop(this.ctx.currentTime + dur);
   },
-  jump(){ this.beep(420, .12, 'square', .06); },
-  doubleJump(){ this.beep(620, .1, 'square', .05); this.beep(820, .1, 'square', .04); },
+  // ★ 跳跃音效音量刻意调大（0.06/0.05/0.04 → 0.18/0.15/0.12），明显高于背景音乐，
+  //   不被 BGM 覆盖；与 BGM 走不同输出通道（Web Audio ctx vs HTMLAudioElement），互不干扰。
+  jump(){ this.beep(420, .13, 'square', .18); },
+  doubleJump(){ this.beep(620, .12, 'square', .15); this.beep(820, .12, 'square', .12); },
   stomp(){ this.beep(180, .15, 'sawtooth', .08); this.beep(120, .2, 'square', .06); },
   hit(){ this.beep(80, .25, 'sawtooth', .1); },
   coin(){ this.beep(880, .08, 'square', .05); this.beep(1100, .08, 'square', .05); },
@@ -213,6 +216,11 @@ const Sfx = {
   // ===== 背景音乐独立开关（仅控制 BGM，绝对不影响动作/拾取/警报等音效）=====
   initBgmState(){
     try{ this.bgmEnabled = localStorage.getItem('cellQuest_bgmOff') !== '1'; }catch(e){ this.bgmEnabled = true; }
+    // 读取已保存的 BGM 音量（0~100 → 0~1），默认 0.5
+    try{
+      const v = parseInt(localStorage.getItem('cellQuest_bgmVol'), 10);
+      if(!isNaN(v)) this._bgmFileVol = Math.max(0, Math.min(1, v / 100));
+    }catch(e){}
     return this.bgmEnabled;
   },
   setBgmEnabled(on){
@@ -220,7 +228,6 @@ const Sfx = {
     try{ localStorage.setItem('cellQuest_bgmOff', this.bgmEnabled ? '0' : '1'); }catch(e){}
     if(!this.bgmEnabled){
       this.stopFileBgm();
-      this.stopBgm();
     } else {
       // 按当前所在场景恢复对应 BGM（关卡进行中/暂停/结算/死亡 → level；菜单/大厅 → menu）
       const inLevelCtx = (typeof Game !== 'undefined' && Game) &&
@@ -230,98 +237,21 @@ const Sfx = {
   },
   toggleBgm(){ this.setBgmEnabled(!this.bgmEnabled); return this.bgmEnabled; },
 
-  // 1) 循环背景音乐（音量最低，仅作点缀）
-  //    mode: 'menu'  = 舒缓（主菜单 / 选关界面）
-  //          'level' = 稍活泼、有激情（正式关卡，带轻底鼓律动）
-  startBgm(mode){
-    if(!this.bgmEnabled) return;
-    mode = mode || this._bgmMode || 'menu';
-    this._bgmMode = mode;
-    this._initTiers();
-    if(!this.ctx) return;
-    if(this._bgmOn){
-      if(this._bgmMode === mode) return; // 同模式不重复启动
-      this.stopBgm();                    // 切换模式：先停后启
-    }
-    this._bgmOn = true;
-
-    // 两套风格参数
-    const CFG = mode === 'level'
-      ? { // 关卡：明亮、稍快、带轻底鼓，更"有激情"
-          scale:[261.63, 329.63, 392.00, 440.00, 523.25, 659.25],
-          motif:[0,2,4,5, 4,2,3,4, 5,4,2,0, 3,4,2,-1],
-          bass:[130.81, 130.81, 174.61, 196.00],
-          stepDur:0.34, noteGain:0.5, bassGain:0.55, lp:2200, kick:true
-        }
-      : { // 菜单：低沉、舒缓、留白多
-          scale:[196.00, 233.08, 261.63, 311.13, 349.23, 392.00],
-          motif:[0,2,4,2, 3,2,-1,-1, 4,3,2,0, -1,-1,-1,-1],
-          bass:[98.00, 98.00, 130.81, 116.54],
-          stepDur:0.6, noteGain:0.42, bassGain:0.5, lp:1200, kick:false
-        };
-
-    // 整体低通，去掉高频毛刺
-    const lp = this.ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = CFG.lp;
-    lp.connect(this._gBgm);
-
-    const playNote = (freq, time, dur, peak, type) => {
-      if(!freq || freq <= 0) return;
-      const o = this.ctx.createOscillator();
-      o.type = type || 'triangle';
-      o.frequency.value = freq;
-      const g = this.ctx.createGain();
-      g.gain.setValueAtTime(0.0001, time);
-      g.gain.exponentialRampToValueAtTime(peak, time + 0.05);
-      g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
-      o.connect(g); g.connect(lp);
-      o.start(time); o.stop(time + dur + 0.05);
-    };
-    // 轻底鼓：短促低频下坠，增加律动（仅关卡版）
-    const playKick = (time) => {
-      const o = this.ctx.createOscillator(); o.type = 'sine';
-      const g = this.ctx.createGain();
-      o.frequency.setValueAtTime(120, time);
-      o.frequency.exponentialRampToValueAtTime(45, time + 0.12);
-      g.gain.setValueAtTime(0.0001, time);
-      g.gain.exponentialRampToValueAtTime(0.9, time + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, time + 0.16);
-      o.connect(g); g.connect(this._gBgm);
-      o.start(time); o.stop(time + 0.18);
-    };
-
-    let step = 0;
-    let nextTime = this._now() + 0.2;
-    const tick = () => {
-      if(!this._bgmOn) return;
-      // 音频上下文未解锁（浏览器自动播放策略）时仅等待，不排程
-      if(!this.ctx || this.ctx.state !== 'running'){ this._bgmTimer = setTimeout(tick, 250); return; }
-      const now = this._now();
-      if(nextTime < now) nextTime = now + 0.2; // 从挂起恢复后纠正排程时间，避免一次性补播
-      const ahead = now + 1.0; // 提前 1 秒排程，避免卡顿
-      while(nextTime < ahead){
-        const idx = CFG.motif[step % CFG.motif.length];
-        if(idx >= 0) playNote(CFG.scale[idx], nextTime, CFG.stepDur * 1.7, CFG.noteGain, 'triangle');
-        if(step % 4 === 0){
-          const b = CFG.bass[(step / 4) % CFG.bass.length];
-          playNote(b, nextTime, CFG.stepDur * 3.4, CFG.bassGain, 'sine');
-          if(CFG.kick) playKick(nextTime);
-        }
-        step++;
-        nextTime += CFG.stepDur;
-      }
-      this._bgmTimer = setTimeout(tick, 250);
-    };
-    tick();
-  },
-  stopBgm(){
-    this._bgmOn = false;
-    if(this._bgmTimer){ clearTimeout(this._bgmTimer); this._bgmTimer = null; }
-    if(this._bgmNodes){ this._bgmNodes.forEach(n => { try{ n.stop && n.stop(); }catch(e){} }); this._bgmNodes = null; }
+  // ===== 背景音乐音量（独立于开关，0~1，持久化到 localStorage）=====
+  getBgmVolume(){ return this._bgmFileVol; },
+  setBgmVolume(v01){
+    v01 = Math.max(0, Math.min(1, v01));
+    this._bgmFileVol = v01;
+    try{ localStorage.setItem('cellQuest_bgmVol', String(Math.round(v01 * 100))); }catch(e){}
+    // 实时应用到正在播放的 BGM（muted 状态不覆盖静音）
+    if(this._bgmFileEl && !this.muted) this._bgmFileEl.volume = v01;
   },
 
-  // 文件型 BGM：真正循环播放用户上传的 mp3（audio/bgm_loop.mp3 等）
-  // 与上面的合成 BGM（startBgm）互不干扰、互不覆盖；用于实际游玩入口（老版 js 引擎）。
+  // 合成式 BGM（startBgm/stopBgm）已移除：当前背景音乐统一为文件型 startFileBgm，
+  // 全部关卡/菜单均循环播放用户指定的同一首音频（audio/bgm_loop.mp3），由 bgmEnabled 控制开关。
+
+  // 文件型 BGM：循环播放用户指定的同一首背景音乐（audio/bgm_loop.mp3）。
+  // 菜单 / 关卡统一使用这一首；开关由 bgmEnabled 控制（M 键 / 音乐按钮 / localStorage）。
   startFileBgm(mode){
     if(!this.bgmEnabled) return;
     mode = mode || 'menu';
@@ -329,8 +259,7 @@ const Sfx = {
     if(this._bgmFileMode === mode && this._bgmFileEl && !this._bgmFileEl.paused) return;
     this.stopFileBgm();
     this._bgmFileMode = mode;
-    const MAP = { menu: 'audio/menu_bgm.mp3', level: 'audio/level_bgm.mp3' };
-    const src = MAP[mode] || 'audio/bgm_loop.mp3';
+    const src = 'audio/bgm_loop.mp3';
     const el = new Audio(src);
     el.loop = true;
     el.volume = this.muted ? 0 : this._bgmFileVol;

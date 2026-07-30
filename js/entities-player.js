@@ -18,6 +18,7 @@ class Player {
     this.sprinting = false;
     this.lastTapDir = 0;         // 上次按下的方向
     this.lastTapTime = 0;        // 上次按下的时间(帧)
+    this._sprintMinFrames = 0;   // 奔跑保底维持帧数（防止单帧抖动闪回走路）
     this.sprintDrainTimer = 0;   // 奔跑额外消耗计时
     this._switchCD = 0;          // 细胞切换冷却
     this.health = 100;
@@ -153,18 +154,7 @@ class Player {
         }
       }
       // 突进对Boss造成伤害
-      if(Game.boss && Game.boss.alive && rectOverlap(this, Game.boss)){
-        Game.boss.hp -= 2;
-        Game.boss.flashTimer = 8;
-        spawnParticles(Game.boss.x+Game.boss.w/2, Game.boss.y+Game.boss.h/2, C.swordGlow, 12, 3);
-        if(Game.boss.hp <= 0){
-          Game.boss.alive = false;
-          Game.stats.kills++;
-          spawnParticles(Game.boss.x+Game.boss.w/2, Game.boss.y+Game.boss.h/2, C.boss, 30, 5);
-          Sfx.complete();
-          showToast('Boss 已击杀！');
-        }
-      }
+      for(const b of Game.bosses){ if(!b.alive) continue; if(rectOverlap(this, b)){ b.hp -= 2; b.flashTimer = 8; spawnParticles(b.x+b.w/2, b.y+b.h/2, C.swordGlow, 12, 3); if(b.hp <= 0){ b.alive = false; Game.stats.kills++; spawnParticles(b.x+b.w/2, b.y+b.h/2, C.boss, 30, 5); Sfx.complete(); showToast('Boss 已击杀！'); } } }
       if(this.dashTimer <= 0) this.vx *= 0.3;
       if(this.playerIndex === 1) Game.prevKeysP2 = {...Game.keysP2};
       else Game.prevKeys = {...Game.keys};
@@ -197,10 +187,7 @@ class Player {
           }
         }
       }
-      if(Game.boss && Game.boss.alive && rectOverlap(this, Game.boss)){
-        Game.boss.hp -= PHAGO_CHARGE_DMG; Game.boss.flashTimer = 8;
-        spawnParticles(Game.boss.x + Game.boss.w/2, Game.boss.y + Game.boss.h/2, C.wbc, 12, 3);
-      }
+      for(const b of Game.bosses){ if(!b.alive) continue; if(rectOverlap(this, b)){ b.hp -= PHAGO_CHARGE_DMG; b.flashTimer = 8; spawnParticles(b.x + b.w/2, b.y + b.h/2, C.wbc, 12, 3); } }
       if(this.phagoChargeTimer <= 0) this.vx *= 0.3;
       if(this.playerIndex === 1) Game.prevKeysP2 = {...Game.keysP2};
       else Game.prevKeys = {...Game.keys};
@@ -291,26 +278,48 @@ class Player {
     // 趋化因子加速
     if(this.onChemokine) speedMul *= 1.5;
 
-    // v3: 奔跑模式 — 双击方向键触发(300ms内)
+    // v3: 奔跑模式 — 双击方向键触发（任意时刻稳定可触发，支持无限次重复）
+    // 关键修复：
+    //   * 去除 "&& !this.sprinting" 门控 —— 否则奔跑中 lastTapTime/lastTapDir 被冻结成
+    //     陈旧值，导致第二次双击因历史错位而静默失败，退回快走。
+    //   * 每次"按键下落沿"都刷新点击历史，双击判定不再依赖上一轮奔跑的残留状态。
+    //   * 放宽双击窗口到 26 帧(~433ms)，对手感更宽容、稳定触发。
+    //   * 另设 _sprintMinFrames 保底：成功触发后至少维持数帧奔跑，避免单帧输入抖动闪回走路。
     if(this.onGround && !this.crouching){
-      if(k.left && !pk.left && !this.sprinting){
-        if(this.lastTapDir === -1 && Game.frame - this.lastTapTime < 18){
-          this.sprinting = true; // 双击左→奔跑
+      const SPRINT_TAP_WINDOW = 26; // 双击判定窗口(帧) ≈ 433ms，覆盖任何"刻意双击"
+      const onLeftEdge  = k.left  && !pk.left;
+      const onRightEdge = k.right && !pk.right;
+      if(onLeftEdge){
+        if(this.lastTapDir === -1 && (Game.frame - this.lastTapTime) < SPRINT_TAP_WINDOW){
+          this.sprinting = true;   // 窗口内同方向第二次按下 → 触发奔跑
+          this._sprintMinFrames = 10;
+          // 触发后重置点击历史：下一次奔跑必须是"两个全新按键"，避免单次轻点被旧触发误配
+          this.lastTapDir = 0; this.lastTapTime = -9999;
+        } else {
+          this.lastTapDir = -1; this.lastTapTime = Game.frame;
         }
-        this.lastTapDir = -1; this.lastTapTime = Game.frame;
       }
-      if(k.right && !pk.right && !this.sprinting){
-        if(this.lastTapDir === 1 && Game.frame - this.lastTapTime < 18){
-          this.sprinting = true; // 双击右→奔跑
+      if(onRightEdge){
+        if(this.lastTapDir === 1 && (Game.frame - this.lastTapTime) < SPRINT_TAP_WINDOW){
+          this.sprinting = true;   // 双击右→奔跑
+          this._sprintMinFrames = 10;
+          this.lastTapDir = 0; this.lastTapTime = -9999;
+        } else {
+          this.lastTapDir = 1; this.lastTapTime = Game.frame;
         }
-        this.lastTapDir = 1; this.lastTapTime = Game.frame;
       }
-      // 松开方向键停止奔跑
+      // 松开方向键 → 停止奔跑（松开后才可再次双击触发，逻辑自洽）
       if(!k.left && !k.right) this.sprinting = false;
-      // 跳跃或能量过低时停止奔跑
+      // 离地或能量过低 → 停止奔跑
       if(!this.onGround || Game.globalEnergy < 15) this.sprinting = false;
+      // 保底维持：刚触发后的若干帧，只要仍按着方向键就保持奔跑，杜绝动画闪回
+      if(this._sprintMinFrames > 0){
+        this._sprintMinFrames--;
+        if(k.left || k.right) this.sprinting = true;
+      }
     } else {
       this.sprinting = false;
+      this._sprintMinFrames = 0;
     }
     if(this.sprinting){
       speedMul *= 1.5; // 奔跑1.5倍速
@@ -693,13 +702,13 @@ class Player {
       updateHUD();
       return;
     }
-    this.health -= 5;
+    this.health -= 10;
     // RBC 被动【废气回流】：受击释放 CO₂ 雾气范围场，范围内敌人减速
     if(this.cellType === 3 && this.co2Cooldown <= 0){
       this.co2Cooldown = RBC_CO2_CD;
       this.co2Reflow(level);
     }
-    Game.damageNumbers.push(new DamageNumber(this.x+this.w/2,this.y-6,'-5','#ff4444'));
+    Game.damageNumbers.push(new DamageNumber(this.x+this.w/2,this.y-6,'-10','#ff4444'));
     this.invincible = INVINCIBLE_FRAMES;
     Game.camera.shake = 8;
     Sfx.hit();
@@ -745,6 +754,8 @@ class Player {
     level.respawnEnemies();
 
     // 显示死亡面板
+    Game.deathSeq = (Game.deathSeq || 0) + 1;   // 无限复活：死亡序号永久递增
+    saveDeathSeq();
     Game.deathsThisRun++;    // v3: 自适应难度追踪
     Game.state = 'dead';
     if(Game.mobile){ Game.mobile.input.releaseAll(); Game.mobile.overlay.setDisabled(true); }

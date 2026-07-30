@@ -191,7 +191,7 @@ function levelComplete(){
   // v3: 双评分制星级评定
   let stars = 1;
   // 击杀完成度
-  const totalEnemies = Game.level.enemies.length + (Game.boss ? 1 : 0);
+  const totalEnemies = Game.level.enemies.length + Game.bosses.length;
   const killPct = totalEnemies > 0 ? Game.stats.kills / totalEnemies : 1;
   // 收集完成度
   const collectPct = Game.totalItems > 0 ? Game.itemsCollected / Game.totalItems : 1;
@@ -332,7 +332,7 @@ function backToHub(){
   Game.tutorialPause = false;
   Game.memoryCardOpen = false;
   Game.oxyField = false;
-  Game.boss = null;
+  Game.bosses = [];
   Game.swordTimer = 0;
   Game.swordCooldown = 0;
   Game.pusTiles = [];
@@ -504,6 +504,7 @@ function LoadLevel(n, cellTypeOverride){
   Game.healingProgress = 0;
   Game.cells = 3;          // 初始化细胞数（生命数）
   Game.deathsThisRun = 0;   // v3: 本局死亡计数
+  Game.deathSeq = loadDeathSeq(); // 载入本关卡永久死亡序号（无限复活，不重置）
   Game.keysP2 = {};          // v3: 初始化P2按键
   Game.prevKeysP2 = {};
   // 挥剑状态重置（Boss 由关卡地图 b 瓦片创建，不在此处清空）
@@ -654,6 +655,19 @@ function level3Mechanics(player, level){ /* 血管奔流：血流冲击/高速�
 function level4Mechanics(player, level){ /* 淋巴结：免疫中枢/强敌AI */ }
 function level5Mechanics(player, level){ /* Boss感染：三阶段Boss战 */ }
 
+// ===== 死亡编号（无限复活 · 永久递增 · 永久记录） =====
+// 每个关卡独立的死亡序号，持久化到 localStorage，刷新/重进关卡都继续累计，永不回收。
+function deathSeqKey(){
+  return 'cellQuest_deathSeq_' + (Game.levelIndex >= 0 ? Game.levelIndex : 'preview');
+}
+function loadDeathSeq(){
+  try { return parseInt(localStorage.getItem(deathSeqKey())) || 0; }
+  catch(e){ return 0; }
+}
+function saveDeathSeq(){
+  try { localStorage.setItem(deathSeqKey(), String(Game.deathSeq || 0)); } catch(e){}
+}
+
 // ===== 死亡面板 =====
 function showDeathPanel(){
   console.error('[DEBUG] showDeathPanel called! player=' + (Game.player ? Game.player.y : 'null') + ' state=' + Game.state);
@@ -667,33 +681,17 @@ function showDeathPanel(){
   const avatarMap = {1:'images/avatar-wbc.webp', 2:'images/avatar-plt.webp', 3:'images/avatar-rbc.webp'};
   const avatarEl = $('death-cell-avatar');
   avatarEl.src = avatarMap[Game.player.cellType] || 'images/avatar-rbc.webp';
-  // Game.cells <= 0 时头像变灰
-  if(Game.cells <= 0){
-    avatarEl.classList.add('lost');
-  } else {
-    avatarEl.classList.remove('lost');
-  }
+  avatarEl.classList.remove('lost'); // 无限复活：头像不再变灰
 
-  // 数字 -1
+  // 死亡编号标签（永久递增：001、002、003……）
   const countEl = $('death-cells-count');
-  countEl.textContent = Game.cells;
-  if(Game.cells <= 0){
-    countEl.classList.add('lost');
-  } else {
-    countEl.classList.remove('lost');
-  }
+  countEl.textContent = String(Game.deathSeq).padStart(3, '0') + '已死亡';
+  countEl.classList.remove('lost');
 
-  // 更新重试按钮
+  // 更新重试按钮（始终可点击，无限复活）
   const retryBtn = $('btn-retry');
-  const countBtn = $('death-cells-count-btn');
-  if(countBtn) countBtn.textContent = Game.cells;
-  if(Game.cells <= 0){
-    retryBtn.disabled = true;
-    retryBtn.innerHTML = '细胞耗尽，无法继续挑战';
-  } else {
-    retryBtn.disabled = false;
-    retryBtn.innerHTML = '继续挑战 (剩余细胞: <span id="death-cells-count-btn">' + Game.cells + ')</span>';
-  }
+  retryBtn.disabled = false;
+  retryBtn.innerHTML = '继续挑战';
 
   // 显示面板，隐藏 HUD
   $('death-panel').classList.remove('hidden');
@@ -707,8 +705,6 @@ function showDeathPanel(){
 }
 
 function retryFromDeath(){
-  if(Game.cells <= 0) return;
-
   const lvl = Game.level;
   if(!lvl) return;
 
@@ -726,11 +722,9 @@ function retryFromDeath(){
   // 兼容旧代码
   Game.player = Game.players[0];
 
-  // v3: 记忆细胞 — 恢复保留的能量
-  if(Game._deathEnergyKeep > 0){
-    Game.globalEnergy = Math.min(getMaxEnergy(), Game._deathEnergyKeep);
-    Game._deathEnergyKeep = 0;
-  }
+  // 复活切换编号：ATP 直接恢复为满格（每次切换到新编号角色，能量重置满格）
+  Game.globalEnergy = getMaxEnergy();
+  Game._deathEnergyKeep = 0;
 
   // 隐藏死亡面板
   $('death-panel').classList.add('hidden');
@@ -871,6 +865,25 @@ function init(){
   bindClick('btn-music-menu', ()=>{ toggleMusic(); });
   bindClick('btn-music-hub', ()=>{ toggleMusic(); });
 
+  // ===== 背景音乐音量滑块（HUD 与暂停面板共享状态，双向同步）=====
+  function syncBgmVolumeUI(){
+    const v = String(Math.round(Sfx.getBgmVolume() * 100));
+    const a = $('bgm-volume'); if(a) a.value = v;
+    const b = $('bgm-volume-pause'); if(b) b.value = v;
+  }
+  ['bgm-volume','bgm-volume-pause'].forEach(id => {
+    const el = $(id);
+    if(el) el.addEventListener('input', (e) => {
+      const pct = parseInt(e.target.value, 10);
+      Sfx.setBgmVolume(pct / 100);          // 实时改音量并持久化
+      // 同步另一个滑块
+      ['bgm-volume','bgm-volume-pause'].forEach(oid => {
+        if(oid !== id){ const o = $(oid); if(o) o.value = e.target.value; }
+      });
+    });
+  });
+  syncBgmVolumeUI();
+
   // v3: AI 生成关卡按钮
   bindClick('btn-hub-ai', ()=>{ showAIGeneratePanel(); });
 
@@ -989,7 +1002,7 @@ window.addEventListener('storage', function(e) {
 
 // Refresh builtin level data from server (for after editor saves to file)
 async function refreshBuiltinLevels() {
-  const files = ['level0_blood','level1_wbc','level2_alveoli','level3_vessel','level4_lymph','level5_boss'];
+  const files = ['level0_blood','level1_wbc','level2_alveoli','level3_vessel','level4_lymph'];
   let changed = false;
   for (let i = 0; i < files.length; i++) {
     try {

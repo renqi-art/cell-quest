@@ -49,6 +49,14 @@ function loadSprites(){
   Game.wbcWalkLeft.src = 'images/sprites/wbc-walk-left-v3.webp?v=2';
   Game.wbcWalkLeft.onload = function(){ DEBUG_SPRITES && console.log('[WBC] 左走v3加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
 
+  // ★ 奔跑（双击方向键触发）：v2 - 2 帧左右脚相反步态交替循环，去掉站姿过渡帧
+  Game.wbcRunRight = new Image();
+  Game.wbcRunRight.src = 'images/sprites/wbc-run-right-v2.webp?v=1';
+  Game.wbcRunRight.onload = function(){ DEBUG_SPRITES && console.log('[WBC] 右跑v2加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.wbcRunLeft = new Image();
+  Game.wbcRunLeft.src = 'images/sprites/wbc-run-left-v2.webp?v=1';
+  Game.wbcRunLeft.onload = function(){ DEBUG_SPRITES && console.log('[WBC] 左跑v2加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+
   Game.wbcIdleRight = new Image();
   Game.wbcIdleRight.src = 'images/sprites/wbc-idle-right.webp?v=1';
   Game.wbcIdleRight.onload = function(){ DEBUG_SPRITES && console.log('[WBC] 右idle加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
@@ -74,6 +82,7 @@ function loadSprites(){
   // WBC 帧配置
   Game.wbcActionFrameSize = { w: 441, h: 461 };
   Game.wbcWalkFrameSize = { w: 248, h: 372 };
+  Game.wbcRunFrameSize  = { w: 248, h: 372 };  // 奔跑：与走路同尺寸（参考 GIF 拆分 6 帧）
   Game.wbcIdleFrameSize = { w: 248, h: 372 };
   Game.wbcJumpFrameSize = { w: 248, h: 372 };
   Game.wbcCrouchFrameSize = { w: 248, h: 372 };
@@ -82,6 +91,7 @@ function loadSprites(){
   Game.wbcSpriteFrames = {
     idle: [0],
     walk: [0,1,2,3,4,5],
+    run:  [0,1,2,3,4,5],   // 奔跑帧序：与走路 6 帧对应，但内容是 GIF 跑酷模组
     jump: [0],
     crouch: [0],
     attack: [0, 0],
@@ -111,6 +121,17 @@ function loadSprites(){
   Game.rbcWalkLeft.onload = function(){ DEBUG_SPRITES && console.log('[RBC] 左走v7加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
   Game.rbcWalkFrameSize = { w: 256, h: 372 };
   Game.rbcWalkSpriteFrames = [0, 1, 2, 3, 4, 5];
+
+  // ★ RBC 奔跑（双击方向键触发）：v1 - 2 帧左右脚相反步态交替循环，参考红细胞奔跑 GIF
+  //   与白细胞 v2 手法一致：仅取 GIF 里左右脚相反方向的两帧，6 帧 [A,B,A,B,A,B] 循环
+  Game.rbcRunRight = new Image();
+  Game.rbcRunRight.src = 'images/sprites/rbc-run-right-v1.webp?v=2';
+  Game.rbcRunRight.onload = function(){ DEBUG_SPRITES && console.log('[RBC] 右跑v1加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.rbcRunLeft = new Image();
+  Game.rbcRunLeft.src = 'images/sprites/rbc-run-left-v1.webp?v=2';
+  Game.rbcRunLeft.onload = function(){ DEBUG_SPRITES && console.log('[RBC] 左跑v1加载完成:', this.naturalWidth + 'x' + this.naturalHeight); };
+  Game.rbcRunFrameSize = { w: 248, h: 372 };
+  Game.rbcRunSpriteFrames = [0, 1, 2, 3, 4, 5];  // 6 帧 [A,B,A,B,A,B] 经典 2 帧跑动循环
 
   // RBC idle
   Game.rbcIdleRight = new Image();
