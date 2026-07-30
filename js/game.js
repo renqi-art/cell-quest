@@ -782,8 +782,10 @@ function init(){
     const skip = $('npc-intro-skip');
     if(!wrap || !vid){ if(done) done(); return; }
     let finished = false;
+    let safety = null;
     const finish = ()=>{
       if(finished) return; finished = true;
+      if(safety) clearTimeout(safety);
       try{ vid.pause(); vid.removeAttribute('src'); vid.load(); }catch(e){}
       wrap.classList.add('hidden');
       window.removeEventListener('keydown', onKey, true);
@@ -808,6 +810,9 @@ function init(){
     vid.addEventListener('ended', finish, { once:true });
     // 兜底：视频加载/解码失败时不卡死，允许自动跳过进入主城
     vid.addEventListener('error', finish, { once:true });
+    // 二次兜底：若视频既不上 ended 也不触发 error（如某些环境流式传输挂起），
+    // 12 秒后强制跳过，确保一定能进入主城，不会卡在先导片。
+    safety = setTimeout(finish, 12000);
   }
 
   bindClick('btn-start', ()=>{

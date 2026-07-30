@@ -2,8 +2,13 @@
  * levels.js — 关卡汇总入口（数据在 js/levels/ 目录下各文件中）
  * ==================================================================== */
 
-// 内置关卡数据
-const _BUILTIN_LEVELS = [LEVEL_0, LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5];
+// 内置关卡数据。
+// 第 5 关（LEVEL_5）为 Boss 关，其数据定义在 js/levels/level5_boss.js。
+// 非 boss 版本不会加载该文件，因此这里对 LEVEL_5 做存在性守卫：
+// 缺失时仅纳入前 5 关（0~4），既避免 ReferenceError 导致整个 init 崩溃，
+// 也保证非 boss 版本不会出现 Boss 关入口。
+const _BUILTIN_LEVELS = [LEVEL_0, LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4];
+if (typeof LEVEL_5 !== 'undefined' && LEVEL_5) _BUILTIN_LEVELS.push(LEVEL_5);
 
 // 自定义关卡（从 localStorage 加载）
 const _CUSTOM_LEVELS = loadCustomLevels();
@@ -18,8 +23,10 @@ const _BUILTIN_DEFS = [
   { id:2, name:'蠕虫侵袭·食物中毒(下)', bgMusic:'lung',     enemies:['strep'], mechanics:['crouch','floatPlatform','tide'], checkpoint:true },
   { id:3, name:'呼吸道烽火·流行性感冒', bgMusic:'vessel',   enemies:[], mechanics:['bloodLoss','tide','oxyField','collect','pipe'], checkpoint:true },
   { id:4, name:'组织溃烂·真菌感染',      bgMusic:'lymph',    enemies:['staph','staphLarge','strep'], mechanics:['sword','dash','stomp'], checkpoint:true },
-  { id:5, name:'细胞畸变·癌细胞侵袭',    bgMusic:'boss',     enemies:['boss'], mechanics:['sword','dash','stomp','pipe'], checkpoint:true },
 ];
+if (typeof LEVEL_5 !== 'undefined' && LEVEL_5) {
+  _BUILTIN_DEFS.push({ id:5, name:'细胞畸变·癌细胞侵袭', bgMusic:'boss', enemies:['boss'], mechanics:['sword','dash','stomp','pipe'], checkpoint:true });
+}
 
 // ===== 关卡开场剧情（玩家载入关卡后强制触发，不可跳过）=====
 // 结构：每个关卡给出【树突状细胞】固定开场 + 三名可选角色各自一句回应。
