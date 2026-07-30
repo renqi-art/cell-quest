@@ -128,3 +128,10 @@ test('serves browser security headers', async () => {
   assert.match(response.headers.get('permissions-policy') || '', /camera=\(\)/);
   assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
 });
+
+test('serves versioned font assets with the correct MIME type', async () => {
+  const response = await fetch(`${BASE_URL}/fonts/phosphor-regular.woff2?v=1`);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'font/woff2');
+  assert.match(response.headers.get('cache-control') || '', /immutable/);
+});

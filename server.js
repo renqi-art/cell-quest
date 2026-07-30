@@ -35,12 +35,13 @@ const mime = {
   '.svg': 'image/svg+xml',
   '.json': 'application/json; charset=utf-8',
   '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
 };
 
 const PUBLIC_FILES = new Set(['/index.html', '/editor.html', '/deck.html', '/ai-settings.html']);
-const PUBLIC_PREFIXES = ['/js/', '/css/', '/images/', '/audio/'];
+const PUBLIC_PREFIXES = ['/js/', '/css/', '/images/', '/fonts/', '/audio/'];
 const LEVEL_FILENAME = /^level\d+_[a-z0-9_-]+\.js$/i;
 
 function sendJson(res, status, payload) {
