@@ -199,6 +199,40 @@ body{
 }
 .overlay.hidden{display:none;}
 
+/* ===== NPC 先导片全屏播放层 ===== */
+#npc-intro{
+  z-index:120;
+  background:#000;
+  backdrop-filter:none;
+  justify-content:center;
+  align-items:center;
+  cursor:pointer;
+}
+#npc-intro-video{
+  width:100%;
+  height:100%;
+  max-width:100vw;
+  max-height:100vh;
+  object-fit:contain;
+  background:#000;
+}
+#npc-intro-skip{
+  position:absolute;
+  top:18px;
+  right:18px;
+  z-index:2;
+  background:rgba(20,20,40,.7);
+  border:1px solid rgba(255,255,255,.35);
+  color:#fff;
+  padding:8px 18px;
+  font-size:14px;
+  border-radius:8px;
+  cursor:pointer;
+  pointer-events:auto;
+  transition:background .15s;
+}
+#npc-intro-skip:hover{ background:rgba(40,40,80,.9); }
+
 /* 主菜单背景 */
 #main-menu{
   background:url('../images/main-menu-bg.webp') center center / cover no-repeat;

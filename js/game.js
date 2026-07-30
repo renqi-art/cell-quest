@@ -781,6 +781,41 @@ function init(){
   loadAdaptiveDifficulty();  // v3: AI自适应难度
   setupInput();
 
+  // ===== NPC 先导片：点击「新的游戏」后全屏播放，结束/跳过后再进主城 =====
+  function playNpcIntro(done){
+    const wrap = $('npc-intro');
+    const vid = $('npc-intro-video');
+    const skip = $('npc-intro-skip');
+    if(!wrap || !vid){ if(done) done(); return; }
+    let finished = false;
+    const finish = ()=>{
+      if(finished) return; finished = true;
+      try{ vid.pause(); vid.removeAttribute('src'); vid.load(); }catch(e){}
+      wrap.classList.add('hidden');
+      window.removeEventListener('keydown', onKey, true);
+      if(skip) skip.removeEventListener('click', finish);
+      wrap.removeEventListener('click', onWrapClick);
+      if(done) done();
+    };
+    const onKey = (e)=>{
+      if(e.key === 'Escape' || e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); e.stopPropagation(); finish(); }
+    };
+    const onWrapClick = (e)=>{ if(e.target === skip) return; finish(); };
+    if(skip) skip.addEventListener('click', finish);
+    wrap.addEventListener('click', onWrapClick);
+    window.addEventListener('keydown', onKey, true);
+    wrap.classList.remove('hidden'); // 显示全屏视频层
+    vid.src = 'videos/npc-intro.mp4';
+    vid.load();
+    const p = vid.play();
+    if(p && typeof p.catch === 'function'){
+      p.catch(()=>{ /* 点击已是用户手势，通常可直接播放；被拦截时静待下次手势 */ });
+    }
+    vid.addEventListener('ended', finish, { once:true });
+    // 兜底：视频加载/解码失败时不卡死，允许自动跳过进入主城
+    vid.addEventListener('error', finish, { once:true });
+  }
+
   bindClick('btn-start', ()=>{
     Sfx.init();
     // 自动找第一个空存档作为新游戏
@@ -790,7 +825,8 @@ function init(){
       switchSlot(emptySlot);
       showToast('已创建新存档: 存档 '+(emptySlot+1));
     }
-    showHub(); $('game-container').focus();
+    // 先播放 NPC 先导片，结束/跳过后进入主城
+    playNpcIntro(()=>{ showHub(); $('game-container').focus(); });
   });
   // 主菜单快捷按钮: 在当前页面弹出面板,不跳转
   bindClick('btn-menu-slots', ()=>{ Sfx.init(); showSlotPanel(); });
