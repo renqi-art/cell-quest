@@ -386,6 +386,7 @@ function switchHubTab(tab){
 }
 
 function showHub(){
+  ensureGameAssetsLoaded();
   Game.state = 'hub';
   refreshCustomLevels();
   $('main-menu').classList.add('hidden');
