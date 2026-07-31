@@ -356,6 +356,7 @@ function LoadLevel(n, cellTypeOverride){
   if(Game.mobile && !Game.mobile.viewport.requestBattleStart(
     ()=>LoadLevel(n, cellTypeOverride)
   )) return false;
+  ensureGameAssetsLoaded();
   // Preview level: n is a string key
   if(typeof n === 'string' && _PREVIEW_LEVELS[n]){
     const mapData = _PREVIEW_LEVELS[n];
@@ -755,13 +756,18 @@ function preloadBgImages(){
   }
 }
 
+let gameAssetsPreloadStarted = false;
+function ensureGameAssetsLoaded(){
+  if(gameAssetsPreloadStarted) return;
+  gameAssetsPreloadStarted = true;
+  loadSprites();
+  preloadBgImages();
+}
+
 function init(){
   Game.canvas = $('canvas');
   Game.ctx = Game.canvas.getContext('2d');
   Game.ctx.imageSmoothingEnabled = false;
-
-  loadSprites();
-  preloadBgImages();
 
   // v3: 迁移旧版单存档 → 多栏位
   migrateOldSave();
@@ -815,6 +821,7 @@ function init(){
   }
 
   bindClick('btn-start', ()=>{
+    ensureGameAssetsLoaded();
     Sfx.init();
     // 自动找第一个空存档作为新游戏
     let emptySlot = -1;
