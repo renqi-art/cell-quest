@@ -3,7 +3,7 @@
   src: url("../fonts/phosphor-regular.woff2?v=1") format("woff2");
   font-weight: normal;
   font-style: normal;
-  font-display: block;
+  font-display: swap;
 }
 
 .ph {
@@ -57,7 +57,7 @@
 .main-menu-backdrop__glow {
   position: absolute;
   inset: 0;
-  background: url('../images/main-menu-bg-v4.png?v=1') center / cover no-repeat;
+  background: url('../images/main-menu-bg-v4.webp?v=1') center / cover no-repeat;
   transform-origin: 72% 46%;
   will-change: transform, filter, opacity;
 }
