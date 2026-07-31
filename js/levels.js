@@ -11,7 +11,8 @@ const _BUILTIN_LEVELS = [LEVEL_0, LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4];
 if (typeof LEVEL_5 !== 'undefined' && LEVEL_5) _BUILTIN_LEVELS.push(LEVEL_5);
 
 // 自定义关卡（从 localStorage 加载）
-const _CUSTOM_LEVELS = loadCustomLevels();
+// 防御性初始化：若 config.js 加载失败（如服务器 404），loadCustomLevels 可能未定义
+var _CUSTOM_LEVELS = (typeof loadCustomLevels === 'function') ? loadCustomLevels() : [];
 
 // 合并所有关卡
 const LEVEL_MAPS = [..._BUILTIN_LEVELS, ..._CUSTOM_LEVELS];
@@ -126,32 +127,39 @@ const MEMORY_CARD = {
 
 // 刷新关卡数据（编辑器保存后调用）
 function refreshCustomLevels(){
-  const newLevels = loadCustomLevels();
-  _CUSTOM_LEVELS.length = 0;
-  _CUSTOM_LEVELS.push(...newLevels);
-  // 同步更新 LEVEL_MAPS
-  LEVEL_MAPS.length = _BUILTIN_LEVELS.length;
-  LEVEL_MAPS.push(..._CUSTOM_LEVELS);
-  // 同步更新 LEVEL_DEFS
-  LEVEL_DEFS.length = _BUILTIN_DEFS.length;
-  const newDefs = _CUSTOM_LEVELS.map((lvl, i) => ({
-    id: 7 + i,
-    name: lvl.name || '自定义关卡',
-    icon: lvl.icon || '🗺️',
-    bgMusic: 'tutorial',
-    enemies: [],
-    mechanics: [],
-    checkpoint: false,
-    _isCustom: true,
-  }));
-  LEVEL_DEFS.push(...newDefs);
-  // 确保 Game 数组长度匹配（增加时填充，减少时裁剪）
-  const total = LEVEL_MAPS.length;
-  while(Game.unlocked.length < total) Game.unlocked.push(true);
-  while(Game.completed.length < total) Game.completed.push(false);
-  while(Game.stars.length < total) Game.stars.push(0);
-  // 删除时裁剪多余项
-  if(Game.unlocked.length > total) Game.unlocked.splice(total);
-  if(Game.completed.length > total) Game.completed.splice(total);
-  if(Game.stars.length > total) Game.stars.splice(total);
+  // 防御性保护：若依赖的脚本文件（config.js、levels/level*.js）在服务器上加载失败
+  // 导致顶层 const 变量处于 TDZ 未初始化状态，直接跳过避免 ReferenceError
+  try {
+    if (!Array.isArray(_CUSTOM_LEVELS) || !Array.isArray(LEVEL_MAPS) || !Array.isArray(LEVEL_DEFS)) return;
+    const newLevels = loadCustomLevels();
+    _CUSTOM_LEVELS.length = 0;
+    _CUSTOM_LEVELS.push(...newLevels);
+    // 同步更新 LEVEL_MAPS
+    LEVEL_MAPS.length = _BUILTIN_LEVELS.length;
+    LEVEL_MAPS.push(..._CUSTOM_LEVELS);
+    // 同步更新 LEVEL_DEFS
+    LEVEL_DEFS.length = _BUILTIN_DEFS.length;
+    const newDefs = _CUSTOM_LEVELS.map((lvl, i) => ({
+      id: 7 + i,
+      name: lvl.name || '自定义关卡',
+      icon: lvl.icon || '🗺️',
+      bgMusic: 'tutorial',
+      enemies: [],
+      mechanics: [],
+      checkpoint: false,
+      _isCustom: true,
+    }));
+    LEVEL_DEFS.push(...newDefs);
+    // 确保 Game 数组长度匹配（增加时填充，减少时裁剪）
+    const total = LEVEL_MAPS.length;
+    while(Game.unlocked.length < total) Game.unlocked.push(true);
+    while(Game.completed.length < total) Game.completed.push(false);
+    while(Game.stars.length < total) Game.stars.push(0);
+    // 删除时裁剪多余项
+    if(Game.unlocked.length > total) Game.unlocked.splice(total);
+    if(Game.completed.length > total) Game.completed.splice(total);
+    if(Game.stars.length > total) Game.stars.splice(total);
+  } catch(e) {
+    console.warn('refreshCustomLevels: skipped due to initialization error', e);
+  }
 }
