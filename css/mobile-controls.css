@@ -410,6 +410,8 @@ body:has(#mobile-controls.touch-device) #hud-tr {
     width: min(62vw, 190px);
     margin: 0 8px;
     scroll-snap-align: center;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
   }
 
   body:has(#mobile-controls.touch-device) .hub-footer {
